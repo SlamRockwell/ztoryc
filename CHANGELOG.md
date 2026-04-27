@@ -7,6 +7,25 @@
 
 ---
 
+## [2026-04-26b] — feat: open .tnz from Finder via Apple Events
+
+### Added
+- **Apertura .tnz da Finder** (`main.cpp`, `BundleInfo.plist.in`): doppio click
+  su un file `.tnz` dal Finder apre Ztoryc, attiva il progetto corretto e carica
+  la scena. Implementato tramite `ZtoryApplication` (sottoclasse di `QApplication`)
+  che intercetta `QFileOpenEvent` (meccanismo Apple Events di macOS).
+  Se l'evento arriva prima che l'app sia inizializzata, il path viene salvato in
+  `m_pendingFile` e processato dopo `w.show()`.
+- **`CFBundleDocumentTypes`** in `BundleInfo.plist.in`: registra `.tnz` come
+  tipo di documento nativo di Ztoryc (`LSHandlerRank: Owner`).
+
+### Notes
+- Su primo avvio dopo build potrebbe servire forzare la registrazione:
+  `lsregister -f Ztoryc.app`
+- Windows e Linux richiedono implementazione separata (non ancora fatto).
+
+---
+
 ## [2026-04-26] — fix: SIGBUS project switch + storyboard SQ visibility + repo cleanup
 
 ### Fixed
