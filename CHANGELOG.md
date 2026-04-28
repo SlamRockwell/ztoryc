@@ -7,6 +7,51 @@
 
 ---
 
+## [2026-04-28] — fix: workflow switch crash (Windows) + .tnz Finder open
+
+### Fixed
+- **Crash al secondo switch workflow Storyboard** (`mainwindow.cpp`): la funzione
+  `ensureStoryboardRoomsTemplate()` faceva il rename di `layouts.txt` in
+  `layouts_legacy.txt` senza copiare template al suo posto (i template non
+  esistono ancora nel repo). Al secondo switch la cartella era senza `layouts.txt`
+  e l'app crashava con `0xc0000409` (abort) su Windows, SIGSEGV su macOS.
+  Fix: disabilitato il blocco di rename finché i template non saranno disponibili.
+- **Apertura .tnz da Finder** (`main.cpp`, `BundleInfo.plist.in`): doppio click
+  su `.tnz` dal Finder ora apre Ztoryc, attiva il progetto e carica la scena.
+  Implementato via `ZtoryApplication` che intercetta `QFileOpenEvent`.
+
+### Notes
+- Il crash Windows era `STATUS_STACK_BUFFER_OVERRUN` (0xc0000409) in `ucrtbase.dll`
+  causato dall'abort() implicito nel codice corrotto post-rename.
+- I template storyboard (`board.ini`, `animatic.ini`) vanno ancora creati e
+  aggiunti a `stuff/layouts/Storyboard/` — quando pronti, riabilitare il blocco
+  in `ensureStoryboardRoomsTemplate()`.
+- Crash separato aperto: `PlasticTool::onSelectionChanged()` SIGSEGV su scena
+  con plastic deformer — da indagare, probabilmente dangling listener pointer
+  (stesso pattern di stopmotioncontroller.h).
+- Commits: f2c7b350b (mainwindow fix), precedenti per .tnz Finder open.
+
+---
+
+## [2026-04-26b] — feat: open .tnz from Finder via Apple Events
+
+### Added
+- **Apertura .tnz da Finder** (`main.cpp`, `BundleInfo.plist.in`): doppio click
+  su un file `.tnz` dal Finder apre Ztoryc, attiva il progetto corretto e carica
+  la scena. Implementato tramite `ZtoryApplication` (sottoclasse di `QApplication`)
+  che intercetta `QFileOpenEvent` (meccanismo Apple Events di macOS).
+  Se l'evento arriva prima che l'app sia inizializzata, il path viene salvato in
+  `m_pendingFile` e processato dopo `w.show()`.
+- **`CFBundleDocumentTypes`** in `BundleInfo.plist.in`: registra `.tnz` come
+  tipo di documento nativo di Ztoryc (`LSHandlerRank: Owner`).
+
+### Notes
+- Su primo avvio dopo build potrebbe servire forzare la registrazione:
+  `lsregister -f Ztoryc.app`
+- Windows e Linux richiedono implementazione separata (non ancora fatto).
+
+---
+
 ## [2026-04-26b] — feat: open .tnz from Finder via Apple Events
 
 ### Added
