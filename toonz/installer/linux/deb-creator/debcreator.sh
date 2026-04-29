@@ -25,7 +25,7 @@ set -e
 # -p or --package: Defines the package version (e.g., 1.5.1).
 # -v or --version: Defines the program version (e.g., 1.5.1).
 # -t or --template: Specifies the path to the deb-template directory.
-# -c or --compressed: Provides the path to the compressed Tahoma2D archive (.tar.gz or .zip). Cannot be used with -x
+# -c or --compressed: Provides the path to the compressed Ztoryc archive (.tar.gz or .zip). Cannot be used with -x
 # -x or --appimage-extract: Provides the path to the extracted appimage. Cannot be used with -c.
 # -s or --stuff: Provides the path to the stuff folder. Used with -x
 # -f or --ffmpag: Provides the path to the ffmpeg folder. Used with -x
@@ -81,8 +81,8 @@ function _updateVersion() {
         package_version="${package_version// /"."}" # Convert array back to version format
     fi
 
-    # Get current program version from "Description: Tahoma 2D Version ..."
-    current_program_version=$(grep -oP '(?<=Description: Tahoma 2D Version )\d+(\.\d+)*' "$control_file")
+    # Get current program version from "Description: Ztoryc Version ..."
+    current_program_version=$(grep -oP '(?<=Description: Ztoryc Version )\d+(\.\d+)*' "$control_file")
     if [ -z "$program_version" ]; then
         # No -v provided, keep current program version
         program_version="$current_program_version"
@@ -90,7 +90,7 @@ function _updateVersion() {
 
     # Update Version: and Description: lines
     sed -i "s/Version: .*$/Version: $package_version/" "$control_file"
-    sed -i "s/Description: .*$/Description: Tahoma 2D Version $program_version/" "$control_file"
+    sed -i "s/Description: .*$/Description: Ztoryc Version $program_version/" "$control_file"
 
     rm "$backup_file"
     echo "[INFO] Package version: $package_version"
@@ -105,7 +105,7 @@ function _findCompressedFile() {
 
     # Find compressed file if not provided
     if [ -z "$compressed_file" ]; then
-        compressed_file=$(find "$(pwd)" -maxdepth 1 -type f \( -name "Tahoma2D.AppImage" -o -name "Tahoma2D*.tar.gz" -o -name "Tahoma2D*.zip" \) | head -n 1)
+        compressed_file=$(find "$(pwd)" -maxdepth 1 -type f \( -name "Ztoryc.AppImage" -o -name "Ztoryc*.tar.gz" -o -name "Ztoryc*.zip" \) | head -n 1)
         if [ ! -f "$compressed_file" ]; then
             echo "Compressed file not found: " compressed_file
             exit 1
@@ -117,7 +117,7 @@ function _findCompressedFile() {
 function _copyTemplate() {
     # Copy template to final folder in /tmp
     _sanitizePath
-    final_folder="/tmp/tahoma2d_${version_number}_amd64"
+    final_folder="/tmp/ztoryc_${version_number}_amd64"
     cp -rT "$deb_template_path" "$final_folder"
 }
 
@@ -146,7 +146,7 @@ function _extract() {
 }
 
 function _extractAppImage() {
-    bin_folder="$final_folder/etc/skel/.local/share/Tahoma2D/"
+    bin_folder="$final_folder/etc/skel/.local/share/Ztoryc/"
     mkdir -p "$bin_folder"
 
     # Skip appimage extract if -x was given
@@ -156,7 +156,7 @@ function _extractAppImage() {
             exit 1
         fi
     else
-        appimage_file=$(find "$temp_extract" -type f -name "Tahoma2D.AppImage" | head -n 1)
+        appimage_file=$(find "$temp_extract" -type f -name "Ztoryc.AppImage" | head -n 1)
         echo "[INFO] AppImage file: $appimage_file"
         if [ -f "$appimage_file" ]; then
             chmod +x "$appimage_file"
@@ -170,7 +170,7 @@ function _extractAppImage() {
 }
 
 function _moveFiles() {
-    dest_folder="$final_folder/etc/skel/.local/share/Tahoma2D"
+    dest_folder="$final_folder/etc/skel/.local/share/Ztoryc"
     if [ -z "$compressed_file" ]; then
         if [ -d "$stuff_path" ]; then
             echo "[INFO] Copying $stuff_path"
@@ -208,25 +208,25 @@ function _moveFiles() {
         done
     fi
     
-    echo "[INFO] Copying $appimage_extract_path/usr/share/applications/org.tahoma2d.Tahoma2D.desktop"
+    echo "[INFO] Copying $appimage_extract_path/usr/share/applications/org.ztoryc.Ztoryc.desktop"
     mkdir -p "$final_folder/usr/local/share/applications"
-    cp "$appimage_extract_path/usr/share/applications/org.tahoma2d.Tahoma2D.desktop" "$final_folder/usr/local/share/applications/org.tahoma2d.Tahoma2D.desktop"
+    cp "$appimage_extract_path/usr/share/applications/org.ztoryc.Ztoryc.desktop" "$final_folder/usr/local/share/applications/org.ztoryc.Ztoryc.desktop"
 
-    echo "[INFO] Copying $appimage_extract_path/usr/share/icons/hicolor/128x128/apps/org.tahoma2d.Tahoma2D.png"
+    echo "[INFO] Copying $appimage_extract_path/usr/share/icons/hicolor/128x128/apps/org.ztoryc.Ztoryc.png"
     mkdir -p "$final_folder/usr/share/icons/hicolor/128x128/apps/"
-    cp "$appimage_extract_path/usr/share/icons/hicolor/128x128/apps/org.tahoma2d.Tahoma2D.png" "$final_folder/usr/share/icons/hicolor/128x128/apps/org.tahoma2d.Tahoma2D.png"
+    cp "$appimage_extract_path/usr/share/icons/hicolor/128x128/apps/org.ztoryc.Ztoryc.png" "$final_folder/usr/share/icons/hicolor/128x128/apps/org.ztoryc.Ztoryc.png"
 
-    echo "[INFO] Copying $appimage_extract_path/usr/share/icons/hicolor/256x256/apps/org.tahoma2d.Tahoma2D.png"
+    echo "[INFO] Copying $appimage_extract_path/usr/share/icons/hicolor/256x256/apps/org.ztoryc.Ztoryc.png"
     mkdir -p "$final_folder/usr/share/icons/hicolor/256x256/apps/"
-    cp "$appimage_extract_path/usr/share/icons/hicolor/256x256/apps/org.tahoma2d.Tahoma2D.png" "$final_folder/usr/share/icons/hicolor/256x256/apps/org.tahoma2d.Tahoma2D.png"
+    cp "$appimage_extract_path/usr/share/icons/hicolor/256x256/apps/org.ztoryc.Ztoryc.png" "$final_folder/usr/share/icons/hicolor/256x256/apps/org.ztoryc.Ztoryc.png"
 
-    echo "[INFO] Copying $appimage_extract_path/usr/share/metainfo/org.tahoma2d.Tahoma2D.metainfo.xml"
+    echo "[INFO] Copying $appimage_extract_path/usr/share/metainfo/org.ztoryc.Ztoryc.metainfo.xml"
     mkdir -p "$final_folder/usr/share/metainfo/"
-    cp "$appimage_extract_path/usr/share/metainfo/org.tahoma2d.Tahoma2D.metainfo.xml" "$final_folder/usr/share/metainfo/org.tahoma2d.Tahoma2D.metainfo.xml"
+    cp "$appimage_extract_path/usr/share/metainfo/org.ztoryc.Ztoryc.metainfo.xml" "$final_folder/usr/share/metainfo/org.ztoryc.Ztoryc.metainfo.xml"
 
     echo "[INFO] Copying $appimage_extract_path/AppRun"
-    mkdir -p "$final_folder/etc/skel/.local/share/Tahoma2D/"
-    cp "$appimage_extract_path/AppRun" "$final_folder/etc/skel/.local/share/Tahoma2D/AppRun"
+    mkdir -p "$final_folder/etc/skel/.local/share/Ztoryc/"
+    cp "$appimage_extract_path/AppRun" "$final_folder/etc/skel/.local/share/Ztoryc/AppRun"
 }
 
 function _generateMd5sums() {
@@ -240,9 +240,9 @@ function _setPermissions() {
 # Set permissions
     chmod 0775 "$final_folder/DEBIAN"
     chmod +x "$final_folder/DEBIAN/postinst"
-    chmod +x "$final_folder/usr/local/bin/tahoma2d"
-    chmod +x "$final_folder/usr/local/bin/tahoma-permissions"
-    chmod +x "$final_folder/etc/skel/.local/share/Tahoma2D/AppRun"
+    chmod +x "$final_folder/usr/local/bin/ztoryc"
+    chmod +x "$final_folder/usr/local/bin/ztoryc-permissions"
+    chmod +x "$final_folder/etc/skel/.local/share/Ztoryc/AppRun"
 }
 
 function _createDeb() {
@@ -252,7 +252,7 @@ function _createDeb() {
         exit 1
     fi
 
-    output_deb="$deb_output_path/tahoma2d_${package_version}_amd64.deb"
+    output_deb="$deb_output_path/ztoryc_${package_version}_amd64.deb"
 
     echo "[INFO] Creating Debian package: $output_deb"
 

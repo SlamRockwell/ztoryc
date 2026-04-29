@@ -1,11 +1,13 @@
-name: Tahoma2D Linux Build
+name: Ztoryc Linux Build
 
-on: [push, pull_request, workflow_dispatch]
+on:
+  workflow_dispatch:
 
 jobs:
   Linux:
     runs-on: ubuntu-22.04
     strategy:
+      fail-fast: false
       matrix:
         compiler: [ gcc, clang ]
         include:
@@ -37,6 +39,22 @@ jobs:
           key: ${{ runner.os }}-${{ matrix.compiler }}-refs/heads/master
           restore-keys: |
             ${{ runner.os }}-${{ matrix.compiler }}-
+      - name: Restore external dependency cache
+        id: restore-deps-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            /usr/local/lib
+            /usr/local/include
+            /usr/local/lib/pkgconfig
+            /usr/local/bin/ffmpeg
+            /usr/local/bin/ffprobe
+            thirdparty/openh264
+            thirdparty/ffmpeg
+            thirdparty/opencv
+            thirdparty/libmypaint/src
+            thirdparty/libgphoto2_src
+          key: ${{ runner.os }}-${{ matrix.compiler }}-deps-${{ hashFiles('ci-scripts/linux/tahoma-build*.sh', 'ci-scripts/linux/tahoma-install.sh') }}
       - name: Get CanonSDK
         if: ${{ (github.repository_owner == 'tahoma2d' || github.repository_owner == 'manongjohn') && github.event_name == 'push' }}
         run: |
@@ -45,26 +63,30 @@ jobs:
           mv EDSDK_Linux/EDSDK/* thirdparty/canon
           chmod 644 thirdparty/canon/Library/x86_64/lib*
       - name: Build ffmpeg
+        if: ${{ steps.restore-deps-cache.outputs.cache-hit != 'true' }}
         run: |
           export CC="ccache ${{ matrix.cc }}"
           export CXX="ccache ${{ matrix.cxx }}"
           ci-scripts/linux/tahoma-buildffmpeg.sh
       - name: Build OpenCV
+        if: ${{ steps.restore-deps-cache.outputs.cache-hit != 'true' }}
         run: |
           export CC="ccache ${{ matrix.cc }}"
           export CXX="ccache ${{ matrix.cxx }}"
           ci-scripts/linux/tahoma-buildopencv.sh
       - name: Build libmypaint
+        if: ${{ steps.restore-deps-cache.outputs.cache-hit != 'true' }}
         run: |
           export CC="ccache ${{ matrix.cc }}"
           export CXX="ccache ${{ matrix.cxx }}"
           ci-scripts/linux/tahoma-buildlibmypaint.sh
       - name: Build libgphoto2
+        if: ${{ steps.restore-deps-cache.outputs.cache-hit != 'true' }}
         run: |
           export CC="ccache ${{ matrix.cc }}"
           export CXX="ccache ${{ matrix.cxx }}"
           ci-scripts/linux/tahoma-buildlibgphoto2.sh
-      - name: Build Tahoma2D
+      - name: Build Ztoryc
         run: |
           export CC="ccache ${{ matrix.cc }}"
           export CXX="ccache ${{ matrix.cxx }}"
@@ -75,16 +97,16 @@ jobs:
       - name: Create Package
         run: |
           ci-scripts/linux/tahoma-buildpkg.sh
-          mv toonz/build/Tahoma2D-linux.tar.gz toonz/build/Tahoma2D-linux-${{ matrix.compiler }}.tar.gz
-          mv toonz/build/Tahoma2D-linux.deb toonz/build/Tahoma2D-linux-${{ matrix.compiler }}.deb
+          mv toonz/build/Ztoryc-linux.tar.gz toonz/build/Ztoryc-linux-${{ matrix.compiler }}.tar.gz
+          mv toonz/build/Ztoryc-linux.deb toonz/build/Ztoryc-linux-${{ matrix.compiler }}.deb
       - uses: actions/upload-artifact@v4
         with:
-          name: Tahoma2D-linux-${{ matrix.compiler }}.tar.gz
-          path: toonz/build/Tahoma2D-linux-${{ matrix.compiler }}.tar.gz
+          name: Ztoryc-linux-${{ matrix.compiler }}.tar.gz
+          path: toonz/build/Ztoryc-linux-${{ matrix.compiler }}.tar.gz
       - uses: actions/upload-artifact@v4
         with:
-          name: Tahoma2D-linux-${{ matrix.compiler }}.deb
-          path: toonz/build/Tahoma2D-linux-${{ matrix.compiler }}.deb
+          name: Ztoryc-linux-${{ matrix.compiler }}.deb
+          path: toonz/build/Ztoryc-linux-${{ matrix.compiler }}.deb
       - name: Get Nightly Release Date
         if: ${{ github.repository_owner == 'tahoma2d' && github.event_name == 'push' && github.ref == 'refs/heads/master' }}
         run: |
@@ -108,7 +130,7 @@ jobs:
         with:
           allowUpdates: true
           artifactErrorsFailBuild: false
-          artifacts: toonz/build/Tahoma2D-linux-${{ matrix.compiler }}.tar.gz,toonz/build/Tahoma2D-linux-${{ matrix.compiler }}.deb
+          artifacts: toonz/build/Ztoryc-linux-${{ matrix.compiler }}.tar.gz,toonz/build/Ztoryc-linux-${{ matrix.compiler }}.deb
           artifactContentType: "raw"
           body: ${{ github.event.head_commit.message }}
           name: Latest Nightly ${{ env.NIGHTLYDATE }}
@@ -122,7 +144,7 @@ jobs:
         with:
           allowUpdates: true
           artifactErrorsFailBuild: false
-          artifacts: toonz/build/Tahoma2D-linux-${{ matrix.compiler }}.tar.gz,toonz/build/Tahoma2D-linux-${{ matrix.compiler }}.deb
+          artifacts: toonz/build/Ztoryc-linux-${{ matrix.compiler }}.tar.gz,toonz/build/Ztoryc-linux-${{ matrix.compiler }}.deb
           artifactContentType: "raw"
           body: ${{ github.event.head_commit.message }}
           name: ${{ env.NIGHTLYDATETIME }}
@@ -146,3 +168,19 @@ jobs:
           path: |
             /home/runner/.ccache
           key: ${{ runner.os }}-${{ matrix.compiler }}-${{ github.ref }}
+      - name: Save external dependency cache
+        if: ${{ steps.restore-deps-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            /usr/local/lib
+            /usr/local/include
+            /usr/local/lib/pkgconfig
+            /usr/local/bin/ffmpeg
+            /usr/local/bin/ffprobe
+            thirdparty/openh264
+            thirdparty/ffmpeg
+            thirdparty/opencv
+            thirdparty/libmypaint/src
+            thirdparty/libgphoto2_src
+          key: ${{ runner.os }}-${{ matrix.compiler }}-deps-${{ hashFiles('ci-scripts/linux/tahoma-build*.sh', 'ci-scripts/linux/tahoma-install.sh') }}

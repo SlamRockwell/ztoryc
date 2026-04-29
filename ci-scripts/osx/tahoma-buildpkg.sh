@@ -18,61 +18,61 @@ then
    export TOONZDIR=$TOONZDIR/Release
 fi
 
-if [ -d $TOONZDIR/Tahoma2D.app/tahomastuff ]
+if [ -d $TOONZDIR/Ztoryc.app/tahomastuff ]
 then
    # In case of prior builds, replace stuff folder
-   rm -rf $TOONZDIR/Tahoma2D.app/tahomastuff
+   rm -rf $TOONZDIR/Ztoryc.app/tahomastuff
 fi
 
 if [ -d thirdparty/apps/ffmpeg/bin ]
 then
-   echo ">>> Copying FFmpeg to Tahoma2D.app/ffmpeg"
-   if [ -d $TOONZDIR/Tahoma2D.app/ffmpeg ]
+   echo ">>> Copying FFmpeg to Ztoryc.app/ffmpeg"
+   if [ -d $TOONZDIR/Ztoryc.app/ffmpeg ]
    then
       # In case of prior builds, replace ffmpeg folder
-      rm -rf $TOONZDIR/Tahoma2D.app/ffmpeg
+      rm -rf $TOONZDIR/Ztoryc.app/ffmpeg
    fi
-   mkdir $TOONZDIR/Tahoma2D.app/ffmpeg
-   cp -R thirdparty/apps/ffmpeg/bin/ffmpeg thirdparty/apps/ffmpeg/bin/ffprobe $TOONZDIR/Tahoma2D.app/ffmpeg
-   chmod -R 755 $TOONZDIR/Tahoma2D.app/ffmpeg
+   mkdir $TOONZDIR/Ztoryc.app/ffmpeg
+   cp -R thirdparty/apps/ffmpeg/bin/ffmpeg thirdparty/apps/ffmpeg/bin/ffprobe $TOONZDIR/Ztoryc.app/ffmpeg
+   chmod -R 755 $TOONZDIR/Ztoryc.app/ffmpeg
 fi
 
 if [ -d thirdparty/apps/rhubarb ]
 then
-   echo ">>> Copying Rhubarb Lip Sync to Tahoma2D.app/rhubarb"
-   if [ -d $TOONZDIR/Tahoma2D.app/rhubarb ]
+   echo ">>> Copying Rhubarb Lip Sync to Ztoryc.app/rhubarb"
+   if [ -d $TOONZDIR/Ztoryc.app/rhubarb ]
    then
       # In case of prior builds, replace rhubarb folder
-      rm -rf $TOONZDIR/Tahoma2D.app/rhubarb
+      rm -rf $TOONZDIR/Ztoryc.app/rhubarb
    fi
-   mkdir $TOONZDIR/Tahoma2D.app/rhubarb
-   cp -R thirdparty/apps/rhubarb/rhubarb thirdparty/apps/rhubarb/res $TOONZDIR/Tahoma2D.app/rhubarb
-   chmod -R 755 $TOONZDIR/Tahoma2D.app/rhubarb
+   mkdir $TOONZDIR/Ztoryc.app/rhubarb
+   cp -R thirdparty/apps/rhubarb/rhubarb thirdparty/apps/rhubarb/res $TOONZDIR/Ztoryc.app/rhubarb
+   chmod -R 755 $TOONZDIR/Ztoryc.app/rhubarb
 fi
 
-if [ ! -d $TOONZDIR/Tahoma2D.app/Contents/Frameworks ]
+if [ ! -d $TOONZDIR/Ztoryc.app/Contents/Frameworks ]
 then
-   mkdir $TOONZDIR/Tahoma2D.app/Contents/Frameworks
+   mkdir $TOONZDIR/Ztoryc.app/Contents/Frameworks
 fi
 
 if [ -d thirdparty/canon/Framework ]
 then
-   if [ ! -d $TOONZDIR/Tahoma2D.app/Contents/Frameworks/EDSDK.framework ]
+   if [ ! -d $TOONZDIR/Ztoryc.app/Contents/Frameworks/EDSDK.framework ]
    then
-      echo ">>> Copying canon framework to Tahoma2D.app/Contents/Frameworks/EDSDK.Framework"
-      cp -R thirdparty/canon/Framework/ $TOONZDIR/Tahoma2D.app/Contents/Frameworks
-      chmod -R 755 $TOONZDIR/Tahoma2D.app/Contents/Frameworks/EDSDK.framework
+      echo ">>> Copying canon framework to Ztoryc.app/Contents/Frameworks/EDSDK.Framework"
+      cp -R thirdparty/canon/Framework/ $TOONZDIR/Ztoryc.app/Contents/Frameworks
+      chmod -R 755 $TOONZDIR/Ztoryc.app/Contents/Frameworks/EDSDK.framework
    fi
 fi
 
-if [ ! -d $TOONZDIR/Tahoma2D.app/Contents/Frameworks/libgphoto2 ]
+if [ ! -d $TOONZDIR/Ztoryc.app/Contents/Frameworks/libgphoto2 ]
 then
-   echo ">>> Copying libghoto2 supporting directories to Tahoma2D.app/Contents/Frameworks"
-   cp -R /usr/local/lib/libgphoto2 $TOONZDIR/Tahoma2D.app/Contents/Frameworks
-   cp -R /usr/local/lib/libgphoto2_port $TOONZDIR/Tahoma2D.app/Contents/Frameworks
+   echo ">>> Copying libghoto2 supporting directories to Ztoryc.app/Contents/Frameworks"
+   cp -R /usr/local/lib/libgphoto2 $TOONZDIR/Ztoryc.app/Contents/Frameworks
+   cp -R /usr/local/lib/libgphoto2_port $TOONZDIR/Ztoryc.app/Contents/Frameworks
 
-   rm $TOONZDIR/Tahoma2D.app/Contents/Frameworks/libgphoto2/print-camera-list
-   find $TOONZDIR/Tahoma2D.app/Contents/Frameworks/libgphoto2* -name *.la -exec rm -f {} \;
+   rm $TOONZDIR/Ztoryc.app/Contents/Frameworks/libgphoto2/print-camera-list
+   find $TOONZDIR/Ztoryc.app/Contents/Frameworks/libgphoto2* -name *.la -exec rm -f {} \;
 fi
 
 echo ">>> Creating DSYM files"
@@ -81,41 +81,41 @@ then
    rm -rf $TOONZDIR/DSYM
 fi
 
-for X in `find $TOONZDIR/Tahoma2D.app/Contents/MacOS -type f`
+for X in `find $TOONZDIR/Ztoryc.app/Contents/MacOS -type f`
 do
    dsymutil -o $TOONZDIR/DSYM $X
    strip -S $X
 done
 
-if [ -d $TOONZDIR/Tahoma2D.app/DSYM ]
+if [ -d $TOONZDIR/Ztoryc.app/DSYM ]
 then
-   rm -rf $TOONZDIR/Tahoma2D.app/DSYM
+   rm -rf $TOONZDIR/Ztoryc.app/DSYM
 fi
 
-echo ">>> Configuring Tahoma2D.app for deployment"
+echo ">>> Configuring Ztoryc.app for deployment"
 
-$QTDIR/bin/macdeployqt $TOONZDIR/Tahoma2D.app -verbose=0 -always-overwrite \
-   -executable=$TOONZDIR/Tahoma2D.app/Contents/MacOS/lzocompress \
-   -executable=$TOONZDIR/Tahoma2D.app/Contents/MacOS/lzodecompress \
-   -executable=$TOONZDIR/Tahoma2D.app/Contents/MacOS/tcleanup \
-   -executable=$TOONZDIR/Tahoma2D.app/Contents/MacOS/tcomposer \
-   -executable=$TOONZDIR/Tahoma2D.app/Contents/MacOS/tconverter \
-   -executable=$TOONZDIR/Tahoma2D.app/Contents/MacOS/tfarmcontroller \
-   -executable=$TOONZDIR/Tahoma2D.app/Contents/MacOS/tfarmserver 
+$QTDIR/bin/macdeployqt $TOONZDIR/Ztoryc.app -verbose=0 -always-overwrite \
+   -executable=$TOONZDIR/Ztoryc.app/Contents/MacOS/lzocompress \
+   -executable=$TOONZDIR/Ztoryc.app/Contents/MacOS/lzodecompress \
+   -executable=$TOONZDIR/Ztoryc.app/Contents/MacOS/tcleanup \
+   -executable=$TOONZDIR/Ztoryc.app/Contents/MacOS/tcomposer \
+   -executable=$TOONZDIR/Ztoryc.app/Contents/MacOS/tconverter \
+   -executable=$TOONZDIR/Ztoryc.app/Contents/MacOS/tfarmcontroller \
+   -executable=$TOONZDIR/Ztoryc.app/Contents/MacOS/tfarmserver 
 
 for FW in `echo "QtDBus QtPdf QtQml QtQmlModels QtQuick QtVirtualKeyboard"`
 do
-   if [ ! -d $TOONZDIR/Tahoma2D.app/Contents/Frameworks/$FW.framework ]
+   if [ ! -d $TOONZDIR/Ztoryc.app/Contents/Frameworks/$FW.framework ]
    then
-      echo ">>> Copying missing $FW.framework to Tahoma2D.app/Contents/Frameworks"
-      cp -r $QTDIR/Frameworks/$FW.framework $TOONZDIR/Tahoma2D.app/Contents/Frameworks
+      echo ">>> Copying missing $FW.framework to Ztoryc.app/Contents/Frameworks"
+      cp -r $QTDIR/Frameworks/$FW.framework $TOONZDIR/Ztoryc.app/Contents/Frameworks
    fi
 done
 
-if [ ! -d $TOONZDIR/Tahoma2D.app/Contents/lib ]
+if [ ! -d $TOONZDIR/Ztoryc.app/Contents/lib ]
 then
-   echo ">>> Adding Contents/lib symbolic link to Tahoma2D.app/Contents/Frameworks"
-   ln -s Frameworks $TOONZDIR/Tahoma2D.app/Contents/lib
+   echo ">>> Adding Contents/lib symbolic link to Ztoryc.app/Contents/Frameworks"
+   ln -s Frameworks $TOONZDIR/Ztoryc.app/Contents/lib
 fi
 
 echo ">>> Correcting library paths"
@@ -129,7 +129,7 @@ function checkLibFile() {
          local Y=`basename $DEPFILE`
          local W=`basename $LIBFILE`
          local X=`echo $DEPFILE | grep "\.framework\/"`
-         if [ "$X" = "" -a ! -f $TOONZDIR/Tahoma2D.app/Contents/Frameworks/$Y ]
+         if [ "$X" = "" -a ! -f $TOONZDIR/Ztoryc.app/Contents/Frameworks/$Y ]
          then
             local SRC=$DEPFILE
             local Z=`echo $DEPFILE | cut -c 1-16`
@@ -143,10 +143,10 @@ function checkLibFile() {
                 local SRC=/usr/local/lib/$Y
             fi
             echo "Copying $SRC to Frameworks"
-            cp $SRC $TOONZDIR/Tahoma2D.app/Contents/Frameworks
-            chmod 644 $TOONZDIR/Tahoma2D.app/Contents/Frameworks/$Y
+            cp $SRC $TOONZDIR/Ztoryc.app/Contents/Frameworks
+            chmod 644 $TOONZDIR/Ztoryc.app/Contents/Frameworks/$Y
             local ORIGDEPFILE=$DEPFILE
-            checkLibFile $TOONZDIR/Tahoma2D.app/Contents/Frameworks/$Y
+            checkLibFile $TOONZDIR/Ztoryc.app/Contents/Frameworks/$Y
             DEPFILE=$ORIGDEPFILE
          fi
          if [ "$Y" != "$W" ]
@@ -170,26 +170,26 @@ function checkLibFile() {
    done
 }
 
-for FILE in `find $TOONZDIR/Tahoma2D.app/Contents -type f | grep -v -e"\.h" -e"\.prl" -e"\.plist" -e"\.conf" -e"\.icns" -e"EDSDK" -e"\/Headers\/"`
+for FILE in `find $TOONZDIR/Ztoryc.app/Contents -type f | grep -v -e"\.h" -e"\.prl" -e"\.plist" -e"\.conf" -e"\.icns" -e"EDSDK" -e"\/Headers\/"`
 do
    checkLibFile $FILE
 done
 
-echo ">>> Moving DYSM to Tahoma2D.app"
-mv $TOONZDIR/DSYM $TOONZDIR/Tahoma2D.app
+echo ">>> Moving DYSM to Ztoryc.app"
+mv $TOONZDIR/DSYM $TOONZDIR/Ztoryc.app
 
-echo ">>> Creating Tahoma2D-install-osx.pkg"
+echo ">>> Creating Ztoryc-install-osx.pkg"
 
 toonz/installer/osx/app.rb $TOONZDIR stuff toonz/installer/osx/scripts $TAHOMA2DVERSION
 
-mv $TOONZDIR/Tahoma2D-install-osx.pkg $TOONZDIR/..
+mv $TOONZDIR/Ztoryc-install-osx.pkg $TOONZDIR/..
 
-echo ">>> Creating Tahoma2D-portable-osx.dmg"
+echo ">>> Creating Ztoryc-portable-osx.dmg"
 
-cp -R stuff $TOONZDIR/Tahoma2D.app/tahomastuff
-chmod -R 777 $TOONZDIR/Tahoma2D.app/tahomastuff
+cp -R stuff $TOONZDIR/Ztoryc.app/tahomastuff
+chmod -R 777 $TOONZDIR/Ztoryc.app/tahomastuff
 
-find $TOONZDIR/Tahoma2D.app/tahomastuff -name .gitkeep -exec rm -f {} \;
+find $TOONZDIR/Ztoryc.app/tahomastuff -name .gitkeep -exec rm -f {} \;
 
 cd $TOONZDIR
 
@@ -205,11 +205,11 @@ do
       echo ">>> DMG file creation failed.  Retrying $TRY/$MAXTRY..."
    fi
 
-    $QTDIR/bin/macdeployqt Tahoma2D.app -dmg -verbose=0
-    if [ -f Tahoma2D.dmg ]
+    $QTDIR/bin/macdeployqt Ztoryc.app -dmg -verbose=0
+    if [ -f Ztoryc.dmg ]
     then
        echo ">>> DMG file created successfully"
-       mv Tahoma2D.dmg ../Tahoma2D-portable-osx.dmg
+       mv Ztoryc.dmg ../Ztoryc-portable-osx.dmg
        exit 0
     fi
 done

@@ -23,11 +23,11 @@ void AboutClickableLabel::mousePressEvent(QMouseEvent* event) {
 }
 
 AboutPopup::AboutPopup(QWidget* parent)
-    : DVGui::Dialog(parent, true, true, "About Tahoma2D") {
+    : DVGui::Dialog(parent, true, true, "About Ztoryc") {
   setFixedWidth(360);
   setFixedHeight(383);
 
-  setWindowTitle(tr("About Tahoma2D"));
+  setWindowTitle(tr("About Ztoryc"));
   setTopMargin(0);
 
   TFilePath baseLicensePath   = TEnv::getStuffDir() + "doc/LICENSE";
@@ -37,7 +37,7 @@ AboutPopup::AboutPopup(QWidget* parent)
 
   QLabel* logo = new QLabel(this);
 
-  logo->setPixmap(QPixmap::fromImage(QImage(":Resources/tahoma2d_about.png")));
+  logo->setPixmap(QPixmap::fromImage(QImage(":Resources/ztoryc_about.png")));
   mainLayout->addWidget(logo);
 
   QString name = QString::fromStdString(TEnv::getApplicationFullName());
@@ -50,7 +50,7 @@ AboutPopup::AboutPopup(QWidget* parent)
   mainLayout->addWidget(blankLabel);
 
   AboutClickableLabel* licenseLink = new AboutClickableLabel(this);
-  licenseLink->setText(tr("Tahoma2D License"));
+  licenseLink->setText(tr("Ztoryc License"));
 
   connect(licenseLink, &AboutClickableLabel::clicked, [=]() {
     if (TSystem::isUNC(tahomaLicensePath))
@@ -79,13 +79,13 @@ AboutPopup::AboutPopup(QWidget* parent)
 
   QLabel* ffmpegLabel = new QLabel(this);
   ffmpegLabel->setText(tr(
-      "Tahoma2D ships with FFmpeg.\nFFmpeg is licensed under the LGPLv2.1"));
+      "Ztoryc ships with FFmpeg.\nFFmpeg is licensed under the LGPLv2.1"));
   mainLayout->addWidget(ffmpegLabel);
 
   mainLayout->addSpacerItem(new QSpacerItem(this->width(), 10));
 
   mainLayout->addWidget(
-      new QLabel(tr("Tahoma2D is made possible with the help of "
+      new QLabel(tr("Ztoryc is made possible with the help of "
                     "patrons.\nSpecial thanks to:")));
   QLabel* patrons = new QLabel(
       "<i>Rodney Baker, Hans Jacob Wagner, Pierre Coffin, Adam Earle, MelieConieK</i>");
@@ -95,7 +95,7 @@ AboutPopup::AboutPopup(QWidget* parent)
   mainLayout->addWidget(new QLabel("  "));
 
   //  AboutClickableLabel* supportLink = new AboutClickableLabel(this);
-  //  supportLink->setText(tr("Please consider supporting Tahoma2D on
+  //  supportLink->setText(tr("Please consider supporting Ztoryc on
   //  Patreon."));
   //  connect(supportLink, &AboutClickableLabel::clicked, [=]() {
   //    QDesktopServices::openUrl(QUrl("https://patreon.com/jeremybullock"));
@@ -104,7 +104,7 @@ AboutPopup::AboutPopup(QWidget* parent)
   //  supportLink->setToolTip("https://patreon.com/jeremybullock");
   //  mainLayout->addWidget(supportLink);
   mainLayout->addWidget(new QLabel(
-      tr("Please consider sponsoring Tahoma2D developers on GitHub.")));
+      tr("Please consider sponsoring Ztoryc developers on GitHub.")));
   mainLayout->addStretch();
 
   QFrame* mainFrame = new QFrame(this);

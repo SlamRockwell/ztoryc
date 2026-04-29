@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop">
+  <id>org.ztoryc.Ztoryc</id>
+  <launchable type="desktop-id">org.ztoryc.Ztoryc.desktop</launchable>
+  <name>Ztoryc</name>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>BSD-3-Clause</project_license>
+  <developer_name>Ztoryc</developer_name>
+  <summary>2D animation</summary>
+  <description>
+    <p>Free and powerful software for 2D and stop motion animators</p>
+    <p>Ztoryc is a 2D and stop motion animation software. It is a fork of OpenToonz, originally developed in Italy by Digital Video, Inc., and customized by Studio Ghibli over many years of production.</p>
+  </description>
+  <url type="homepage">https://github.com/matitanimata/ztoryc</url>
+  <url type="bugtracker">https://github.com/matitanimata/ztoryc/issues</url>
+  <content_rating type="oars-1.1"/>
+</component>

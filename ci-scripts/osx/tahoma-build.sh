@@ -35,6 +35,7 @@ export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:/usr/local/opt/jpeg-turbo/lib/pkgconfig
 cmake ../sources  $CANON_FLAG \
       -DCMAKE_BUILD_TYPE=RelWithDebInfo \
       -DWITH_GPHOTO2=ON \
+      -DWITH_SYSTEM_SUPERLU=ON \
       -DQT_PATH=$USEQTLIB \
       -DTIFF_INCLUDE_DIR=../../thirdparty/tiff-4.2.0/libtiff/ \
       -DSUPERLU_INCLUDE_DIR=../../thirdparty/superlu/SuperLU_4.1/include/

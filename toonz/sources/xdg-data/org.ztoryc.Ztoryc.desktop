@@ -1,0 +1,18 @@
+[Desktop Entry]
+Type=Application
+Name=Ztoryc
+Icon=org.ztoryc.Ztoryc
+Exec=ztoryc
+Categories=Graphics;
+Terminal=false
+
+Comment=2d Digital Animation and Stop Motion (Webcam/DSLR)
+Comment[de]=2d Digitale Animation und Stop Motion (Webcam/DSLR)
+Comment[es]=Animacion 2d Digital y Stop Motion (Webcam/DSLR)
+Comment[gl]=2d Animacion dixital e Stop Motion (Webcam/DSLR)
+Comment[fr]=Animation numerique 2D et Stop Motion (Webcam/DSLR)
+Comment[pt]=Animacao Digital 2d e Stop Motion (Webcam/DSLR)
+Comment[it]=Animazione digitale 2d e stop motion (Webcam/DSLR)
+Comment[ru]=2d tsifrovaya animatsiya i pokadrovaya animatsiya (Webcam/DSLR)
+
+Keywords=Dragonframe;Toon Boom;Harmony;TV Paint;

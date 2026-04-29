@@ -1,6 +1,7 @@
-name: Tahoma2D macOS Build
+name: Ztoryc macOS Build
 
-on: [push, pull_request, workflow_dispatch]
+on:
+  workflow_dispatch:
 
 jobs:
   macOS:
@@ -27,6 +28,22 @@ jobs:
           key: ${{ runner.os }}-refs/heads/master
           restore-keys: |
             ${{ runner.os }}-
+      - name: Restore external dependency cache
+        id: restore-deps-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            /usr/local/lib
+            /usr/local/include
+            /usr/local/lib/pkgconfig
+            /usr/local/bin/ffmpeg
+            /usr/local/bin/ffprobe
+            thirdparty/aom
+            thirdparty/dav1d
+            thirdparty/ffmpeg
+            thirdparty/opencv
+            thirdparty/libgphoto2_src
+          key: ${{ runner.os }}-deps-${{ hashFiles('ci-scripts/osx/tahoma-build*.sh', 'ci-scripts/osx/tahoma-install.sh') }}
       - name: Get CanonSDK
         if: ${{ (github.repository_owner == 'tahoma2d' || github.repository_owner == 'manongjohn') && github.event_name == 'push' }}
         run: |
@@ -46,18 +63,21 @@ jobs:
         run: |
           ci-scripts/osx/tahoma-get3rdpartyapps.sh
       - name: Build ffmpeg
+        if: ${{ steps.restore-deps-cache.outputs.cache-hit != 'true' }}
         run: |
           export PATH="/usr/local/opt/ccache/libexec:$PATH"
           ci-scripts/osx/tahoma-buildffmpeg.sh
       - name: Build OpenCV
+        if: ${{ steps.restore-deps-cache.outputs.cache-hit != 'true' }}
         run: |
           export PATH="/usr/local/opt/ccache/libexec:$PATH"
           ci-scripts/osx/tahoma-buildopencv.sh
       - name: Build libgphoto2
+        if: ${{ steps.restore-deps-cache.outputs.cache-hit != 'true' }}
         run: |
           export PATH="/usr/local/opt/ccache/libexec:$PATH"
           ci-scripts/osx/tahoma-buildlibgphoto2.sh
-      - name: Build Tahoma2D
+      - name: Build Ztoryc
         run: |
           export PATH="/usr/local/opt/ccache/libexec:$PATH"
           ci-scripts/osx/tahoma-build.sh
@@ -65,12 +85,12 @@ jobs:
         run: bash ./ci-scripts/osx/tahoma-buildpkg.sh
       - uses: actions/upload-artifact@v4
         with:
-          name: Tahoma2D-portable-osx.dmg
-          path: toonz/build/Tahoma2D-portable-osx.dmg
+          name: Ztoryc-portable-osx.dmg
+          path: toonz/build/Ztoryc-portable-osx.dmg
       - uses: actions/upload-artifact@v4
         with:
-          name: Tahoma2D-install-osx.pkg
-          path: toonz/build/Tahoma2D-install-osx.pkg
+          name: Ztoryc-install-osx.pkg
+          path: toonz/build/Ztoryc-install-osx.pkg
       - name: Get Nightly Release Date
         if: ${{ github.repository_owner == 'tahoma2d' && github.event_name == 'push' && github.ref == 'refs/heads/master' }}
         run: |
@@ -94,7 +114,7 @@ jobs:
         with:
           allowUpdates: true
           artifactErrorsFailBuild: false
-          artifacts: toonz/build/Tahoma2D-portable-osx.dmg,toonz/build/Tahoma2D-install-osx.pkg
+          artifacts: toonz/build/Ztoryc-portable-osx.dmg,toonz/build/Ztoryc-install-osx.pkg
           artifactContentType: "raw"
           body: ${{ github.event.head_commit.message }}
           name: Latest Nightly ${{ env.NIGHTLYDATE }}
@@ -108,7 +128,7 @@ jobs:
         with:
           allowUpdates: true
           artifactErrorsFailBuild: false
-          artifacts: toonz/build/Tahoma2D-portable-osx.dmg,toonz/build/Tahoma2D-install-osx.pkg
+          artifacts: toonz/build/Ztoryc-portable-osx.dmg,toonz/build/Ztoryc-install-osx.pkg
           artifactContentType: "raw"
           body: ${{ github.event.head_commit.message }}
           name: ${{ env.NIGHTLYDATETIME }}
@@ -132,3 +152,19 @@ jobs:
           path: |
             /Users/runner/.ccache
           key: ${{ runner.os }}-${{ github.ref }}
+      - name: Save external dependency cache
+        if: ${{ steps.restore-deps-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            /usr/local/lib
+            /usr/local/include
+            /usr/local/lib/pkgconfig
+            /usr/local/bin/ffmpeg
+            /usr/local/bin/ffprobe
+            thirdparty/aom
+            thirdparty/dav1d
+            thirdparty/ffmpeg
+            thirdparty/opencv
+            thirdparty/libgphoto2_src
+          key: ${{ runner.os }}-deps-${{ hashFiles('ci-scripts/osx/tahoma-build*.sh', 'ci-scripts/osx/tahoma-install.sh') }}

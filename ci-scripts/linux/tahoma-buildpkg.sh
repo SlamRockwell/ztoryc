@@ -2,7 +2,7 @@
 export TAHOMA2DVERSION=1.6
 #source /opt/qt515/bin/qt515-env.sh
 
-echo ">>> Temporary install of Tahoma2D"
+echo ">>> Temporary install of Ztoryc"
 SCRIPTPATH=`dirname "$0"`
 export BUILDDIR=$SCRIPTPATH/../../toonz/build
 cd $BUILDDIR
@@ -19,50 +19,50 @@ then
 fi
 mkdir -p appdir/usr
 
-echo ">>> Copy and configure Tahoma2D installation in appDir"
+echo ">>> Copy and configure Ztoryc installation in appDir"
 cp -r /opt/tahoma2d/* appdir/usr
 cp appdir/usr/share/applications/*.desktop appdir
 cp appdir/usr/share/icons/hicolor/128x128/apps/*.png appdir
 mv appdir/usr/lib/tahoma2d/* appdir/usr/lib
 rmdir appdir/usr/lib/tahoma2d
 
-echo ">>> Creating Tahoma2D directory"
-if [ -d Tahoma2D ]
+echo ">>> Creating Ztoryc directory"
+if [ -d Ztoryc ]
 then
-   rm -rf Tahoma2D
+   rm -rf Ztoryc
 fi
-mkdir Tahoma2D
+mkdir Ztoryc
 
-echo ">>> Copying stuff to Tahoma2D/tahomastuff"
+echo ">>> Copying stuff to Ztoryc/tahomastuff"
 
-mv appdir/usr/share/tahoma2d/stuff Tahoma2D/tahomastuff
-chmod -R 777 Tahoma2D/tahomastuff
+mv appdir/usr/share/tahoma2d/stuff Ztoryc/tahomastuff
+chmod -R 777 Ztoryc/tahomastuff
 rmdir appdir/usr/share/tahoma2d
 
-find Tahoma2D/tahomastuff -name .gitkeep -exec rm -f {} \;
+find Ztoryc/tahomastuff -name .gitkeep -exec rm -f {} \;
 
 if [ -d ../../thirdparty/apps/ffmpeg/bin ]
 then
-   echo ">>> Copying FFmpeg to Tahoma2D/ffmpeg"
-   if [ -d Tahoma2D/ffmpeg ]
+   echo ">>> Copying FFmpeg to Ztoryc/ffmpeg"
+   if [ -d Ztoryc/ffmpeg ]
    then
-      rm -rf Tahoma2D/ffmpeg
+      rm -rf Ztoryc/ffmpeg
    fi
-   mkdir -p Tahoma2D/ffmpeg
-   cp -R ../../thirdparty/apps/ffmpeg/bin/ffmpeg ../../thirdparty/apps/ffmpeg/bin/ffprobe Tahoma2D/ffmpeg
-   chmod -R 755 Tahoma2D/ffmpeg
+   mkdir -p Ztoryc/ffmpeg
+   cp -R ../../thirdparty/apps/ffmpeg/bin/ffmpeg ../../thirdparty/apps/ffmpeg/bin/ffprobe Ztoryc/ffmpeg
+   chmod -R 755 Ztoryc/ffmpeg
 fi
 
 if [ -d ../../thirdparty/apps/rhubarb ]
 then
-   echo ">>> Copying Rhubarb Lip Sync to Tahoma2D/rhubarb"
-   if [ -d Tahoma2D/rhubarb ]
+   echo ">>> Copying Rhubarb Lip Sync to Ztoryc/rhubarb"
+   if [ -d Ztoryc/rhubarb ]
    then
-      rm -rf Tahoma2D/rhubarb
+      rm -rf Ztoryc/rhubarb
    fi
-   mkdir -p Tahoma2D/rhubarb
-   cp -R ../../thirdparty/apps/rhubarb/rhubarb ../../thirdparty/apps/rhubarb/res Tahoma2D/rhubarb
-   chmod 755 -R Tahoma2D/rhubarb
+   mkdir -p Ztoryc/rhubarb
+   cp -R ../../thirdparty/apps/rhubarb/rhubarb ../../thirdparty/apps/rhubarb/res Ztoryc/rhubarb
+   chmod 755 -R Ztoryc/rhubarb
 fi
 
 if [ -d ../../thirdparty/canon/Library ]
@@ -79,7 +79,7 @@ rm appdir/usr/lib/libgphoto2/print-camera-list
 find appdir/usr/lib/libgphoto2* -name *.la -exec rm -f {} \;
 find appdir/usr/lib/libgphoto2* -name *.so -exec patchelf --set-rpath '$ORIGIN/../..' {} \;
 
-echo ">>> Creating Tahoma2D/Tahoma2D.AppImage"
+echo ">>> Creating Ztoryc/Ztoryc.AppImage"
 
 if [ -f /usr/lib/qt5/bin/linuxdeployqt ]
 then
@@ -94,7 +94,7 @@ fi
 fi
 
 export LD_LIBRARY_PATH=appdir/usr/lib/tahoma2d
-$LINUXDEPLOYQT appdir/usr/bin/Tahoma2D -bundle-non-qt-libs -verbose=0 -always-overwrite -no-strip \
+$LINUXDEPLOYQT appdir/usr/bin/Ztoryc -bundle-non-qt-libs -verbose=0 -always-overwrite -no-strip \
    -executable=appdir/usr/bin/lzocompress \
    -executable=appdir/usr/bin/lzodecompress \
    -executable=appdir/usr/bin/tcleanup \
@@ -107,15 +107,15 @@ rm appdir/AppRun
 cp ../sources/scripts/AppRun appdir
 chmod 775 appdir/AppRun
 
-$LINUXDEPLOYQT appdir/usr/bin/Tahoma2D -appimage -no-strip 
+$LINUXDEPLOYQT appdir/usr/bin/Ztoryc -appimage -no-strip
 
-mv Tahoma2D*.AppImage Tahoma2D/Tahoma2D.AppImage
+mv Ztoryc*.AppImage Ztoryc/Ztoryc.AppImage
 
-echo ">>> Creating Tahoma2D Linux package"
+echo ">>> Creating Ztoryc Linux package"
 
-tar zcf Tahoma2D-linux.tar.gz Tahoma2D
+tar zcf Ztoryc-linux.tar.gz Ztoryc
 
-echo ">>> Creating Tahoma2D Debian Package"
+echo ">>> Creating Ztoryc Debian Package"
 
 chmod +x ../installer/linux/deb-creator/debcreator.sh 
 
@@ -124,8 +124,8 @@ chmod +x ../installer/linux/deb-creator/debcreator.sh
  -v $TAHOMA2DVERSION \
  -t ../installer/linux/deb-creator/deb-template \
  -x ./appdir \
- -f ./Tahoma2D/ffmpeg \
- -r ./Tahoma2D/rhubarb \
+ -f ./Ztoryc/ffmpeg \
+ -r ./Ztoryc/rhubarb \
  -s ../../stuff
 
- mv tahoma2d_*_amd64.deb Tahoma2D-linux.deb
+ mv ztoryc_*_amd64.deb Ztoryc-linux.deb

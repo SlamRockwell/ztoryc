@@ -21,12 +21,12 @@ SRC_STUFF_DIR = ARGV[1]
 SRC_SCRIPTS_DIR = ARGV[2] 
 VERSION = ARGV[3]
 VIRTUAL_ROOT = "#{BUILD_DIR}/VirtualRoot"
-APP_BUNDLE = "#{BUILD_DIR}/Tahoma2D.app"
+APP_BUNDLE = "#{BUILD_DIR}/Ztoryc.app"
 APP = "Applications"
 
-PKG_ID = "io.github.tahoma2d"
-PKG_TMP = "Tahoma2DBuild.pkg"
-FINAL_PKG = "#{BUILD_DIR}/Tahoma2D-install-osx.pkg"
+PKG_ID = "io.github.ztoryc"
+PKG_TMP = "ZtorycBuild.pkg"
+FINAL_PKG = "#{BUILD_DIR}/Ztoryc-install-osx.pkg"
 
 # Installation in VirtualRoot
 # Delete existing and install
@@ -66,7 +66,7 @@ exec_with_assert "pkgbuild --root #{VIRTUAL_ROOT} --component-plist #{PKG_PLIST}
 DIST_XML = "#{BUILD_DIR}/distribution.xml"
 unless File.exist? DIST_XML then
     exec_with_assert "productbuild --synthesize --package #{PKG_TMP} #{DIST_XML}"
-    exec_with_assert "gsed -i -e \"3i <title>Tahoma2D</title>\" #{DIST_XML}"
+    exec_with_assert "gsed -i -e \"3i <title>Ztoryc</title>\" #{DIST_XML}"
 end
 
 # Generate final pkg

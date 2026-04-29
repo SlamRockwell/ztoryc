@@ -2,40 +2,40 @@
 
 cd toonz\build
 
-echo ">>> Creating Tahoma2D directory"
+echo ">>> Creating Ztoryc directory"
 
-IF EXIST Tahoma2D rmdir /S /Q Tahoma2D
+IF EXIST Ztoryc rmdir /S /Q Ztoryc
 
-mkdir Tahoma2D
+mkdir Ztoryc
 
-echo ">>> Copy Tahoma2D DLLs"
+echo ">>> Copy Ztoryc DLLs"
 
-copy /y RelWithDebInfo\*.* Tahoma2D
+copy /y RelWithDebInfo\*.* Ztoryc
 
 echo ">>> Copy ThirdParty DLLs"
-copy /Y ..\..\thirdparty\freeglut\bin\x64\freeglut.dll Tahoma2D
-copy /Y ..\..\thirdparty\glew\glew-1.9.0\bin\64bit\glew32.dll Tahoma2D
-copy /Y ..\..\thirdparty\libmypaint\dist\64\libiconv-2.dll Tahoma2D
-copy /Y ..\..\thirdparty\libmypaint\dist\64\libintl-8.dll Tahoma2D
-copy /Y ..\..\thirdparty\libmypaint\dist\64\libjson-c-2.dll Tahoma2D
-copy /Y ..\..\thirdparty\libmypaint\dist\64\libmypaint-1-4-0.dll Tahoma2D
+copy /Y ..\..\thirdparty\freeglut\bin\x64\freeglut.dll Ztoryc
+copy /Y ..\..\thirdparty\glew\glew-1.9.0\bin\64bit\glew32.dll Ztoryc
+copy /Y ..\..\thirdparty\libmypaint\dist\64\libiconv-2.dll Ztoryc
+copy /Y ..\..\thirdparty\libmypaint\dist\64\libintl-8.dll Ztoryc
+copy /Y ..\..\thirdparty\libmypaint\dist\64\libjson-c-2.dll Ztoryc
+copy /Y ..\..\thirdparty\libmypaint\dist\64\libmypaint-1-4-0.dll Ztoryc
 
 echo ">>> Copy OpenCV DLLs"
 IF EXIST C:\tools\opencv (
-   copy /Y "C:\tools\opencv\build\x64\vc16\bin\opencv_world4110.dll" Tahoma2D
+   copy /Y "C:\tools\opencv\build\x64\vc16\bin\opencv_world4110.dll" Ztoryc
 ) ELSE (
-   copy /Y "C:\opencv\4110\build\x64\vc16\bin\opencv_world4110.dll" Tahoma2D
+   copy /Y "C:\opencv\4110\build\x64\vc16\bin\opencv_world4110.dll" Ztoryc
 )
 
 IF EXIST ..\..\thirdparty\canon\Header (
    echo ">>> Copy Canon EDSDK DLLs"
-   copy /Y ..\..\thirdparty\canon\Dll\EDSDK.dll Tahoma2D
-   copy /Y ..\..\thirdparty\canon\Dll\EdsImage.dll Tahoma2D
+   copy /Y ..\..\thirdparty\canon\Dll\EDSDK.dll Ztoryc
+   copy /Y ..\..\thirdparty\canon\Dll\EdsImage.dll Ztoryc
 )
 
 IF EXIST ..\..\thirdparty\libgphoto2\include (
    echo ">>> Copy Libgphoto2 DLLs"
-   xcopy /Y /E ..\..\thirdparty\libgphoto2\bin Tahoma2D
+   xcopy /Y /E ..\..\thirdparty\libgphoto2\bin Ztoryc
 )
 
 echo ">>> Copy MSVC DLLs"
@@ -57,13 +57,13 @@ for /d /r ""%VCINSTALLDIR%"" %%a in (14.*) do (
 :done
 echo "VCRUNTIME_PATH=%VCRUNTIME_PATH%"
 
-copy /Y "%VCRUNTIME_PATH%\vcruntime140.dll" Tahoma2D
-copy /Y "%VCRUNTIME_PATH%\vcruntime140_1.dll" Tahoma2D
-copy /Y "%VCRUNTIME_PATH%\msvcp140.dll" Tahoma2D
-copy /Y "%VCRUNTIME_PATH%\msvcp140_1.dll" Tahoma2D
-copy /Y "%VCRUNTIME_PATH%\msvcp140_2.dll" Tahoma2D
+copy /Y "%VCRUNTIME_PATH%\vcruntime140.dll" Ztoryc
+copy /Y "%VCRUNTIME_PATH%\vcruntime140_1.dll" Ztoryc
+copy /Y "%VCRUNTIME_PATH%\msvcp140.dll" Ztoryc
+copy /Y "%VCRUNTIME_PATH%\msvcp140_1.dll" Ztoryc
+copy /Y "%VCRUNTIME_PATH%\msvcp140_2.dll" Ztoryc
 
-echo ">>> Configuring Tahoma2D.exe for deployment"
+echo ">>> Configuring Ztoryc.exe for deployment"
 
 REM Setup for local builds
 set QT_PATH=C:\Qt\5.15.2_wintab\msvc2019_64
@@ -73,35 +73,35 @@ IF EXIST ..\..\thirdparty\qt\5.15.2_wintab\msvc2019_64 set QT_PATH=..\..\thirdpa
 echo "QT_PATH=%QT_PATH%"
 
 
-%QT_PATH%\bin\windeployqt.exe Tahoma2D\Tahoma2D.exe --opengl
+%QT_PATH%\bin\windeployqt.exe Ztoryc\Ztoryc.exe --opengl
 
 
 IF EXIST ..\..\thirdparty\apps\ffmpeg\bin (
-   echo ">>> Copying FFmpeg to Tahoma2D\ffmpeg"
-   IF EXIST Tahoma2D\ffmpeg rmdir /S /Q Tahoma2D\ffmpeg
-   mkdir Tahoma2D\ffmpeg
-   copy /Y ..\..\thirdparty\apps\ffmpeg\bin\ffmpeg.exe Tahoma2D\ffmpeg
-   copy /Y ..\..\thirdparty\apps\ffmpeg\bin\ffprobe.exe Tahoma2D\ffmpeg
+   echo ">>> Copying FFmpeg to Ztoryc\ffmpeg"
+   IF EXIST Ztoryc\ffmpeg rmdir /S /Q Ztoryc\ffmpeg
+   mkdir Ztoryc\ffmpeg
+   copy /Y ..\..\thirdparty\apps\ffmpeg\bin\ffmpeg.exe Ztoryc\ffmpeg
+   copy /Y ..\..\thirdparty\apps\ffmpeg\bin\ffprobe.exe Ztoryc\ffmpeg
 )
 
 IF EXIST ..\..\thirdparty\apps\rhubarb (
-   echo ">>> Copying Rhubarb Lip Sync to Tahoma2D\rhubarb"
-   IF EXIST Tahoma2D\rhubarb rmdir /S /Q Tahoma2D\rhubarb
-   mkdir Tahoma2D\rhubarb
-   copy /Y ..\..\thirdparty\apps\rhubarb\rhubarb.exe Tahoma2D\rhubarb
-   xcopy /Y /E /I ..\..\thirdparty\apps\rhubarb\res "Tahoma2D\rhubarb\res"
+   echo ">>> Copying Rhubarb Lip Sync to Ztoryc\rhubarb"
+   IF EXIST Ztoryc\rhubarb rmdir /S /Q Ztoryc\rhubarb
+   mkdir Ztoryc\rhubarb
+   copy /Y ..\..\thirdparty\apps\rhubarb\rhubarb.exe Ztoryc\rhubarb
+   xcopy /Y /E /I ..\..\thirdparty\apps\rhubarb\res "Ztoryc\rhubarb\res"
 )
 
 echo ">>> Remove unnecessary files"
 REM Remove github keep files
 del /A- /S ..\..\stuff\*.gitkeep
 
-echo ">>> Creating Tahoma2D Windows Installer"
+echo ">>> Creating Ztoryc Windows Installer"
 IF NOT EXIST installer mkdir installer
 cd installer
 
 IF EXIST program rmdir /S /Q program
-xcopy /Y /E /I ..\Tahoma2D program
+xcopy /Y /E /I ..\Ztoryc program
 
 IF EXIST stuff rmdir /S /Q stuff
 xcopy /Y /E /I ..\..\..\stuff stuff
@@ -111,12 +111,12 @@ ISCC.exe /I. /O.. ..\..\installer\windows\setup.iss
 
 cd ..
 
-echo ">>> Creating Tahoma2D Windows Portable package"
+echo ">>> Creating Ztoryc Windows Portable package"
 
-xcopy /Y /E /I ..\..\stuff Tahoma2D\tahomastuff
+xcopy /Y /E /I ..\..\stuff Ztoryc\tahomastuff
 
-IF EXIST Tahoma2D-portable-win.zip del Tahoma2D-portable-win.zip
-7z a Tahoma2D-portable-win.zip Tahoma2D
+IF EXIST Ztoryc-portable-win.zip del Ztoryc-portable-win.zip
+7z a Ztoryc-portable-win.zip Ztoryc
 
 
 cd ../..

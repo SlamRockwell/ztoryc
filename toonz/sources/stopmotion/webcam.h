@@ -143,10 +143,11 @@ private:
   AVCaptureDeviceInput_t*      m_avInput     = nullptr;
   AVCaptureVideoDataOutput_t*  m_avOutput    = nullptr;
   AVCaptureDelegate_t*         m_avDelegate  = nullptr;
-  bool                         m_useAVCapture = false;
   cv::Mat                      m_avCurrentFrame;
   QMutex*                      m_avFrameMutex = nullptr;
 #endif
+  // Keep this cross-platform so non-mac builds can compile shared webcam logic.
+  bool                         m_useAVCapture = false;
 
   void adjustLevel(cv::Mat& image);
   void binarize(cv::Mat& image);
