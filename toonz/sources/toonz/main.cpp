@@ -253,6 +253,31 @@ static void script_output(int type, const QString &value) {
 }
 
 //-----------------------------------------------------------------------------
+// ZtoryApplication: intercepts macOS Apple Events for file open (double-click)
+
+class ZtoryApplication final : public QApplication {
+public:
+  using QApplication::QApplication;
+  TFilePath m_pendingFile;
+
+  bool event(QEvent *e) override {
+    if (e->type() == QEvent::FileOpen) {
+      auto *foe = static_cast<QFileOpenEvent *>(e);
+      TFilePath fp(foe->file().toStdWString());
+      if (fp.getType() == "tnz" && TFileStatus(fp).doesExist()) {
+        if (TApp::instance() && TApp::instance()->getMainWindow()) {
+          auto *pm = TProjectManager::instance();
+          pm->loadSceneProject(fp);
+          IoCmd::loadScene(fp);
+        } else {
+          m_pendingFile = fp;  // app not ready yet — handled after init
+        }
+      }
+      return true;
+    }
+    return QApplication::event(e);
+  }
+};
 
 int main(int argc, char *argv[]) {
 #ifdef Q_OS_WIN
@@ -368,7 +393,7 @@ int main(int argc, char *argv[]) {
   QApplication::setAttribute(Qt::AA_UseDesktopOpenGL, true);
 #endif
 
-  QApplication a(argc, argv);
+  ZtoryApplication a(argc, argv);
 
 #ifdef MACOSX
   // This workaround is to avoid missing left button problem on Qt5.6.0.
@@ -837,6 +862,13 @@ int main(int argc, char *argv[]) {
                        Qt::AlignRight | Qt::AlignBottom, Qt::black);
     loadFilePath = loadFilePath.withType("tnz");
     if (TFileStatus(loadFilePath).doesExist()) IoCmd::loadScene(loadFilePath);
+  }
+
+  // Handle file opened via macOS double-click (Apple Event received before init)
+  if (!a.m_pendingFile.isEmpty() && loadFilePath.isEmpty()) {
+    auto *pm = TProjectManager::instance();
+    pm->loadSceneProject(a.m_pendingFile);
+    IoCmd::loadScene(a.m_pendingFile);
   }
 
   QFont *myFont;

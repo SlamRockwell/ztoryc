@@ -18,7 +18,7 @@ public:
 
 private:
   const char *applicationName     = "Ztoryc";
-  const float applicationVersion  = 1.0f;
+  const float applicationVersion  = 0.2f;
   const float applicationRevision = 0;
   const char *applicationNote     = "";
 };

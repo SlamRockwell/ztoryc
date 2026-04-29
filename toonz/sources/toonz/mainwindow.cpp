@@ -213,6 +213,12 @@ static bool ensureStoryboardRoomsTemplate(const QString &choice) {
   if (hasBoard && hasAnimatic && hasBrowser) return false;
   if (hasCustom) return false;
 
+  // Template migration disabled: no built-in storyboard templates available yet.
+  // When templates are added to stuff/layouts/Storyboard/, re-enable this block.
+  // Without templates to copy in, renaming layouts.txt would leave the folder
+  // empty and cause a crash on the next workflow switch.
+  return false;
+
   // Backup old layouts list so the new storyboard templates can be copied in.
   TFilePath backupPath = myDir + TFilePath("layouts_legacy.txt");
   if (TFileStatus(backupPath).doesExist()) {

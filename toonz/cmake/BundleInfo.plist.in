@@ -23,11 +23,11 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.0</string>
+	<string>0.2.0-beta</string>
 	<key>CFBundleSignature</key>
 	<string>????</string>
 	<key>CFBundleVersion</key>
-	<string>1.0.0</string>
+	<string>0.2.0-beta</string>
 	<key>CSResourcesFileMapped</key>
 	<true/>
 	<key>NSHighResolutionCapable</key>
@@ -36,5 +36,22 @@
 	<string>Ztoryc needs access to removable volumes to open and save projects.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>Ztoryc — based on Tahoma2D/Toonz. Original software by Digital Video S.p.A.</string>
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeExtensions</key>
+			<array>
+				<string>tnz</string>
+			</array>
+			<key>CFBundleTypeName</key>
+			<string>Ztoryc Scene</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>LSHandlerRank</key>
+			<string>Owner</string>
+			<key>NSDocumentClass</key>
+			<string>ZtoryScene</string>
+		</dict>
+	</array>
 </dict>
 </plist>
