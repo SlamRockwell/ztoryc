@@ -101,7 +101,7 @@ void DoubleValueLineEdit::keyPressEvent(QKeyEvent *event) {
 
         // Clamp value to valid range before processing
         if (!std::isfinite(value) || value < minValue || value > maxValue) {
-            setValue(std::clamp(value, minValue, maxValue));
+            setValue(tcrop(value, minValue, maxValue));
         }
         emit editingFinished();
         clearFocus();
@@ -391,7 +391,7 @@ void DoubleLineEdit::setValue(double value) {
   if (!std::isfinite(value)) return;
   double minValue, maxValue;
   getRange(minValue, maxValue);
-  value        = std::clamp(value, minValue, maxValue);
+  value        = tcrop(value, minValue, maxValue);
   QString str;
   str.setNum(value);
   int pos = 0;
