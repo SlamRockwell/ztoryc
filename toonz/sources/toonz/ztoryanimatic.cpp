@@ -52,6 +52,8 @@
 #include "toonz/txshlevelcolumn.h"
 #include "toonz/fxdag.h"
 #include <thread>
+extern ToggleCommandHandler mainAudioToggle;
+#include "toonzqt/selectioncommandids.h"
 
 // Shared label column width — must match ZtoryAudioTrack::labelW (80px).
 // Used by ZtoryAnimaticRuler and ZtoryAnimaticTrack to align with audio tracks.
@@ -247,6 +249,7 @@ void ZtoryAnimaticController::onNativePlayingStatusChanged() {
 
   if (startSample > endSample) return;
 
+  if (!mainAudioToggle.getStatus()) return;
   mainXsh->play(st.getPointer(), startSample, endSample, false);
   m_nativeAudioPlaying = true;
 }
@@ -286,6 +289,7 @@ void ZtoryAnimaticController::onNativeFrameSwitched() {
   if (s0 >= totalSamples) return;
   if (s1 >= totalSamples) s1 = totalSamples - 1;
 
+  if (!mainAudioToggle.getStatus()) return;
   mainXsh->play(st.getPointer(), s0, s1, false);
 }
 
@@ -1971,7 +1975,7 @@ void ZtoryAnimaticViewer::onDrawFrame(
               stopFr = mr1 + 1;
           }
           TINT32 endSmp = std::min((TINT32)(stopFr * spf3), totalSmp - 1);
-          if (startSmp <= endSmp) {
+          if (startSmp <= endSmp && mainAudioToggle.getStatus()) {
             mainXsh2->play(m_sound, startSmp, endSmp, false);
             m_continuousPlay = true;
           }
@@ -2118,6 +2122,7 @@ void ZtoryAnimaticViewer::refreshAnimaticSound() {
 // no-op so it does not interrupt or replace the streaming buffer.
 void ZtoryAnimaticViewer::playAnimaticAudioFrame(int frame) {
   if (m_continuousPlay) return;   // audio already streaming — do nothing
+  if (!mainAudioToggle.getStatus()) return;  // audio toggle OFF
   if (!m_sound) return;
   if (m_first) {
     m_first           = false;
@@ -2220,6 +2225,7 @@ void ZtoryAnimaticViewer::onAnimaticPlayingStatusChanged(bool playing) {
   // TSoundOutputDeviceImp uses QAudioOutput with a 100 ms hardware buffer,
   // refilled every 50 ms via QAudioOutput::notify.  One call avoids the
   // per-frame m_buffer replacement that caused glitches in the old approach.
+  if (!mainAudioToggle.getStatus()) return;  // audio toggle OFF
   mainXsh->play(m_sound, startSample, endSample, false);
   m_continuousPlay = true;
 }
@@ -2275,7 +2281,26 @@ void ZtoryAnimaticViewer::restartAudioIfPlaying() {
 
   // play() overwrites the QAudioOutput buffer in-place — no stop/restart.
   // QAudioOutput continues streaming; new data replaces the old within ~100ms.
+  if (!mainAudioToggle.getStatus()) return;
   mainXsh->play(m_sound, startSample, endSample, false);
+}
+
+void ZtoryAnimaticViewer::stopAudio() {
+  ZtoryAnimaticController *ctrl = ZtoryAnimaticController::instance();
+  TXsheet *mainXsh = ctrl ? ctrl->mainXsheet() : nullptr;
+  if (mainXsh) mainXsh->stopScrub();
+  m_continuousPlay = false;
+  // Also stop controller-managed native audio (used inside sub-scenes)
+  if (ctrl) ctrl->stopNativeAudio();
+}
+
+void ZtoryAnimaticViewer::onAudioToggleChanged() {
+  if (!mainAudioToggle.getStatus()) return;  // audio already OFF — nothing to stop
+  // Audio toggled OFF — stop any active playback immediately
+  ZtoryAnimaticController *ctrl = ZtoryAnimaticController::instance();
+  TXsheet *mainXsh = ctrl ? ctrl->mainXsheet() : nullptr;
+  if (mainXsh) mainXsh->stopScrub();
+  m_continuousPlay = false;
 }
 
 void ZtoryAnimaticViewer::showEvent(QShowEvent *e) {
@@ -2308,6 +2333,8 @@ void ZtoryAnimaticViewer::showEvent(QShowEvent *e) {
           this, &ZtoryAnimaticViewer::updateAnimaticFrameRange);
   connect(app->getCurrentScene(), &TSceneHandle::sceneChanged,
           this, &ZtoryAnimaticViewer::updateAnimaticFrameMarkers);
+  connect(app->getCurrentScene(), &TSceneHandle::sceneChanged,
+          this, &ZtoryAnimaticViewer::onAudioToggleChanged);
 
   // ctrl frame handle: re-add the range-update connection, removing any
   // previous one first to avoid accumulation across show/hide cycles.

@@ -49,6 +49,8 @@
 #include "mainwindow.h"
 #include "ztoryanimatic.h"
 #include "sceneviewer.h"
+#include "toonzqt/selectioncommandids.h"
+extern ToggleCommandHandler mainAudioToggle;
 #include "xsheetdragtool.h"
 #include "ruler.h"
 #include "menubarcommandids.h"
@@ -339,6 +341,8 @@ void BaseViewerPanel::showEvent(QShowEvent *event) {
   */
   ret = ret && connect(xshHandle, SIGNAL(xsheetChanged()), this,
                        SLOT(onSceneChanged()));
+  ret = ret && connect(xshHandle, SIGNAL(xsheetSoundChanged()), this,
+                       SLOT(onXsheetSoundChanged()));
   ret = ret && connect(sceneHandle, SIGNAL(sceneSwitched()), this,
                        SLOT(onSceneChanged()));
   ret = ret && connect(sceneHandle, SIGNAL(sceneChanged()), this,
@@ -841,6 +845,14 @@ void BaseViewerPanel::onSceneChanged() {
 
 //-----------------------------------------------------------------------------
 
+void BaseViewerPanel::onXsheetSoundChanged() {
+  // Audio track added/removed/modified: rebuild m_sound so stale
+  // cached TSoundTrack pointers are never played back.
+  hasSoundtrack();
+}
+
+//-----------------------------------------------------------------------------
+
 void BaseViewerPanel::onSceneSwitched() {
   m_previewButton->setPressed(false);
   m_subcameraPreviewButton->setPressed(false);
@@ -866,7 +878,9 @@ void BaseViewerPanel::onFrameSwitched() {
   if (m_keyFrameButton->getCurrentFrame() != frameIndex)
     m_keyFrameButton->setCurrentFrame(frameIndex);
 
-  if (m_playing && m_playSound) {
+  // Respect the main-audio toggle (MI_ToggleMainAudio)
+  bool mainAudioEnabled = mainAudioToggle.getStatus();
+  if (m_playing && m_playSound && mainAudioEnabled) {
     if (m_first == true && hasSoundtrack()) {
       playAudioFrame(frameIndex);
     } else if (m_hasSoundtrack) {

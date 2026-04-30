@@ -19,7 +19,8 @@
     <separator/>
     <command>MI_Collapse</command> 
     <command>MI_ToggleXsheetBreadcrumbs</command>
-    <command>MI_ToggleEditInPlace</command>    
+    <command>MI_ToggleEditInPlace</command>
+    <command>MI_ToggleMainAudio</command>    
     
   </commandbar>
 

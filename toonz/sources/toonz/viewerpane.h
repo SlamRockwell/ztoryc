@@ -111,6 +111,7 @@ public slots:
   void changeWindowTitle();
   void updateFrameRange();
   void onSceneChanged();
+  void onXsheetSoundChanged();
   void onXshLevelSwitched(TXshLevel *);
   virtual void updateFrameMarkers();
   void onButtonPressed(FlipConsole::EGadget button);

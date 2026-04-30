@@ -95,6 +95,11 @@ private:
   ZtoryAnimaticViewer  *m_viewer = nullptr;
   // True while we are streaming main-xsheet audio on behalf of the native viewer.
   bool m_nativeAudioPlaying  = false;
+  void stopNativeAudio() {
+    TXsheet *xsh = mainXsheet();
+    if (xsh) xsh->stopScrub();
+    m_nativeAudioPlaying = false;
+  }
   // Guards against launching a second async build while one is already running.
   bool m_soundBuildPending   = false;
 };
@@ -370,6 +375,7 @@ class ZtoryAnimaticViewer : public BaseViewerPanel {
   Q_OBJECT
 public:
   ZtoryAnimaticViewer(QWidget *parent = nullptr);
+  void stopAudio();
   void updateShowHide() override {}
   void addShowHideContextMenu(QMenu *) override {}
   void checkOldVersionVisblePartsFlags(QSettings &) override {}
@@ -415,6 +421,7 @@ private slots:
   // Called when FlipConsole play starts: overrides m_sound built by base
   // onPlayingStatusChanged() (which reads from the wrong sub-scene xsheet).
   void onAnimaticPlayingStatusChanged(bool playing);
+  void onAudioToggleChanged();
 
 private:
   // Rebuilds m_sound from the main xsheet (not the current/sub-scene xsheet).

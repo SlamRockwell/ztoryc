@@ -93,6 +93,8 @@
 #include <QMainWindow>
 
 #include "sceneviewer.h"
+#include "toonzqt/selectioncommandids.h"
+#include "ztoryanimatic.h"
 
 TEnv::IntVar ShowSceneOverlay("ShowSceneOverlay", 1);
 
@@ -290,6 +292,11 @@ ToggleCommandHandler::ToggleCommandHandler(CommandId id, bool startStatus)
 
 void ToggleCommandHandler::execute() {
   m_status = !m_status;
+  // If audio toggle switched OFF, stop any active audio immediately
+  if (std::string(m_id) == MI_ToggleMainAudio && !m_status) {
+    ZtoryAnimaticViewer *v = ZtoryAnimaticController::instance()->viewer();
+    if (v) v->stopAudio();
+  }
   // emit sceneChanged WITHOUT dirty flag
   TApp::instance()->getCurrentScene()->notifySceneChanged(false);
 }
@@ -298,6 +305,7 @@ void ToggleCommandHandler::execute() {
 
 ToggleCommandHandler viewTableToggle(MI_ViewTable, false);
 ToggleCommandHandler editInPlaceToggle(MI_ToggleEditInPlace, false);
+ToggleCommandHandler mainAudioToggle(MI_ToggleMainAudio, true);
 ToggleCommandHandler fieldGuideToggle(MI_FieldGuide, false);
 ToggleCommandHandler safeAreaToggle(MI_SafeArea, false);
 ToggleCommandHandler rasterizePliToggle(MI_RasterizePli, false);

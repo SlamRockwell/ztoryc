@@ -178,6 +178,9 @@ void CommandBar::buildDefaultToolbar(CommandBar *toolbar) {
     QAction *editInPlace =
         CommandManager::instance()->getAction("MI_ToggleEditInPlace");
     toolbar->addAction(editInPlace);
+    QAction *mainAudio =
+        CommandManager::instance()->getAction("MI_ToggleMainAudio");
+    toolbar->addAction(mainAudio);
   }
 }
 
