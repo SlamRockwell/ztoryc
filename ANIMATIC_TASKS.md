@@ -464,6 +464,7 @@ alle sequence del progetto (sq01, sq02…).
 10. ~~**NEW Numerazione SQ/SH/P**~~ ✅ DONE 2026-04-25 — sistema completo Sequence/Simple: SQ default "01", SQ nascosto in Simple, resetOnSeqChange, config dialog
 11. ~~**Task 9**~~ ✅ DONE 2026-04-20 — Audio export con shot (fix compilazione + frame offset)
 12. **Task 11** — Viewer toggle (QStackedWidget)
+12b. **BUG Audio toggle in sub-scena** — toggle `MI_ToggleMainAudio` non ferma audio in tempo reale durante play in sub-scena (workaround: stop → toggle → play). Root cause: `TXsheet::scrub()` guard funziona ma il percorso `onNativePlayingStatusChanged` riparte lo streaming. Da investigare con Claude Code.
 13. **NEW Undo/Redo** — TUndoManager su tutte le operazioni CRUD shot (dopo ZtoryModel consolidato)
 14. **Task 13d** — Navigation tags (⚠️ design session prima)
 
