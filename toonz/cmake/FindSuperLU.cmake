@@ -1,10 +1,23 @@
 
 if(WITH_SYSTEM_SUPERLU)
-    # depend on CMake's defaults
-    set(_header_hints)
+    # Homebrew (Intel: /usr/local, Apple Silicon: /opt/homebrew)
+    if(DEFINED ENV{HOMEBREW_PREFIX})
+      set(_brew_prefix "$ENV{HOMEBREW_PREFIX}")
+    elseif(EXISTS /opt/homebrew/opt/superlu)
+      set(_brew_prefix "/opt/homebrew")
+    else()
+      set(_brew_prefix "/usr/local")
+    endif()
+    set(_header_hints
+        "${_brew_prefix}/opt/superlu/include"
+    )
     set(_header_suffixes
         superlu
         SuperLU
+        .
+    )
+    set(_lib_hints
+        "${_brew_prefix}/opt/superlu/lib"
     )
     set(_lib_suffixes)
 else()
@@ -34,9 +47,23 @@ find_path(
         ${_header_suffixes}
 )
 
+# Homebrew SuperLU 7+ installs headers to include/superlu/*.h. Only on Apple,
+# toonz/sources/CMakeLists.txt appends "/superlu" to SUPERLU_INCLUDE_DIR; find_path
+# must then yield the parent (e.g. .../include). Linux/BSD use SUPERLU_INCLUDE_DIR as-is.
+if(WITH_SYSTEM_SUPERLU AND SUPERLU_INCLUDE_DIR AND APPLE)
+    if(EXISTS "${SUPERLU_INCLUDE_DIR}/slu_Cnames.h")
+        get_filename_component(_superlu_include_leaf "${SUPERLU_INCLUDE_DIR}" NAME)
+        if(_superlu_include_leaf STREQUAL "superlu")
+            get_filename_component(SUPERLU_INCLUDE_DIR "${SUPERLU_INCLUDE_DIR}" DIRECTORY)
+        endif()
+    endif()
+endif()
+
 find_library(
     SUPERLU_LIBRARY
     NAMES
+        superlu
+        libsuperlu.dylib
         libsuperlu.so
         libsuperlu.a
         libsuperlu_4.1.a
@@ -64,6 +91,7 @@ mark_as_advanced(
     SUPERLU_INCLUDE_DIR
 )
 
+unset(_superlu_include_leaf)
 unset(_header_hints)
 unset(_header_suffixes)
 unset(_lib_hints)

@@ -8,12 +8,6 @@ jobs:
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
-      - name: Install Dependencies
-        run: |
-          ci-scripts\windows\tahoma-install.bat
-          choco install ccache
-          copy C:\ProgramData\chocolatey\lib\ccache\tools\ccache*\ccache.exe C:\ProgramData\chocolatey\bin\cl.exe
-          mkdir %LOCALAPPDATA%\ccache
       - name: Restore cache
         id: restore-cache
         uses: actions/cache/restore@v4
@@ -23,6 +17,21 @@ jobs:
           key: ${{ runner.os }}-refs/heads/master
           restore-keys: |
             ${{ runner.os }}-
+      - name: Restore external dependency cache
+        id: restore-deps-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            thirdparty/qt
+            C:\tools\opencv
+            C:\local\boost_1_87_0
+          key: ${{ runner.os }}-deps-${{ hashFiles('ci-scripts/windows/tahoma-install.bat', 'ci-scripts/windows/tahoma-build.bat') }}
+      - name: Install Dependencies
+        run: |
+          ci-scripts\windows\tahoma-install.bat
+          choco install ccache -y
+          copy C:\ProgramData\chocolatey\lib\ccache\tools\ccache*\ccache.exe C:\ProgramData\chocolatey\bin\cl.exe
+          mkdir %LOCALAPPDATA%\ccache
       - name: Get CanonSDK
         if: ${{ (github.repository_owner == 'tahoma2d' || github.repository_owner == 'manongjohn') && github.event_name == 'push' }}
         run: |
@@ -112,3 +121,12 @@ jobs:
           path: |
             ~/AppData/Local/ccache
           key: ${{ runner.os }}-${{ github.ref }}
+      - name: Save external dependency cache
+        if: ${{ steps.restore-deps-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            thirdparty/qt
+            C:\tools\opencv
+            C:\local\boost_1_87_0
+          key: ${{ runner.os }}-deps-${{ hashFiles('ci-scripts/windows/tahoma-install.bat', 'ci-scripts/windows/tahoma-build.bat') }}
