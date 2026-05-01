@@ -727,7 +727,7 @@
 		<file>Resources/tahoma2d_splash.svg</file>
 		<file>Resources/tahoma2d_about.png</file>
 		<file>Resources/tahoma2d_startup.svg</file>
-		<file alias="Resources/ztoryc_about.png">../../../../ztoryc_icon.png</file>
+		<file>Resources/ztoryc_about.png</file>
 		<file>Resources/stroke_select.png</file>
 		<file>Resources/tape.png</file>
 		<file>Resources/type_in.png</file>
