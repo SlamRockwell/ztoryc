@@ -1,9 +1,23 @@
 #!/bin/bash
+set -e
 # Leave one processor available for other processing if possible
 parallel=$(($(nproc) < 2 ? 1 : $(nproc) - 1))
-pushd thirdparty/tiff-4.2.0
-CFLAGS="-fPIC" CXXFLAGS="-fPIC" ./configure --disable-jbig --disable-webp && make -j "$parallel"
-popd
+_should_rebuild_tiff() {
+  if [ "${FORCE_TIFF_REBUILD:-0}" = "1" ]; then return 0; fi
+  if [ ! -d thirdparty/tiff-4.2.0/libtiff/.libs ]; then return 0; fi
+  if [ -z "$(find thirdparty/tiff-4.2.0/libtiff/.libs -maxdepth 1 -name 'libtiff.*' -print -quit 2>/dev/null)" ]; then
+    return 0
+  fi
+  return 1
+}
+if _should_rebuild_tiff; then
+  echo "TIFF: configuring and building"
+  pushd thirdparty/tiff-4.2.0
+  CFLAGS="-fPIC" CXXFLAGS="-fPIC" ./configure --disable-jbig --disable-webp && make -j "$parallel"
+  popd
+else
+  echo "TIFF: reuse existing libtiff/.libs — skipped configure/make"
+fi
 
 cd toonz
 

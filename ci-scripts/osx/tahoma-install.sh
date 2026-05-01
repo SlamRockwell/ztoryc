@@ -1,5 +1,10 @@
 #!/bin/bash
-brew update
+# Avoid 5–15+ minute meta-updates every CI run (brew formulae pins are unchanged in-tree).
+if [ "${GITHUB_ACTIONS:-}" != "true" ]; then
+  brew update
+else
+  echo "Skipping brew update on GitHub Actions (scripts pin versions)."
+fi
 # Remove symlink in order for latest python to install
 rm -f '/usr/local/bin/python3'
 rm -f '/usr/local/bin/python3.12'

@@ -6,6 +6,9 @@ on:
 jobs:
   macOS:
     runs-on: macos-15-intel
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+      HOMEBREW_NO_ANALYTICS: '1'
     steps:
       - uses: actions/checkout@v4
       - name: Setup cmake
@@ -14,6 +17,20 @@ jobs:
           cmake-version: '3.31.6'
       - name: Use cmake
         run: cmake --version
+      - name: Restore Homebrew downloads cache
+        id: brew-cache-restore
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/Library/Caches/Homebrew
+          key: ${{ runner.os }}-brew-${{ hashFiles('ci-scripts/osx/tahoma-install.sh') }}
+          restore-keys: |
+            ${{ runner.os }}-brew-
+      - name: Explain macOS CI hot vs cold paths
+        run: |
+          echo "Cold (deps cache miss): ffmpeg + opencv + libgphoto2 + TIFF (often ~1h+)."
+          echo "Hot (deps cache hit): skips those heavy native builds; restores thirdparty TIFF build + /usr/local tree."
+          echo "Every run still: brew installs (warm), cmake configure, full link of Ztoryc + packaging — not literally app-only;"
+          echo "with ccache + unchanged sources that phase is commonly ~minutes–low tens of minutes, not hours."
       - name: Restore cache
         id: restore-cache
         uses: actions/cache/restore@v4
@@ -38,7 +55,8 @@ jobs:
             thirdparty/ffmpeg
             thirdparty/opencv
             thirdparty/libgphoto2_src
-          key: ${{ runner.os }}-deps-${{ hashFiles('ci-scripts/osx/tahoma-build*.sh', 'ci-scripts/osx/tahoma-install.sh', 'toonz/cmake/FindSuperLU.cmake') }}
+            thirdparty/tiff-4.2.0
+          key: ${{ runner.os }}-deps-${{ hashFiles('ci-scripts/osx/tahoma-build*.sh', 'ci-scripts/osx/tahoma-install.sh', 'toonz/cmake/FindSuperLU.cmake', 'thirdparty/tiff-4.2.0/configure') }}
       - name: Install Dependencies
         run: |
           ci-scripts/osx/tahoma-install.sh
@@ -62,7 +80,7 @@ jobs:
       - name: Get 3rd Party Apps
         run: |
           ci-scripts/osx/tahoma-get3rdpartyapps.sh
-      - name: Build ffmpeg
+      - name: Build ffmpeg (skipped when deps cache hit)
         if: ${{ steps.restore-deps-cache.outputs.cache-hit != 'true' }}
         run: |
           export PATH="/usr/local/opt/ccache/libexec:$PATH"
@@ -167,4 +185,12 @@ jobs:
             thirdparty/ffmpeg
             thirdparty/opencv
             thirdparty/libgphoto2_src
-          key: ${{ runner.os }}-deps-${{ hashFiles('ci-scripts/osx/tahoma-build*.sh', 'ci-scripts/osx/tahoma-install.sh', 'toonz/cmake/FindSuperLU.cmake') }}
+            thirdparty/tiff-4.2.0
+          key: ${{ runner.os }}-deps-${{ hashFiles('ci-scripts/osx/tahoma-build*.sh', 'ci-scripts/osx/tahoma-install.sh', 'toonz/cmake/FindSuperLU.cmake', 'thirdparty/tiff-4.2.0/configure') }}
+
+      - name: Save Homebrew downloads cache
+        if: ${{ success() && steps.brew-cache-restore.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: ~/Library/Caches/Homebrew
+          key: ${{ runner.os }}-brew-${{ hashFiles('ci-scripts/osx/tahoma-install.sh') }}

@@ -49,7 +49,8 @@ jobs:
             thirdparty/opencv
             thirdparty/libmypaint/src
             thirdparty/libgphoto2_src
-          key: ${{ runner.os }}-${{ matrix.compiler }}-deps-${{ hashFiles('ci-scripts/linux/tahoma-build*.sh', 'ci-scripts/linux/tahoma-install.sh', 'toonz/cmake/FindSuperLU.cmake') }}
+            thirdparty/tiff-4.2.0
+          key: ${{ runner.os }}-${{ matrix.compiler }}-deps-${{ hashFiles('ci-scripts/linux/tahoma-build*.sh', 'ci-scripts/linux/tahoma-install.sh', 'toonz/cmake/FindSuperLU.cmake', 'thirdparty/tiff-4.2.0/configure') }}
       - name: Install Dependencies
         run: |
           ci-scripts/linux/tahoma-install.sh
@@ -183,4 +184,5 @@ jobs:
             thirdparty/opencv
             thirdparty/libmypaint/src
             thirdparty/libgphoto2_src
-          key: ${{ runner.os }}-${{ matrix.compiler }}-deps-${{ hashFiles('ci-scripts/linux/tahoma-build*.sh', 'ci-scripts/linux/tahoma-install.sh', 'toonz/cmake/FindSuperLU.cmake') }}
+            thirdparty/tiff-4.2.0
+          key: ${{ runner.os }}-${{ matrix.compiler }}-deps-${{ hashFiles('ci-scripts/linux/tahoma-build*.sh', 'ci-scripts/linux/tahoma-install.sh', 'toonz/cmake/FindSuperLU.cmake', 'thirdparty/tiff-4.2.0/configure') }}
