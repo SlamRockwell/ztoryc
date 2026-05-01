@@ -2810,6 +2810,9 @@ void StoryboardPanel::onExportAnimatic() {
   connect(btnBox, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
   mainLay->addWidget(btnBox);
 
+  // WindowModal blocks only the parent window, so the Output Settings popup
+  // (a separate top-level window) remains fully interactive.
+  dlg.setWindowModality(Qt::WindowModal);
   if (dlg.exec() != QDialog::Accepted) return;
 
   // ── Collect parameters ─────────────────────────────────���────────────────
