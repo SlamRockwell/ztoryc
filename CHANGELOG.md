@@ -6,6 +6,19 @@
 > Voci più vecchie di ~2 settimane → spostarle in `CHANGELOG_ARCHIVE.md`.
 
 ---
+## [2026-05-01b] — Fix testi Board persi al reload, cleanup Export Animatic
+### Fixed
+- **BUG critico: testi dialog/action/notes persi al salvataggio** (`storyboardpanel.cpp`):
+  aggiunta `syncWidgetsToData()` chiamata all'inizio di `saveZtoryc()`. Il handler
+  `dataChanged` aggiornava solo `shotLabel`, mai `data.panels[pi].dialog/action/notes`,
+  quindi il salvataggio XML scriveva dati stale. Ora prima del write tutti i widget
+  vengono copiati nel data model.
+### Modified
+- **Export Animatic dialog**: rimosso pulsante "Output Settings…" (bloccava l'UI con
+  `ApplicationModal`). Sostituito con label read-only che mostra formato/fps/risoluzione
+  correnti + nota "change via Render > Output Settings".
+
+---
 ## [2026-05-01] — Branding Ztoryc, fix crash panel, fix reorder shot
 ### Added
 - `DockWidget::setEmbedded()` in `docklayout.h`: setta `m_floating=false`,
