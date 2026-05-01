@@ -615,38 +615,46 @@ if(BUILD_ENV_APPLE)
 endif()
 
 # copy utility executables onto the directory after build
+# On macOS, CMAKE_BINARY_DIR contains per-target subdirs (e.g. build/tcomposer/), so copying
+# $<TARGET_FILE:tcomposer> onto CMAKE_BINARY_DIR would require a file named "tcomposer" next
+# to the "tcomposer/" directory — CMake fails. Put helpers next to the bundle executable instead.
 if(LZODRIVER_FOUND)
-    add_custom_command(TARGET Ztoryc POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:lzocompress> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} DEPENDS lzocompress)
-    add_custom_command(TARGET Ztoryc POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:lzodecompress> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} DEPENDS lzodecompress)
+    if(BUILD_ENV_APPLE)
+        add_custom_command(TARGET Ztoryc POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:lzocompress> $<TARGET_FILE_DIR:Ztoryc> DEPENDS lzocompress)
+        add_custom_command(TARGET Ztoryc POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:lzodecompress> $<TARGET_FILE_DIR:Ztoryc> DEPENDS lzodecompress)
+    else()
+        add_custom_command(TARGET Ztoryc POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:lzocompress> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} DEPENDS lzocompress)
+        add_custom_command(TARGET Ztoryc POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:lzodecompress> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} DEPENDS lzodecompress)
+    endif()
 endif()
 
 if(BUILD_ENV_APPLE)
     get_target_property(loc Ztoryc MACOSX_BUNDLE_NAME)
     message(" ==> App Bundle: " ${loc})
-    message(" ==> Mach-o: " ${bin})
+    message(" ==> Helpers copy into Ztoryc.app/Contents/MacOS (avoid CMAKE_BINARY_DIR / tcomposer/ name clash)")
     foreach(lib ${EXTRA_LIBS})
-        message(" copy:" ${lib} "==>" ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
-        add_custom_command(TARGET Ztoryc POST_BUILD COMMAND cp ${lib} ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+        message(" copy:" ${lib})
+        add_custom_command(TARGET Ztoryc POST_BUILD COMMAND cp ${lib} $<TARGET_FILE_DIR:Ztoryc>)
     endforeach()
 
-    add_custom_command(TARGET Ztoryc POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:tcomposer> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} DEPENDS tcomposer)
-    add_custom_command(TARGET Ztoryc POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:tcleanup> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} DEPENDS tcleanup)
-    add_custom_command(TARGET Ztoryc POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:tconverter> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} DEPENDS tconverter)
-    add_custom_command(TARGET Ztoryc POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:tfarmcontroller> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} DEPENDS tfarmcontroller)
-    add_custom_command(TARGET Ztoryc POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:tfarmserver> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} DEPENDS tfarmserver)
+    add_custom_command(TARGET Ztoryc POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:tcomposer> $<TARGET_FILE_DIR:Ztoryc> DEPENDS tcomposer)
+    add_custom_command(TARGET Ztoryc POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:tcleanup> $<TARGET_FILE_DIR:Ztoryc> DEPENDS tcleanup)
+    add_custom_command(TARGET Ztoryc POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:tconverter> $<TARGET_FILE_DIR:Ztoryc> DEPENDS tconverter)
+    add_custom_command(TARGET Ztoryc POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:tfarmcontroller> $<TARGET_FILE_DIR:Ztoryc> DEPENDS tfarmcontroller)
+    add_custom_command(TARGET Ztoryc POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:tfarmserver> $<TARGET_FILE_DIR:Ztoryc> DEPENDS tfarmserver)
 
-    add_custom_command(TARGET Ztoryc POST_BUILD COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/../Resources)
-    add_custom_command(TARGET Ztoryc POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/../install/SystemVar.ini ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/../Resources)
+    add_custom_command(TARGET Ztoryc POST_BUILD COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:Ztoryc>/../Resources)
+    add_custom_command(TARGET Ztoryc POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/../install/SystemVar.ini $<TARGET_FILE_DIR:Ztoryc>/../Resources)
 
-    add_custom_command(TARGET Ztoryc POST_BUILD COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/../../../qss)
+    add_custom_command(TARGET Ztoryc POST_BUILD COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/qss)
 
     add_custom_command(TARGET Ztoryc
         POST_BUILD COMMAND
-        ${CMAKE_INSTALL_NAME_TOOL} -add_rpath @executable_path/. ${bin} || true
+        ${CMAKE_INSTALL_NAME_TOOL} -add_rpath @executable_path/. $<TARGET_FILE:Ztoryc> || true
     )
     add_custom_command(TARGET Ztoryc
         POST_BUILD COMMAND
-        ${CMAKE_INSTALL_NAME_TOOL} -add_rpath ${CMAKE_INSTALL_RPATH} ${bin} || true
+        ${CMAKE_INSTALL_NAME_TOOL} -add_rpath ${CMAKE_INSTALL_RPATH} $<TARGET_FILE:Ztoryc> || true
     )
 
 elseif(BUILD_ENV_UNIXLIKE AND BUILD_TARGET_WIN)
