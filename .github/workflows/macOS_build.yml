@@ -40,23 +40,55 @@ jobs:
           key: ${{ runner.os }}-refs/heads/master
           restore-keys: |
             ${{ runner.os }}-
-      - name: Restore external dependency cache
-        id: restore-deps-cache
+      - name: Restore ffmpeg dependency cache
+        id: restore-ffmpeg-cache
         uses: actions/cache/restore@v4
         with:
           path: |
-            /usr/local/lib
-            /usr/local/include
-            /usr/local/lib/pkgconfig
             /usr/local/bin/ffmpeg
             /usr/local/bin/ffprobe
+            /usr/local/lib/libav*.dylib
+            /usr/local/lib/libsw*.dylib
+            /usr/local/lib/libpostproc*.dylib
+            /usr/local/lib/pkgconfig/libav*.pc
+            /usr/local/lib/pkgconfig/libsw*.pc
+            /usr/local/lib/pkgconfig/libpostproc.pc
             thirdparty/aom
             thirdparty/dav1d
             thirdparty/ffmpeg
+          key: ${{ runner.os }}-ffmpeg-${{ hashFiles('ci-scripts/osx/tahoma-buildffmpeg.sh', 'ci-scripts/osx/tahoma-install.sh') }}
+
+      - name: Restore OpenCV dependency cache
+        id: restore-opencv-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            /usr/local/lib/libopencv*.dylib
+            /usr/local/include/opencv4
+            /usr/local/lib/pkgconfig/opencv4.pc
             thirdparty/opencv
+          key: ${{ runner.os }}-opencv-${{ hashFiles('ci-scripts/osx/tahoma-buildopencv.sh', 'ci-scripts/osx/tahoma-install.sh') }}
+
+      - name: Restore libgphoto2 dependency cache
+        id: restore-gphoto-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            /usr/local/lib/libgphoto2*.dylib
+            /usr/local/lib/libgphoto2
+            /usr/local/lib/libgphoto2_port
+            /usr/local/include/gphoto2
+            /usr/local/lib/pkgconfig/libgphoto2*.pc
             thirdparty/libgphoto2_src
+          key: ${{ runner.os }}-gphoto-${{ hashFiles('ci-scripts/osx/tahoma-buildlibgphoto2.sh', 'ci-scripts/osx/tahoma-install.sh') }}
+
+      - name: Restore TIFF build cache
+        id: restore-tiff-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
             thirdparty/tiff-4.2.0
-          key: ${{ runner.os }}-deps-${{ hashFiles('ci-scripts/osx/tahoma-build*.sh', 'ci-scripts/osx/tahoma-install.sh', 'toonz/cmake/FindSuperLU.cmake', 'thirdparty/tiff-4.2.0/configure') }}
+          key: ${{ runner.os }}-tiff-${{ hashFiles('ci-scripts/osx/tahoma-build.sh', 'thirdparty/tiff-4.2.0/configure') }}
       - name: Install Dependencies
         run: |
           ci-scripts/osx/tahoma-install.sh
@@ -80,18 +112,18 @@ jobs:
       - name: Get 3rd Party Apps
         run: |
           ci-scripts/osx/tahoma-get3rdpartyapps.sh
-      - name: Build ffmpeg (skipped when deps cache hit)
-        if: ${{ steps.restore-deps-cache.outputs.cache-hit != 'true' }}
+      - name: Build ffmpeg (skipped when ffmpeg cache hit)
+        if: ${{ steps.restore-ffmpeg-cache.outputs.cache-hit != 'true' }}
         run: |
           export PATH="/usr/local/opt/ccache/libexec:$PATH"
           ci-scripts/osx/tahoma-buildffmpeg.sh
-      - name: Build OpenCV
-        if: ${{ steps.restore-deps-cache.outputs.cache-hit != 'true' }}
+      - name: Build OpenCV (skipped when OpenCV cache hit)
+        if: ${{ steps.restore-opencv-cache.outputs.cache-hit != 'true' }}
         run: |
           export PATH="/usr/local/opt/ccache/libexec:$PATH"
           ci-scripts/osx/tahoma-buildopencv.sh
-      - name: Build libgphoto2
-        if: ${{ steps.restore-deps-cache.outputs.cache-hit != 'true' }}
+      - name: Build libgphoto2 (skipped when libgphoto2 cache hit)
+        if: ${{ steps.restore-gphoto-cache.outputs.cache-hit != 'true' }}
         run: |
           export PATH="/usr/local/opt/ccache/libexec:$PATH"
           ci-scripts/osx/tahoma-buildlibgphoto2.sh
@@ -170,23 +202,55 @@ jobs:
           path: |
             /Users/runner/.ccache
           key: ${{ runner.os }}-${{ github.ref }}
-      - name: Save external dependency cache
-        if: ${{ steps.restore-deps-cache.outputs.cache-hit != 'true' }}
+      - name: Save ffmpeg dependency cache
+        if: ${{ steps.restore-ffmpeg-cache.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v4
         with:
           path: |
-            /usr/local/lib
-            /usr/local/include
-            /usr/local/lib/pkgconfig
             /usr/local/bin/ffmpeg
             /usr/local/bin/ffprobe
+            /usr/local/lib/libav*.dylib
+            /usr/local/lib/libsw*.dylib
+            /usr/local/lib/libpostproc*.dylib
+            /usr/local/lib/pkgconfig/libav*.pc
+            /usr/local/lib/pkgconfig/libsw*.pc
+            /usr/local/lib/pkgconfig/libpostproc.pc
             thirdparty/aom
             thirdparty/dav1d
             thirdparty/ffmpeg
+          key: ${{ runner.os }}-ffmpeg-${{ hashFiles('ci-scripts/osx/tahoma-buildffmpeg.sh', 'ci-scripts/osx/tahoma-install.sh') }}
+
+      - name: Save OpenCV dependency cache
+        if: ${{ steps.restore-opencv-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            /usr/local/lib/libopencv*.dylib
+            /usr/local/include/opencv4
+            /usr/local/lib/pkgconfig/opencv4.pc
             thirdparty/opencv
+          key: ${{ runner.os }}-opencv-${{ hashFiles('ci-scripts/osx/tahoma-buildopencv.sh', 'ci-scripts/osx/tahoma-install.sh') }}
+
+      - name: Save libgphoto2 dependency cache
+        if: ${{ steps.restore-gphoto-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            /usr/local/lib/libgphoto2*.dylib
+            /usr/local/lib/libgphoto2
+            /usr/local/lib/libgphoto2_port
+            /usr/local/include/gphoto2
+            /usr/local/lib/pkgconfig/libgphoto2*.pc
             thirdparty/libgphoto2_src
+          key: ${{ runner.os }}-gphoto-${{ hashFiles('ci-scripts/osx/tahoma-buildlibgphoto2.sh', 'ci-scripts/osx/tahoma-install.sh') }}
+
+      - name: Save TIFF build cache
+        if: ${{ steps.restore-tiff-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: |
             thirdparty/tiff-4.2.0
-          key: ${{ runner.os }}-deps-${{ hashFiles('ci-scripts/osx/tahoma-build*.sh', 'ci-scripts/osx/tahoma-install.sh', 'toonz/cmake/FindSuperLU.cmake', 'thirdparty/tiff-4.2.0/configure') }}
+          key: ${{ runner.os }}-tiff-${{ hashFiles('ci-scripts/osx/tahoma-build.sh', 'thirdparty/tiff-4.2.0/configure') }}
 
       - name: Save Homebrew downloads cache
         if: ${{ success() && steps.brew-cache-restore.outputs.cache-hit != 'true' }}
