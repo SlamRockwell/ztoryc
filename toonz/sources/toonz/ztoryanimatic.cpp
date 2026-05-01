@@ -59,6 +59,7 @@ extern ToggleCommandHandler mainAudioToggle;
 #include "pane.h"
 #include "mainwindow.h"
 #include "storyboardpanel.h"
+#include "tundo.h"
 #include "tpanels.h"
 #include "ztoryscriptpanel.h"
 #include "filebrowser.h"
@@ -68,6 +69,15 @@ extern ToggleCommandHandler mainAudioToggle;
 // Shared label column width — must match ZtoryAudioTrack::labelW (80px).
 // Used by ZtoryAnimaticRuler and ZtoryAnimaticTrack to align with audio tracks.
 static constexpr int kLabelW = 80;
+
+// Find the live StoryboardPanel instance for undo/redo from the Animatic.
+// Searches the whole widget tree since the Board can be embedded or floating.
+static StoryboardPanel *findBoardPanel() {
+  for (QWidget *w : QApplication::allWidgets()) {
+    if (auto *b = qobject_cast<StoryboardPanel *>(w)) return b;
+  }
+  return nullptr;
+}
 
 
 // ---- ZtoryAnimaticController ----
@@ -3352,6 +3362,11 @@ void ZtoryAnimaticPanel::onCutShots() {
   if (!ZtoryModel::assertMainXsheet(false)) return;
   const std::set<int> &sel = m_track->selectedCols();
   if (sel.empty()) return;
+
+  StoryboardPanel *board = findBoardPanel();
+  std::vector<ZtoryShotSnap> before;
+  if (board) before = board->captureSnapshot();
+
   ToonzScene *scene = TApp::instance()->getCurrentScene()->getScene();
   if (scene)
     while (scene->getChildStack()->getAncestorCount() > 0)
@@ -3374,12 +3389,20 @@ void ZtoryAnimaticPanel::onCutShots() {
     clip.push_back(ce);
   }
   ZtoryModel::instance()->setSharedClip(std::move(clip));
-  for (int i = (int)cols.size()-1; i >= 0; i--)
-    ColumnCmd::deleteColumn(cols[i]);
+  for (int i = (int)cols.size()-1; i >= 0; i--) {
+    std::set<int> cs; cs.insert(cols[i]);
+    ColumnCmd::deleteColumns(cs, false, true);  // withoutUndo=true
+  }
   xsh->updateFrameCount();
   ZtoryModel::instance()->resequenceXsheet();
   refreshFromScene();
   m_track->setFocus(Qt::OtherFocusReason);
+
+  if (board) {
+    auto after = board->captureSnapshot();
+    TUndoManager::manager()->add(
+        new UndoBoardState(board, tr("Cut Shot"), std::move(before), std::move(after)));
+  }
 }
 
 // Helper used by both Animatic and Board paste (shared clipboard format).
@@ -3423,6 +3446,11 @@ void ZtoryAnimaticPanel::onPasteShots() {
   const auto &clip = ZtoryModel::instance()->sharedClip();
   if (clip.empty()) return;
   if (!ZtoryModel::assertMainXsheet(false)) return;
+
+  StoryboardPanel *board = findBoardPanel();
+  std::vector<ZtoryShotSnap> before;
+  if (board) before = board->captureSnapshot();
+
   ToonzScene *scene = TApp::instance()->getCurrentScene()->getScene();
   if (scene)
     while (scene->getChildStack()->getAncestorCount() > 0)
@@ -3434,27 +3462,46 @@ void ZtoryAnimaticPanel::onPasteShots() {
   xsh->updateFrameCount();
   ZtoryModel::instance()->resequenceXsheet();
   refreshFromScene();
-  // Cut/clone are one-shot; copy stays for repeated paste
   auto newClip = clip;
   newClip.erase(std::remove_if(newClip.begin(), newClip.end(),
                 [](const ZtoryClipEntry &e){ return e.isCut || e.isClone; }),
                 newClip.end());
   ZtoryModel::instance()->setSharedClip(std::move(newClip));
   m_track->setFocus(Qt::OtherFocusReason);
+
+  if (board) {
+    auto after = board->captureSnapshot();
+    TUndoManager::manager()->add(
+        new UndoBoardState(board, tr("Paste Shot"), std::move(before), std::move(after)));
+  }
 }
 
 void ZtoryAnimaticPanel::onDeleteShots() {
   const std::set<int> &sel = m_track->selectedCols();
   if (sel.empty()) return;
   if (!ZtoryModel::assertMainXsheet(false)) return;
+
+  StoryboardPanel *board = findBoardPanel();
+  std::vector<ZtoryShotSnap> before;
+  if (board) before = board->captureSnapshot();
+
   TXsheet *xsh = TApp::instance()->getCurrentXsheet()->getXsheet();
   std::vector<int> cols(sel.begin(), sel.end());
   std::sort(cols.rbegin(), cols.rend());
-  for (int col : cols) ColumnCmd::deleteColumn(col);
+  for (int col : cols) {
+    std::set<int> cs; cs.insert(col);
+    ColumnCmd::deleteColumns(cs, false, true);  // withoutUndo=true
+  }
   xsh->updateFrameCount();
   ZtoryModel::instance()->resequenceXsheet();
   refreshFromScene();
   m_track->setFocus(Qt::OtherFocusReason);
+
+  if (board) {
+    auto after = board->captureSnapshot();
+    TUndoManager::manager()->add(
+        new UndoBoardState(board, tr("Delete Shot"), std::move(before), std::move(after)));
+  }
 }
 
 // Cmd+D: puts selected shots in clipboard as clones; Cmd+V inserts them.
@@ -3828,6 +3875,11 @@ void mergeChildXsheetContent(TXshChildLevel *dstCl,
 
 void ZtoryAnimaticPanel::onMergeShots() {
   if (!ZtoryModel::assertMainXsheet(/*showWarning=*/true)) return;
+
+  StoryboardPanel *board = findBoardPanel();
+  std::vector<ZtoryShotSnap> before;
+  if (board) before = board->captureSnapshot();
+
   // Use own selection if >= 2; otherwise fall back to shared selection
   // (set by Board when the user selected shots there).
   const std::set<int> *selPtr = &m_track->selectedCols();
@@ -3906,25 +3958,21 @@ void ZtoryAnimaticPanel::onMergeShots() {
     appendAt += duration;
   }
 
-  // Delete source columns in reverse order (skip first = destination).
-  // Reverse order keeps lower column indices stable across iterations.
-  // Do NOT emit shotRemovedAt here — the xsheet is in intermediate state
-  // (dst column cells overlap with still-present src columns). Emitting here
-  // would trigger onShotRemovedAt → renumberAll → updateColumnName →
-  // notifyXsheetChanged → Animatic refreshes mid-merge → visual overlap.
-  for (int i = (int)sortedCols.size() - 1; i >= 1; i--)
-    ColumnCmd::deleteColumn(sortedCols[i]);
+  for (int i = (int)sortedCols.size() - 1; i >= 1; i--) {
+    std::set<int> cs; cs.insert(sortedCols[i]);
+    ColumnCmd::deleteColumns(cs, false, true);  // withoutUndo=true
+  }
 
   xsh->updateFrameCount();
   app->getCurrentXsheet()->notifyXsheetChanged();
   ZtoryModel::instance()->resequenceXsheet();
   m_track->refreshFromScene();
 
-  // Board sync: resequenceXsheet() above already emitted modelReset() →
-  // StoryboardPanel::onModelResequenced() detects the shot-count change
-  // (via xsheet ground-truth count) and calls refreshFromScene() itself.
-  // Do NOT emit shotRemovedAt() here: it would cause a double-removal on the
-  // Board when onModelResequenced() already triggered refreshFromScene().
+  if (board) {
+    auto after = board->captureSnapshot();
+    TUndoManager::manager()->add(
+        new UndoBoardState(board, tr("Merge Shots"), std::move(before), std::move(after)));
+  }
 }
 
 // ── Board sync contract ───────────────────────────────────────────────────────
@@ -3946,6 +3994,10 @@ void ZtoryAnimaticPanel::onAddShot() {
   if (!scene) return;
   TXsheet *xsh = scene->getChildStack()->getTopXsheet();
   if (!xsh) return;
+
+  StoryboardPanel *board = findBoardPanel();
+  std::vector<ZtoryShotSnap> before;
+  if (board) before = board->captureSnapshot();
 
   // Insert after the rightmost selected shot, or append at the end
   int insertAt = xsh->getColumnCount();
@@ -3993,10 +4045,20 @@ void ZtoryAnimaticPanel::onAddShot() {
   m_track->refreshFromScene();
   // Board syncs via resequenceXsheet() → modelReset() → onModelResequenced()
   // (xsheet count check). No shotAdded() needed — it would cause double-insert.
+
+  if (board) {
+    auto after = board->captureSnapshot();
+    TUndoManager::manager()->add(
+        new UndoBoardState(board, tr("Add Shot"), std::move(before), std::move(after)));
+  }
 }
 
 void ZtoryAnimaticPanel::onMergeWithNext(int col) {
   if (!ZtoryModel::assertMainXsheet(/*showWarning=*/true)) return;
+
+  StoryboardPanel *board = findBoardPanel();
+  std::vector<ZtoryShotSnap> before;
+  if (board) before = board->captureSnapshot();
 
   TApp *app = TApp::instance();
   ToonzScene *scene = app->getCurrentScene()->getScene();
@@ -4073,20 +4135,29 @@ void ZtoryAnimaticPanel::onMergeWithNext(int col) {
   for (int r = 0; r < duration; r++)
     xsh->setCell(appendAt + r, col, TXshCell(dstCl, TFrameId(++lastFrameNum)));
 
-  ColumnCmd::deleteColumn(nextCol);
+  { std::set<int> cs; cs.insert(nextCol); ColumnCmd::deleteColumns(cs, false, true); }
 
   xsh->updateFrameCount();
   app->getCurrentXsheet()->notifyXsheetChanged();
   ZtoryModel::instance()->resequenceXsheet();
   m_track->refreshFromScene();
-  // Board syncs via resequenceXsheet() → modelReset() → onModelResequenced()
-  // (xsheet count check). No shotRemovedAt() needed — would cause double-removal.
+
+  if (board) {
+    auto after = board->captureSnapshot();
+    TUndoManager::manager()->add(
+        new UndoBoardState(board, tr("Merge with Next"), std::move(before), std::move(after)));
+  }
 }
 
 // Helper: log column range to debug file
 
 void ZtoryAnimaticPanel::onRazorRequested(int col, int splitFrame) {
   if (!ZtoryModel::assertMainXsheet(/*showWarning=*/true)) return;
+
+  StoryboardPanel *board = findBoardPanel();
+  std::vector<ZtoryShotSnap> before;
+  if (board) before = board->captureSnapshot();
+
   TApp *app = TApp::instance();
   ToonzScene *scene = app->getCurrentScene()->getScene();
   if (!scene) return;
@@ -4128,6 +4199,7 @@ void ZtoryAnimaticPanel::onRazorRequested(int col, int splitFrame) {
 
   // ── Step 3: Clone ──────────────────────────────────────────────────────────
   ColumnCmd::cloneChild(col);
+  TUndoManager::manager()->popUndo(1);  // strip CloneChildUndo: our UndoBoardState covers this
   int newCol = col + 1;
 
   // Grab clone's child level.
@@ -4175,9 +4247,12 @@ void ZtoryAnimaticPanel::onRazorRequested(int col, int splitFrame) {
 
   m_track->refreshFromScene();
   refreshAudioTracks();
-  // Board syncs via resequenceXsheet() → modelReset() → onModelResequenced()
-  // (xsheet count check). No shotAdded() needed — it would cause double-insert
-  // because onModelResequenced already called refreshFromScene() on the Board.
+
+  if (board) {
+    auto after = board->captureSnapshot();
+    TUndoManager::manager()->add(
+        new UndoBoardState(board, tr("Razor"), std::move(before), std::move(after)));
+  }
 }
 
 void ZtoryAnimaticPanel::onAudioRazorRequested(int col, int frame) {
@@ -4257,6 +4332,10 @@ void ZtoryAnimaticPanel::onSegmentDroppedOutside(int srcCol, int origR0,
 }
 
 void ZtoryAnimaticPanel::onShotDurationChanged(int col, int newF1) {
+  StoryboardPanel *board = findBoardPanel();
+  std::vector<ZtoryShotSnap> before;
+  if (board) before = board->captureSnapshot();
+
   int newDuration = newF1 + 1;
   TApp *app = TApp::instance();
   ToonzScene *scene = app->getCurrentScene()->getScene();
@@ -4328,6 +4407,13 @@ void ZtoryAnimaticPanel::onShotDurationChanged(int col, int newF1) {
   }
 
   m_track->refreshFromScene();
+
+  if (board) {
+    auto after = board->captureSnapshot();
+    TUndoManager::manager()->add(
+        new UndoBoardState(board, tr("Resize Shot Duration"),
+                           std::move(before), std::move(after)));
+  }
 }
 
 void ZtoryAnimaticPanel::resequenceXsheet() {

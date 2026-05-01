@@ -1,5 +1,6 @@
 #include "storyboardpanel.h"
 
+#include "tundo.h"
 #include "tapp.h"
 #include "toonz/toonzscene.h"
 #include "toonz/txsheet.h"
@@ -644,6 +645,11 @@ StoryboardPanel::StoryboardPanel(QWidget *parent)
   setWidget(main);
 
   connect(m_addShotButton, &QToolButton::clicked, this, &StoryboardPanel::onAddShot);
+  m_durationCommitTimer = new QTimer(this);
+  m_durationCommitTimer->setSingleShot(true);
+  m_durationCommitTimer->setInterval(600);
+  connect(m_durationCommitTimer, &QTimer::timeout, this, &StoryboardPanel::commitDurationUndo);
+
   m_panelDetectTimer = new QTimer(this);
   m_panelDetectTimer->setSingleShot(true);
   m_panelDetectTimer->setInterval(1000);
@@ -713,6 +719,13 @@ StoryboardPanel::StoryboardPanel(QWidget *parent)
                this, nullptr);
     connect(TApp::instance()->getCurrentXsheet(), &TXsheetHandle::xsheetChanged,
             this, &StoryboardPanel::onXsheetChanged);
+    // While inside a sub-scene, each xsheet change (drawing, erasing) restarts
+    // the detect timer so the Board thumbnail stays in sync without flooding renders.
+    ToonzScene *sc = TApp::instance()->getCurrentScene()->getScene();
+    if (sc && sc->getChildStack()->getAncestorCount() > 0) {
+      connect(TApp::instance()->getCurrentXsheet(), &TXsheetHandle::xsheetChanged,
+              this, [this](){ m_panelDetectTimer->start(); });
+    }
     // Refresh automatico thumbnail
     ToonzScene *scene = TApp::instance()->getCurrentScene()->getScene();
     if (!scene) return;
@@ -963,9 +976,10 @@ void StoryboardPanel::updatePreview(int shotIdx, int panelIdx) {
   if (not scene) return;
   TXsheet *xsh = scene->getChildStack()->getTopXsheet();
   if (not xsh) return;
+  int col = shot.data.xsheetColumn;
   TXshChildLevel *cl = nullptr;
   for (int r = 0; r <= xsh->getFrameCount(); r++) {
-    TXshCell cell = xsh->getCell(r, shotIdx);
+    TXshCell cell = xsh->getCell(r, col);
     if (not cell.isEmpty() && cell.m_level && cell.m_level->getChildLevel()) {
       cl = cell.m_level->getChildLevel();
       break;
@@ -1358,6 +1372,7 @@ void StoryboardPanel::onModelResequenced() {
 
 void StoryboardPanel::onMergeShots() {
   if (!ZtoryModel::assertMainXsheet(true)) return;
+  auto before = captureSnapshot();
 
   TApp *app = TApp::instance();
   ToonzScene *scene = app->getCurrentScene()->getScene();
@@ -1433,8 +1448,10 @@ void StoryboardPanel::onMergeShots() {
   }
 
   // Delete source columns in reverse order to keep lower indices stable
-  for (int i = (int)sortedCols.size() - 1; i >= 1; i--)
-    ColumnCmd::deleteColumn(sortedCols[i]);
+  for (int i = (int)sortedCols.size() - 1; i >= 1; i--) {
+    std::set<int> cs; cs.insert(sortedCols[i]);
+    ColumnCmd::deleteColumns(cs, false, true);  // withoutUndo=true
+  }
 
   xsh->updateFrameCount();
   app->getCurrentXsheet()->notifyXsheetChanged();
@@ -1443,15 +1460,14 @@ void StoryboardPanel::onMergeShots() {
   m_selectedIndices.clear();
   m_selectedShotIndex = -1;
 
-  // Board syncs via resequenceXsheet() → modelReset() → onModelResequenced() above.
-  // m_updating=true prevents THIS Board instance from also processing the signal
-  // via onShotRemovedAt() (which would cause a double-removal now that
-  // onModelResequenced uses the reliable xsheet count and calls refreshFromScene).
-  // Other Board instances (if any) still receive and process shotRemovedAt normally.
   m_updating = true;
   for (int i = (int)sortedCols.size() - 1; i >= 1; i--)
     emit ZtoryModel::instance()->shotRemovedAt(sortedCols[i]);
   m_updating = false;
+
+  auto after = captureSnapshot();
+  TUndoManager::manager()->add(
+      new UndoBoardState(this, tr("Merge Shots"), std::move(before), std::move(after)));
 }
 
 void StoryboardPanel::onShotInserted(int col) {
@@ -1561,7 +1577,10 @@ void StoryboardPanel::onXsheetChanged() {
 
 void StoryboardPanel::showEvent(QShowEvent *e) {
   TPanel::showEvent(e);
-  if (m_shots.empty()) refreshFromScene();
+  if (m_shots.empty())
+    refreshFromScene();
+  else
+    QTimer::singleShot(200, this, &StoryboardPanel::onRefreshPreviews);
 }
 
 void StoryboardPanel::refreshFromScene() {
@@ -1917,6 +1936,8 @@ static void pasteSharedClipToBoard(const std::vector<ZtoryClipEntry> &clip,
 }
 
 void StoryboardPanel::onPasteShot() {
+  auto before = captureSnapshot();
+
   // Shared clipboard (written by both Board and Animatic) always has priority:
   // it reflects the most recent copy/cut/clone regardless of which panel did it.
   // Local m_clipboard is used only when shared is empty (e.g. first launch).
@@ -1944,6 +1965,11 @@ void StoryboardPanel::onPasteShot() {
     }
     resequenceXsheet();
     refreshFromScene();
+    {
+      auto after = captureSnapshot();
+      TUndoManager::manager()->add(
+          new UndoBoardState(this, tr("Paste Shot"), std::move(before), std::move(after)));
+    }
     return;
   }
   // Shared clip is empty — fall back to local m_clipboard (legacy path).
@@ -2054,7 +2080,7 @@ void StoryboardPanel::onPasteShot() {
           break;
         }
       }
-      ColumnCmd::deleteColumn(col);
+      { std::set<int> cs; cs.insert(col); ColumnCmd::deleteColumns(cs, false, true); }
       emit ZtoryModel::instance()->shotRemovedAt(col);  // notify other Board instances
     }
     xsh2->updateFrameCount();
@@ -2068,13 +2094,129 @@ void StoryboardPanel::onPasteShot() {
   resequenceXsheet();
   rebuildGrid();
   saveZtoryc();
+
+  auto after = captureSnapshot();
+  TUndoManager::manager()->add(
+      new UndoBoardState(this, tr("Paste Shot"), std::move(before), std::move(after)));
 }
+
+// ── Undo/Redo snapshot helpers ────────────────────────────────────────────────
+
+std::vector<ZtoryShotSnap> StoryboardPanel::captureSnapshot() {
+  syncWidgetsToData();
+  TXsheet *xsh = TApp::instance()->getCurrentXsheet()->getXsheet();
+  std::vector<ZtoryShotSnap> snap;
+  snap.reserve(m_shots.size());
+  for (const Shot &shot : m_shots) {
+    ZtoryShotSnap s;
+    s.data     = shot.data;
+    s.duration = 0;
+    int col    = shot.data.xsheetColumn;
+    if (xsh) {
+      int frameCount = xsh->getFrameCount();
+      for (int r = 0; r <= frameCount; r++) {
+        TXshCell cell = xsh->getCell(r, col);
+        if (!cell.isEmpty() && cell.m_level && cell.m_level->getChildLevel()) {
+          if (!s.level) s.level = cell.m_level;
+          s.duration++;
+        } else if (s.duration > 0) {
+          break;
+        }
+      }
+    }
+    if (s.duration == 0) s.duration = 24;
+    snap.push_back(std::move(s));
+  }
+  return snap;
+}
+
+void StoryboardPanel::restoreFromSnapshot(const std::vector<ZtoryShotSnap> &snap) {
+  TApp *app = TApp::instance();
+  ToonzScene *scene = app->getCurrentScene()->getScene();
+  if (!scene) return;
+  // Ensure we are at the top-level xsheet before modifying it.
+  while (scene->getChildStack()->getAncestorCount() > 0)
+    CommandManager::instance()->execute("MI_CloseChild");
+  TXsheet *xsh = app->getCurrentXsheet()->getXsheet();
+  if (!xsh) return;
+
+  disconnect(app->getCurrentXsheet(), &TXsheetHandle::xsheetChanged,
+             this, &StoryboardPanel::onXsheetChanged);
+
+  clearShots();
+
+  // Remove all current shot columns (child-level columns at indices 0..N-1).
+  // Non-shot columns (audio etc.) live at higher indices and shift accordingly.
+  int currentShotCols = 0;
+  for (int c = 0; c < xsh->getColumnCount(); c++) {
+    bool isShot = false;
+    int fc = xsh->getFrameCount();
+    for (int r = 0; r <= fc; r++) {
+      TXshCell cell = xsh->getCell(r, c);
+      if (!cell.isEmpty() && cell.m_level && cell.m_level->getChildLevel()) {
+        isShot = true;
+        break;
+      }
+    }
+    if (isShot) currentShotCols++;
+    else break; // shot columns are always first; stop at first non-shot
+  }
+  // Remove from left repeatedly (indices shift left each time).
+  for (int i = 0; i < currentShotCols; i++)
+    xsh->removeColumn(0);
+
+  // Re-insert columns from snapshot.
+  for (int i = 0; i < (int)snap.size(); i++) {
+    const ZtoryShotSnap &s = snap[i];
+    if (!s.level || !s.level->getChildLevel()) continue;
+    xsh->insertColumn(i);
+    for (int r = 0; r < s.duration; r++)
+      xsh->setCell(r, i, TXshCell(s.level.getPointer(), TFrameId(r + 1)));
+  }
+  xsh->updateFrameCount();
+
+  // Rebuild Board state from snapshot data.
+  for (int i = 0; i < (int)snap.size(); i++) {
+    Shot shot;
+    shot.data              = snap[i].data;
+    shot.data.xsheetColumn = i;
+    m_shots.push_back(std::move(shot));
+    for (int pi = 0; pi < (int)snap[i].data.panels.size(); pi++)
+      addPanelWidget(i, pi);
+  }
+
+  m_selectedShotIndex = -1;
+  m_selectedIndices.clear();
+
+  connect(app->getCurrentXsheet(), &TXsheetHandle::xsheetChanged,
+          this, &StoryboardPanel::onXsheetChanged);
+
+  app->getCurrentXsheet()->notifyXsheetChanged();
+  renumberAll();
+  resequenceXsheet();
+  rebuildGrid();
+  saveZtoryc();
+}
+
+// ── UndoBoardState ────────────────────────────────────────────────────────────
+
+void UndoBoardState::undo() const {
+  m_panel->restoreFromSnapshot(m_before);
+}
+
+void UndoBoardState::redo() const {
+  m_panel->restoreFromSnapshot(m_after);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 void StoryboardPanel::onDeleteShot() {
   // Raccogli indici da cancellare (selezione multipla o singola)
   std::vector<int> toDelete(m_selectedIndices.begin(), m_selectedIndices.end());
   if (toDelete.empty() && m_selectedShotIndex >= 0) toDelete.push_back(m_selectedShotIndex);
   if (toDelete.empty()) return;
+
+  auto before = captureSnapshot();
 
   // Usa data.xsheetColumn (non l'indice Board) per identificare le colonne
   // da cancellare nell'xsheet. Se i due sono disallineati (dopo merge/cut),
@@ -2105,7 +2247,8 @@ void StoryboardPanel::onDeleteShot() {
     for (int i = 0; i < (int)m_shots.size(); i++)
       if (m_shots[i].data.xsheetColumn > col)
         m_shots[i].data.xsheetColumn--;
-    ColumnCmd::deleteColumn(col);
+    std::set<int> colSet; colSet.insert(col);
+    ColumnCmd::deleteColumns(colSet, false, true);  // withoutUndo=true: our UndoBoardState owns this
   }
 
   m_selectedShotIndex = -1;
@@ -2115,9 +2258,15 @@ void StoryboardPanel::onDeleteShot() {
   ZtoryModel::instance()->resequenceXsheet();
   rebuildGrid();
   saveZtoryc();
+
+  auto after = captureSnapshot();
+  TUndoManager::manager()->add(
+      new UndoBoardState(this, tr("Delete Shot"), std::move(before), std::move(after)));
 }
 
 void StoryboardPanel::onAddShot() {
+  auto before = captureSnapshot();
+
   TApp *app = TApp::instance();
   ToonzScene *scene = app->getCurrentScene()->getScene();
   if (scene && scene->getChildStack()->getAncestorCount() > 0)
@@ -2177,6 +2326,10 @@ void StoryboardPanel::onAddShot() {
   rebuildGrid();
   saveZtoryc();
   selectShot(insertAt);
+
+  auto after = captureSnapshot();
+  TUndoManager::manager()->add(
+      new UndoBoardState(this, tr("Add Shot"), std::move(before), std::move(after)));
 }
 
 void StoryboardPanel::onEditShot(int shotIdx) {
@@ -2212,6 +2365,7 @@ void StoryboardPanel::onEditShot(int shotIdx) {
 void StoryboardPanel::onMatchDuration(int shotIdx) {
   // Resize the main xsheet column to match the sub-scene's actual frame count.
   if (shotIdx < 0 || shotIdx >= (int)m_shots.size()) return;
+  auto before = captureSnapshot();
   TApp *app = TApp::instance();
   ToonzScene *scene = app->getCurrentScene()->getScene();
   if (!scene) return;
@@ -2256,6 +2410,10 @@ void StoryboardPanel::onMatchDuration(int shotIdx) {
       m_shots[shotIdx].panels[0]->setDuration(actualDuration);
   }
   saveZtoryc();
+
+  auto after = captureSnapshot();
+  TUndoManager::manager()->add(
+      new UndoBoardState(this, tr("Match Duration"), std::move(before), std::move(after)));
 }
 
 void StoryboardPanel::onBackToBoard() {
@@ -2316,6 +2474,10 @@ void StoryboardPanel::onPanelClicked(int shotIdx, int panelIdx, Qt::KeyboardModi
 void StoryboardPanel::onDurationChanged(int shotIdx, int panelIdx, int frames) {
   if (shotIdx < 0 || shotIdx >= (int)m_shots.size()) return;
   if (panelIdx < 0 || panelIdx >= (int)m_shots[shotIdx].data.panels.size()) return;
+  // Capture "before" only on the first change in a coalescing window.
+  if (m_pendingDurationBefore.empty())
+    m_pendingDurationBefore = captureSnapshot();
+  m_durationCommitTimer->start();  // (re)start 600ms debounce
   m_shots[shotIdx].data.panels[panelIdx].duration = frames;
   int tot = m_shots[shotIdx].data.totalDuration();
   for (PanelWidget *pw : m_shots[shotIdx].panels)
@@ -2324,11 +2486,22 @@ void StoryboardPanel::onDurationChanged(int shotIdx, int panelIdx, int frames) {
   saveZtoryc();
 }
 
+void StoryboardPanel::commitDurationUndo() {
+  if (m_pendingDurationBefore.empty()) return;
+  auto after = captureSnapshot();
+  TUndoManager::manager()->add(
+      new UndoBoardState(this, tr("Resize Shot Duration"),
+                         std::move(m_pendingDurationBefore), std::move(after)));
+  m_pendingDurationBefore.clear();
+}
+
 void StoryboardPanel::onMoveShot(int fromShot, int toShot) {
   if (!ZtoryModel::assertMainXsheet(true)) return;   // warn: exit edit mode first
   if (fromShot == toShot) return;
   if (fromShot < 0 || fromShot >= (int)m_shots.size()) return;
   if (toShot < 0 || toShot >= (int)m_shots.size()) return;
+
+  auto before = captureSnapshot();
   Shot s = m_shots[fromShot];
   m_shots.erase(m_shots.begin() + fromShot);
   m_shots.insert(m_shots.begin() + toShot, s);
@@ -2363,6 +2536,10 @@ void StoryboardPanel::onMoveShot(int fromShot, int toShot) {
   rebuildGrid();
   saveZtoryc();
   selectShot(toShot);
+
+  auto after = captureSnapshot();
+  TUndoManager::manager()->add(
+      new UndoBoardState(this, tr("Move Shot"), std::move(before), std::move(after)));
 }
 
 void StoryboardPanel::onColumnsChanged(int value) {

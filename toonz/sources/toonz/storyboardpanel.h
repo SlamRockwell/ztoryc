@@ -29,6 +29,7 @@
 #include <QStackedWidget>
 
 #include "ztorymodel.h"
+#include "ztoryundo.h"
 
 class PanelWidget final : public QFrame {
   Q_OBJECT
@@ -146,6 +147,10 @@ struct Shot {
   std::vector<ClipboardEntry> m_clipboard;
   int  m_fps;
   bool m_autoRenumber;
+  // Coalescing undo for duration spin changes: captures "before" on first change,
+  // then commits one UndoBoardState after 600ms of inactivity.
+  std::vector<ZtoryShotSnap> m_pendingDurationBefore;
+  QTimer                    *m_durationCommitTimer = nullptr;
   void addPanelWidget(int shotIdx, int panelIdx);
   void connectPanelWidget(PanelWidget *pw);
   void renumberAll();
@@ -167,6 +172,8 @@ struct Shot {
 public:
   explicit StoryboardPanel(QWidget *parent = nullptr);
   void refreshFromScene();
+  std::vector<ZtoryShotSnap> captureSnapshot();
+  void restoreFromSnapshot(const std::vector<ZtoryShotSnap> &snap);
 protected:
   void showEvent(QShowEvent *e) override;
   bool eventFilter(QObject *obj, QEvent *e) override;
@@ -197,6 +204,7 @@ protected:
   void onShotInserted(int col);   // called when razor/external op inserts a shot at col
   void onShotRemovedAt(int col);  // called when merge/external op deletes a shot at col
   void onMatchDuration(int shotIdx);  // resize timeline column to sub-scene actual duration
+  void commitDurationUndo();          // fires after coalescing timer expires
   void onBackToBoard();
 };
 

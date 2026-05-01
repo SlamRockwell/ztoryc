@@ -43,14 +43,20 @@ for lib in libcolorfx.dylib libtnzstdfx.dylib libtoonzqt.dylib libtfarm.dylib li
 done
 
 echo "→ Copia risorse..."
-# SystemVar.ini: path assoluti alle risorse (stuff dir). Non viene generato da CMake
-# nella Ztoryc.app di deploy — va copiato esplicitamente dalla source o dalla Tahoma2D.app.
+# SystemVar.ini: path assoluti alle risorse (stuff dir).
+# Viene scritto esplicitamente con chiavi sia TAHOMA2D* che ZTORYC* per coprire
+# l'init anticipata di TEnv (che usa toUpper(appName)="ZTORYC" come prefix
+# prima che main.cpp chiami setSystemVarPrefix("TAHOMA2D")).
 SYSVAR="$APP/Contents/Resources/SystemVar.ini"
-if [ ! -f "$SYSVAR" ]; then
-  cp "$WORKSPACE/toonz/install/SystemVar.ini" "$SYSVAR" 2>/dev/null || \
-  cp "$WORKSPACE/toonz/Tahoma2D.app/Contents/Resources/SystemVar.ini" "$SYSVAR" 2>/dev/null || \
-  echo "⚠️  SystemVar.ini non trovato — l'app non si avvia senza"
-fi
+STUFF="$WORKSPACE/stuff"
+cat > "$SYSVAR" << EOF
+TAHOMA2DROOT=$STUFF
+TAHOMA2DPROFILES=$STUFF/profiles
+TAHOMA2DCONFIG=$STUFF/config
+ZTORYCROOT=$STUFF
+ZTORYCPROFILES=$STUFF/profiles
+ZTORYCCONFIG=$STUFF/config
+EOF
 
 echo "→ Copia helper LZO..."
 cp "$BUILD/lzocompress"   "$MACOS/lzocompress"
