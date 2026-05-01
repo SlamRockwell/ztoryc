@@ -686,14 +686,19 @@ void TopBar::loadMenubar() {
   addMenuItem(windowsMenu, MI_OpenXshView);
   addMenuItem(windowsMenu, MI_OpenTimelineView);
   addMenuItem(windowsMenu, MI_OpenFunctionEditor);
-  addMenuItem(windowsMenu, MI_OpenStoryboard);
-  addMenuItem(windowsMenu, MI_OpenZtoryBack);
-  addMenuItem(windowsMenu, MI_OpenZtoryAnimatic);
-  addMenuItem(windowsMenu, MI_OpenZtoryAnimaticViewer);
-
-  addMenuItem(windowsMenu, "MI_OpenZtoryScript");
-  addMenuItem(windowsMenu, "MI_OpenZtoryLeftPanel");
-  addMenuItem(windowsMenu, "MI_OpenZtoryRightPanel");
+  // ── Ztoryc submenu ─────────────────────────────────────────────────────────
+  {
+    QMenu *ztoryMenu = new QMenu(QObject::tr("Ztoryc"), windowsMenu);
+    addMenuItem(ztoryMenu, MI_OpenStoryboard);
+    addMenuItem(ztoryMenu, MI_OpenZtoryBack);
+    addMenuItem(ztoryMenu, MI_OpenZtoryAnimatic);
+    addMenuItem(ztoryMenu, MI_OpenZtoryAnimaticViewer);
+    ztoryMenu->addSeparator();
+    addMenuItem(ztoryMenu, "MI_OpenZtoryLeftPanel");
+    addMenuItem(ztoryMenu, "MI_OpenZtoryRightPanel");
+    addMenuItem(ztoryMenu, "MI_OpenZtoryScript");
+    windowsMenu->addMenu(ztoryMenu);
+  }
   addMenuItem(windowsMenu, MI_OpenSchematic);
   addMenuItem(windowsMenu, MI_InsertFx);
   addMenuItem(windowsMenu, MI_FxParamEditor);
