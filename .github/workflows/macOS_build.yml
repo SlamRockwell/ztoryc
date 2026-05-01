@@ -2,15 +2,31 @@ name: Ztoryc macOS Build
 
 on:
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: 'Create a versioned GitHub Release and upload DMG + PKG (uses release_tag)'
+        type: boolean
+        default: false
+      release_tag:
+        description: 'Tag name (e.g. v0.2.0); keep in sync with toonz/sources/include/tversion.h'
+        type: string
+        required: true
+        default: 'v0.2.0'
 
 jobs:
   macOS:
     runs-on: macos-15-intel
+    permissions:
+      contents: write
     env:
       HOMEBREW_NO_AUTO_UPDATE: '1'
       HOMEBREW_NO_ANALYTICS: '1'
+      CCACHE_MAXSIZE: 5G
+      CCACHE_COMPRESS: 'true'
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Setup cmake
         uses: jwlawson/actions-setup-cmake@v2
         with:
@@ -37,8 +53,9 @@ jobs:
         with:
           path: |
             /Users/runner/.ccache
-          key: ${{ runner.os }}-refs/heads/master
+          key: ${{ runner.os }}-ccache-5G-${{ github.ref }}
           restore-keys: |
+            ${{ runner.os }}-ccache-5G-
             ${{ runner.os }}-
       - name: Restore ffmpeg dependency cache
         id: restore-ffmpeg-cache
@@ -149,6 +166,36 @@ jobs:
         with:
           name: Ztoryc-install-osx.pkg
           path: toonz/build/Ztoryc-install-osx.pkg
+      - name: Create release tag
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.publish_release == 'true' }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          TAG="${{ github.event.inputs.release_tag }}"
+          git fetch origin --tags --force
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists at $(git rev-parse "$TAG")"
+          else
+            git tag -a "$TAG" -m "Release $TAG"
+            git push origin "$TAG"
+          fi
+      - name: Publish GitHub Release (versioned)
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.publish_release == 'true' }}
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          artifactErrorsFailBuild: true
+          artifacts: toonz/build/Ztoryc-portable-osx.dmg,toonz/build/Ztoryc-install-osx.pkg
+          artifactContentType: "raw"
+          name: Ztoryc ${{ github.event.inputs.release_tag }}
+          body: |
+            Ztoryc macOS build — portable DMG and installer PKG.
+
+            Built from commit ${{ github.sha }}.
+          prerelease: false
+          replacesArtifacts: true
+          tag: ${{ github.event.inputs.release_tag }}
+          token: ${{ secrets.GITHUB_TOKEN }}
       - name: Get Nightly Release Date
         if: ${{ github.repository_owner == 'tahoma2d' && github.event_name == 'push' && github.ref == 'refs/heads/master' }}
         run: |
@@ -200,7 +247,7 @@ jobs:
           token: ${{ secrets.TAHOMA2D_TOKEN }}
       - name: Remove existing master cache
         if: ${{ steps.restore-cache.outputs.cache-hit == 'true' && github.ref == 'refs/heads/master' }}
-        run: gh cache delete ${{ runner.os }}-refs/heads/master
+        run: gh cache delete "${{ runner.os }}-ccache-5G-${{ github.ref }}"
         env:
           GH_TOKEN: ${{ github.token }}
       - name: Save cache
@@ -209,7 +256,7 @@ jobs:
         with:
           path: |
             /Users/runner/.ccache
-          key: ${{ runner.os }}-${{ github.ref }}
+          key: ${{ runner.os }}-ccache-5G-${{ github.ref }}
       - name: Save ffmpeg dependency cache
         if: ${{ steps.restore-ffmpeg-cache.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v4

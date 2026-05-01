@@ -6,6 +6,9 @@ on:
 jobs:
   Windows:
     runs-on: windows-2022
+    env:
+      CCACHE_MAXSIZE: 5G
+      CCACHE_COMPRESS: 'true'
     steps:
       - uses: actions/checkout@v4
       - name: Restore cache

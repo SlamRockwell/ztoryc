@@ -6,6 +6,9 @@ on:
 jobs:
   Linux:
     runs-on: ubuntu-22.04
+    env:
+      CCACHE_MAXSIZE: 5G
+      CCACHE_COMPRESS: 'true'
     strategy:
       fail-fast: false
       matrix:
