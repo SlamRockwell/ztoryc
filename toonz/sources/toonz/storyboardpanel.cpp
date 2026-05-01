@@ -68,6 +68,12 @@
 #include <QComboBox>
 #include <QStackedWidget>
 #include <QApplication>
+#include <QLineEdit>
+#include <QGroupBox>
+#include <QButtonGroup>
+#include "toutputproperties.h"
+#include "toonz/sceneproperties.h"
+#include "menubarcommandids.h"
 
 // Strip leading alphabetic characters from a label; optionally capture the prefix.
 // E.g. "SH010" → "010" (prefix="SH"),  "010" → "010" (prefix=""),  "SQ001" → "001"
@@ -2652,7 +2658,230 @@ void StoryboardPanel::onExportShots() {
 }
 
 void StoryboardPanel::onExportAnimatic() {
-  QMessageBox::information(this, "Export Animatic", "To be connected to render pipeline.");
+  if (m_shots.empty()) {
+    QMessageBox::information(this, tr("Export Animatic"), tr("No shots to export."));
+    return;
+  }
+  if (!ZtoryModel::assertMainXsheet(true)) return;
+
+  ToonzScene *scene = TApp::instance()->getCurrentScene()->getScene();
+  if (!scene) return;
+  TOutputProperties *prop = scene->getProperties()->getOutputProperties();
+
+  // ── Build default output dir/name from scene ───────────────────���───────
+  TFilePath sp       = scene->getScenePath();
+  QString sceneName  = QString::fromStdWString(sp.getWideName());
+  if (sceneName.isEmpty()) sceneName = "animatic";
+  QString defaultDir = QString::fromStdWString(sp.getParentDir().getWideString());
+  if (defaultDir.isEmpty()) defaultDir = QDir::homePath();
+  // Determine extension from current output props
+  QString ext = QString::fromStdString(prop->getPath().getType());
+  if (ext.isEmpty()) ext = "mp4";
+
+  // ── Dialog ───────────────────────────────��─────────────────────────────
+  QDialog dlg(this);
+  dlg.setWindowTitle(tr("Export Animatic"));
+  dlg.setMinimumWidth(480);
+  auto *mainLay = new QVBoxLayout(&dlg);
+  mainLay->setSpacing(10);
+  mainLay->setContentsMargins(14, 14, 14, 14);
+
+  // Mode
+  auto *modeGroup = new QGroupBox(tr("Export mode"), &dlg);
+  auto *modeVLay  = new QVBoxLayout(modeGroup);
+  auto *btnGroup  = new QButtonGroup(&dlg);
+  auto *radioFull  = new QRadioButton(tr("Full animatic (all shots in sequence)"), modeGroup);
+  auto *radioRange = new QRadioButton(tr("Shot range:"), modeGroup);
+  auto *radioEach  = new QRadioButton(tr("One clip per shot  (one file per shot)"), modeGroup);
+  radioFull->setChecked(true);
+  btnGroup->addButton(radioFull,  0);
+  btnGroup->addButton(radioRange, 1);
+  btnGroup->addButton(radioEach,  2);
+
+  // Range selectors (shown only when radioRange is active)
+  auto *rangeWidget = new QWidget(modeGroup);
+  auto *rangeLay    = new QHBoxLayout(rangeWidget);
+  rangeLay->setContentsMargins(20, 0, 0, 0);
+  rangeLay->setSpacing(6);
+  auto *fromCombo = new QComboBox(rangeWidget);
+  auto *toCombo   = new QComboBox(rangeWidget);
+  for (int si = 0; si < (int)m_shots.size(); si++) {
+    QString label = m_shots[si].data.shotNumber;
+    fromCombo->addItem(label);
+    toCombo->addItem(label);
+  }
+  toCombo->setCurrentIndex(toCombo->count() - 1);
+  rangeLay->addWidget(new QLabel(tr("from"), rangeWidget));
+  rangeLay->addWidget(fromCombo);
+  rangeLay->addWidget(new QLabel(tr("to"), rangeWidget));
+  rangeLay->addWidget(toCombo);
+  rangeLay->addStretch();
+  rangeWidget->setEnabled(false);
+
+  modeVLay->addWidget(radioFull);
+  modeVLay->addWidget(radioRange);
+  modeVLay->addWidget(rangeWidget);
+  modeVLay->addWidget(radioEach);
+  mainLay->addWidget(modeGroup);
+
+  connect(radioRange, &QRadioButton::toggled,
+          rangeWidget, &QWidget::setEnabled);
+
+  // Output settings button + summary
+  auto *settingsRow = new QHBoxLayout;
+  auto *settingsBtn = new QPushButton(tr("Output Settings…"), &dlg);
+  settingsBtn->setToolTip(tr("Open the native Output Settings dialog to set\n"
+                             "format, codec, resolution and frame rate."));
+  auto *settingsSummary = new QLabel(&dlg);
+  settingsSummary->setStyleSheet("color:#aaa; font-size:11px;");
+  auto updateSummary = [&]() {
+    int r0, r1, step;
+    prop->getRange(r0, r1, step);
+    int totalFrames = scene->getFrameCount();
+    double fps      = prop->getFrameRate();
+    TFilePath ppath = prop->getPath();
+    settingsSummary->setText(
+        QString("%1  |  %2 fps  |  %3×%4")
+            .arg(QString::fromStdString(ppath.getType()).toUpper())
+            .arg(fps, 0, 'f', 0)
+            .arg(scene->getCurrentCamera()->getRes().lx)
+            .arg(scene->getCurrentCamera()->getRes().ly));
+  };
+  updateSummary();
+  connect(settingsBtn, &QPushButton::clicked, [&]() {
+    CommandManager::instance()->execute(MI_OutputSettings);
+    updateSummary();
+  });
+  settingsRow->addWidget(settingsBtn);
+  settingsRow->addWidget(settingsSummary, 1);
+  mainLay->addLayout(settingsRow);
+
+  // Output folder
+  auto *folderRow = new QHBoxLayout;
+  auto *folderEdit = new QLineEdit(defaultDir, &dlg);
+  auto *folderBtn  = new QToolButton(&dlg);
+  folderBtn->setText("…");
+  connect(folderBtn, &QToolButton::clicked, [&]() {
+    QString d = QFileDialog::getExistingDirectory(&dlg, tr("Output folder"), folderEdit->text());
+    if (!d.isEmpty()) folderEdit->setText(d);
+  });
+  folderRow->addWidget(new QLabel(tr("Output folder:"), &dlg));
+  folderRow->addWidget(folderEdit, 1);
+  folderRow->addWidget(folderBtn);
+  mainLay->addLayout(folderRow);
+
+  // Filename (only meaningful for Full/Range; per-shot uses shot number)
+  auto *nameRow   = new QHBoxLayout;
+  auto *nameEdit  = new QLineEdit(sceneName + "_animatic", &dlg);
+  auto *nameNote  = new QLabel(tr("(.%1)").arg(ext), &dlg);
+  nameNote->setStyleSheet("color:#aaa;");
+  nameRow->addWidget(new QLabel(tr("Filename:"), &dlg));
+  nameRow->addWidget(nameEdit, 1);
+  nameRow->addWidget(nameNote);
+  mainLay->addLayout(nameRow);
+
+  // Inform user: per-shot uses shot number as filename
+  auto *perShotNote = new QLabel(
+      tr("Per-shot mode: files will be named  %1_SH010.%2,  %1_SH020.%2 …")
+          .arg(sceneName).arg(ext), &dlg);
+  perShotNote->setStyleSheet("color:#aaa; font-size:11px;");
+  perShotNote->setVisible(false);
+  mainLay->addWidget(perShotNote);
+  connect(radioEach, &QRadioButton::toggled, [&](bool on) {
+    nameEdit->setEnabled(!on);
+    perShotNote->setVisible(on);
+  });
+
+  // Options
+  auto *optLay   = new QHBoxLayout;
+  auto *chkAudio = new QCheckBox(tr("Include audio"), &dlg);
+  chkAudio->setChecked(true);
+  chkAudio->setToolTip(tr("Audio tracks in the main xsheet are included automatically\n"
+                           "when rendering from the main timeline."));
+  chkAudio->setEnabled(false);  // always on — audio is automatic
+  optLay->addWidget(chkAudio);
+  mainLay->addLayout(optLay);
+
+  // Buttons
+  auto *btnBox = new QDialogButtonBox(
+      QDialogButtonBox::Cancel | QDialogButtonBox::Ok, &dlg);
+  btnBox->button(QDialogButtonBox::Ok)->setText(tr("Export"));
+  connect(btnBox, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+  connect(btnBox, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+  mainLay->addWidget(btnBox);
+
+  if (dlg.exec() != QDialog::Accepted) return;
+
+  // ── Collect parameters ─────────────────────────────────���────────────────
+  int mode       = btnGroup->checkedId();  // 0=full, 1=range, 2=each
+  QString outDir = folderEdit->text();
+  QDir().mkpath(outDir);
+
+  // Save original output props
+  TFilePath origPath = prop->getPath();
+  int origR0, origR1, origStep;
+  prop->getRange(origR0, origR1, origStep);
+
+  // Helper: compute frame range [start, end) for shot si in main xsheet
+  auto shotFrameRange = [&](int si) -> std::pair<int,int> {
+    TXsheet *xsh = scene->getChildStack()->getTopXsheet();
+    int col = m_shots[si].data.xsheetColumn;
+    int r0 = 0, r1 = 0;
+    for (int r = 0; r < xsh->getFrameCount(); r++) {
+      if (!xsh->getCell(r, col).isEmpty()) { r0 = r; break; }
+    }
+    for (int r = xsh->getFrameCount() - 1; r >= 0; r--) {
+      if (!xsh->getCell(r, col).isEmpty()) { r1 = r; break; }
+    }
+    return {r0, r1};
+  };
+
+  if (mode == 0) {
+    // Full animatic: from first cell to last
+    auto [r0, _1] = shotFrameRange(0);
+    auto [_2, r1] = shotFrameRange((int)m_shots.size() - 1);
+    TFilePath outPath = TFilePath(outDir.toStdWString()) +
+                        TFilePath((nameEdit->text() + "." + ext).toStdWString());
+    prop->setPath(outPath);
+    prop->setRange(r0, r1, 1);
+    CommandManager::instance()->execute(MI_Render);
+
+  } else if (mode == 1) {
+    // Shot range
+    int fromIdx = fromCombo->currentIndex();
+    int toIdx   = toCombo->currentIndex();
+    if (fromIdx > toIdx) std::swap(fromIdx, toIdx);
+    auto [r0, _1] = shotFrameRange(fromIdx);
+    auto [_2, r1] = shotFrameRange(toIdx);
+    TFilePath outPath = TFilePath(outDir.toStdWString()) +
+                        TFilePath((nameEdit->text() + "." + ext).toStdWString());
+    prop->setPath(outPath);
+    prop->setRange(r0, r1, 1);
+    CommandManager::instance()->execute(MI_Render);
+
+  } else {
+    // One clip per shot — each render job captures its own path/range via init()
+    for (int si = 0; si < (int)m_shots.size(); si++) {
+      auto [r0, r1] = shotFrameRange(si);
+      QString shotNum = m_shots[si].data.shotNumber;
+      // Build Kitsu-compatible filename: sceneName_SQ01_SH010.mp4
+      QString seqPart = m_shots[si].data.sequenceId.isEmpty()
+                        ? QString() : m_shots[si].data.sequenceId + "_";
+      QString fname = sceneName + "_" + seqPart + shotNum + "." + ext;
+      TFilePath outPath = TFilePath(outDir.toStdWString()) +
+                          TFilePath(fname.toStdWString());
+      prop->setPath(outPath);
+      prop->setRange(r0, r1, 1);
+      CommandManager::instance()->execute(MI_Render);
+      // init() inside doRender() captures path+range before returning —
+      // safe to update props for the next shot.
+    }
+  }
+
+  // Restore original output properties
+  prop->setPath(origPath);
+  prop->setRange(origR0, origR1, origStep);
+  TApp::instance()->getCurrentScene()->notifySceneChanged();
 }
 
 void StoryboardPanel::onExportPdf() {
