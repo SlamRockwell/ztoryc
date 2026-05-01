@@ -2740,7 +2740,7 @@ void MainWindow::defineActions() {
                           "colormodel");
   createMenuWindowsAction(MI_OpenStudioPalette, QT_TR_NOOP("&Studio Palette"),
                           "", "studiopalette");
-  createMenuWindowsAction(MI_OpenStoryboard, QT_TR_NOOP("&Storyboard"), "", "Storyboard");
+  createMenuWindowsAction(MI_OpenStoryboard, QT_TR_NOOP("&Ztoryc Board"), "", "Storyboard");
 
   createMenuWindowsAction("MI_OpenZtoryAnimatic", QT_TR_NOOP("&Ztoryc Animatic"), "", "ZtoryAnimatic");
   createMenuWindowsAction("MI_OpenZtoryAnimaticViewer", QT_TR_NOOP("&Ztoryc Viewer"), "", "ZtoryAnimaticViewer");

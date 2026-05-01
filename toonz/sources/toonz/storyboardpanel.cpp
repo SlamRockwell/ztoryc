@@ -479,7 +479,7 @@ StoryboardPanel::StoryboardPanel(QWidget *parent)
   // qApp filter is the only approach that works consistently.
   qApp->installEventFilter(this);
 
-  setWindowTitle(tr("Storyboard"));
+  setWindowTitle(tr("Ztoryc Board"));
 
   QWidget *main = new QWidget(this);
   QVBoxLayout *mainLayout = new QVBoxLayout(main);
@@ -2771,7 +2771,7 @@ public:
   TPanel *createPanel(QWidget *parent) override {
     TPanel *panel = new StoryboardPanel(parent);
     panel->setObjectName(getPanelType());
-    panel->setWindowTitle(QObject::tr("Storyboard"));
+    panel->setWindowTitle(QObject::tr("Ztoryc Board"));
     return panel;
   }
   void initialize(TPanel *panel) override { assert(0); }
