@@ -624,7 +624,7 @@ void MainWindow::changeWindowTitle() {
   if (!m_layoutName.isEmpty()) sceneName.prepend(m_layoutName + " : ");
 
   QString name = sceneName + " [" + projectName + "] : " +
-                 QString::fromStdString(TEnv::getApplicationFullName());
+                 QString::fromStdString(TEnv::getApplicationDisplayTitle());
 
   setWindowTitle(name);
 }

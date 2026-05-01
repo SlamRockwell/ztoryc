@@ -209,6 +209,10 @@ public:
   }
   std::string getApplicationFullName() { return m_applicationFullName; }
 
+  std::string getTahomaBaseVersionString() {
+    return m_version.getTahomaBaseVersionString();
+  }
+
   void setModuleName(std::string moduleName) { m_moduleName = moduleName; }
   std::string getModuleName() { return m_moduleName; }
 
@@ -529,6 +533,14 @@ void TEnv::setApplicationFullName(std::string applicationFullName) {
 
 std::string TEnv::getApplicationFullName() {
   return EnvGlobals::instance()->getApplicationFullName();
+}
+
+std::string TEnv::getTahomaBaseVersionString() {
+  return EnvGlobals::instance()->getTahomaBaseVersionString();
+}
+
+std::string TEnv::getApplicationDisplayTitle() {
+  return getApplicationFullName() + " · Tahoma2D " + getTahomaBaseVersionString();
 }
 
 void TEnv::setModuleName(std::string moduleName) {

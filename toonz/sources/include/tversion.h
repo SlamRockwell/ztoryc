@@ -14,6 +14,8 @@ public:
   bool hasAppNote(void);
   std::string getAppVersionString(void);
   std::string getAppRevisionString(void);
+  /** Upstream engine lineage (keep in sync with TAHOMA2DVERSION in packaging scripts). */
+  std::string getTahomaBaseVersionString(void);
   std::string getAppVersionInfo(std::string msg);
 
 private:
@@ -21,6 +23,7 @@ private:
   const float applicationVersion  = 0.2f;
   const float applicationRevision = 0;
   const char *applicationNote     = "";
+  const char *tahomaBaseVersion   = "1.6";
 };
 
 std::string ToonzVersion::getAppName(void) {
@@ -51,6 +54,9 @@ std::string ToonzVersion::getAppRevisionString(void) {
   snprintf(buffer, sizeof(buffer), "%g", applicationRevision);
   std::string apprev = std::string(buffer);
   return apprev;
+}
+std::string ToonzVersion::getTahomaBaseVersionString(void) {
+  return std::string(tahomaBaseVersion);
 }
 std::string ToonzVersion::getAppVersionInfo(std::string msg) {
   std::string appinfo = std::string(applicationName);

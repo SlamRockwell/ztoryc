@@ -625,7 +625,8 @@ bool CrashHandler::trigger(const QString reason, bool showDialog) {
 
   // Generate report
   try {
-    out.append(TEnv::getApplicationFullName() + "  (Build " + __DATE__ ")\n");
+    out.append(TEnv::getApplicationFullName() + " (Tahoma2D base " +
+               TEnv::getTahomaBaseVersionString() + ")  (Build " + __DATE__ ")\n");
     out.append("\nReport Date: ");
     out.append(dateName);
     out.append("\nCrash Reason: ");

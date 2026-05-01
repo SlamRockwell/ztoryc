@@ -807,7 +807,7 @@ int main(int argc, char *argv[]) {
       TTool::getTool(T_Symmetry, TTool::VectorImage);
   if (symmetryTool) symmetryTool->loadTool();
 
-  w.setWindowTitle(QString::fromStdString(TEnv::getApplicationFullName()));
+  w.setWindowTitle(QString::fromStdString(TEnv::getApplicationDisplayTitle()));
   if (TEnv::getIsPortable()) {
     splash.showMessage(offsetStr + QObject::tr("Starting Ztoryc..."),
                        Qt::AlignRight | Qt::AlignBottom, Qt::black);

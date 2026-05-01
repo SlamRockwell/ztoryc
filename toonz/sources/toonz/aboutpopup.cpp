@@ -49,7 +49,10 @@ AboutPopup::AboutPopup(QWidget* parent)
   nameLabel->setAlignment(Qt::AlignHCenter);
   mainLayout->addWidget(nameLabel);
 
-  QLabel* forkLabel = new QLabel(tr("Fork of Tahoma2D 1.6.0"), this);
+  QString baseVer =
+      QString::fromStdString(TEnv::getTahomaBaseVersionString());
+  QLabel* forkLabel =
+      new QLabel(tr("Tahoma2D base %1").arg(baseVer), this);
   forkLabel->setAlignment(Qt::AlignHCenter);
   mainLayout->addWidget(forkLabel);
 
