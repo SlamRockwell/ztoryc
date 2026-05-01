@@ -467,10 +467,10 @@ alle sequence del progetto (sq01, sq02…).
 12b. ~~**BUG testi dialog/action/notes persi al reload**~~ ✅ DONE 2026-05-01 — `syncWidgetsToData()` chiamata in `saveZtoryc()` prima del write XML; il handler `dataChanged` non aggiornava `data.panels[pi].dialog/action/notes` prima del salvataggio
 12c. ~~**Export Animatic: rimosso pulsante Output Settings**~~ ✅ DONE 2026-05-01 — sostituito con label read-only formato/fps/res + nota "change via Render > Output Settings"
 12d. **BUG Audio toggle in sub-scena** — toggle `MI_ToggleMainAudio` non ferma audio in tempo reale durante play in sub-scena (workaround: stop → toggle → play). Root cause: `TXsheet::scrub()` guard funziona ma il percorso `onNativePlayingStatusChanged` riparte lo streaming.
-13. **NEW Undo/Redo** — TUndoManager su tutte le operazioni CRUD shot nel Board e Animatic. **← PROSSIMO (priorità massima)**
+13. ~~**NEW Undo/Redo**~~ ✅ DONE 2026-05-01 — UndoBoardState snapshot-based; Board+Animatic CRUD completo; fix column bug updatePreview; fix Board preview refresh su showEvent e xsheetChanged-in-sub-scene
 
 ### Milestone roadmap
-- **Early Beta (v0.2):** Undo/Redo (task 13) + fix audio toggle (12d) → rilascio
+- **Early Beta (v0.2):** ~~Undo/Redo (task 13)~~ ✅ + fix audio toggle (12d) → rilascio
 - **M2 Timeline/Animatic:** TFrameHandle dedicato per animatic viewer, Zoom ruler adattivo, Export Animatic → render
 - **M3 Shot Editor avanzato:** Quick-shot selector dropdown, Export PDF con preview reali
 - **M4 Room REFERENCE:** canvas PureRef-style (QGraphicsScene), drag&drop immagini/GIF/video,

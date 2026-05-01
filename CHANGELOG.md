@@ -6,6 +6,33 @@
 > Voci più vecchie di ~2 settimane → spostarle in `CHANGELOG_ARCHIVE.md`.
 
 ---
+## [2026-05-01c] — Undo/Redo CRUD completo + fix refresh anteprime Board
+### Added
+- **Task 13 — Undo/Redo completo** (`ztoryundo.h`, `storyboardpanel.cpp`, `ztoryanimatic.cpp`):
+  - Nuovo file `ztoryundo.h`: `ZtoryShotSnap {ShotData, TXshLevelP, int duration}` +
+    classe `UndoBoardState` (before/after snapshot, chiama `restoreFromSnapshot` su undo/redo)
+  - `StoryboardPanel::captureSnapshot()` / `restoreFromSnapshot()`: full rebuild xsheet+Board
+    da un vettore di snapshot; `TXshLevelP` mantiene in vita livelli eliminati per undo-of-delete
+  - Board: undo su Add, Delete, Move (drag&drop), Paste, Merge, Match Duration
+  - Board: undo duration con timer di coalescenza 600ms (`m_durationCommitTimer`) — un solo
+    item per "sessione di editing" invece di uno per ogni tick della spinbox
+  - Animatic: undo su Delete, Cut, Paste, Duration resize, Merge, MergeWithNext, Razor
+  - Fix anti-polluzione stack: `ColumnCmd::deleteColumns(..., withoutUndo=true)` per tutti i
+    delete interni; `TUndoManager::manager()->popUndo(1)` dopo `ColumnCmd::cloneChild()` in Razor
+  - `findBoardPanel()`: helper statico in ztoryanimatic.cpp tramite `QApplication::allWidgets()`
+### Fixed
+- **Bug `updatePreview` colonna errata** (`storyboardpanel.cpp:updatePreview`):
+  usava `shotIdx` come indice colonna xsheet invece di `shot.data.xsheetColumn`.
+  Poteva rendere la thumbnail dello shot sbagliato quando ordine shot ≠ ordine colonne.
+- **Anteprime Board stantie dopo disegno** (`storyboardpanel.cpp`):
+  - `showEvent`: aggiunto `onRefreshPreviews()` anche quando Board torna visibile con shots
+    già caricate (prima refresh solo a primo caricamento). Fix caso: disegno in sub-scena →
+    cambio room → Board mostra thumbnail aggiornate.
+  - `xsheetSwitched` handler: quando si entra in una sub-scena, `xsheetChanged` viene ora
+    connesso anche a `m_panelDetectTimer->start()` — ogni modifica (disegno/cancella) riavvia
+    il timer da 1s; al timeout si ri-renderizza la thumbnail dello shot corrente.
+
+---
 ## [2026-05-01b] — Fix testi Board persi al reload, cleanup Export Animatic
 ### Fixed
 - **BUG critico: testi dialog/action/notes persi al salvataggio** (`storyboardpanel.cpp`):
