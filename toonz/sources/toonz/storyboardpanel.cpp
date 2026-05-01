@@ -1007,7 +1007,22 @@ void StoryboardPanel::updateColumnName(int si) {
   }
 }
 
+void StoryboardPanel::syncWidgetsToData() {
+  // Copy every PanelWidget's text fields into the data model before saving.
+  // This is necessary because textChanged only emits dataChanged (which updates
+  // shotLabel) but never writes dialog/action/notes back to data.panels[pi].
+  for (int si = 0; si < (int)m_shots.size(); si++) {
+    Shot &shot = m_shots[si];
+    for (int pi = 0; pi < (int)shot.panels.size() && pi < (int)shot.data.panels.size(); pi++) {
+      shot.data.panels[pi].dialog = shot.panels[pi]->dialog();
+      shot.data.panels[pi].action = shot.panels[pi]->action();
+      shot.data.panels[pi].notes  = shot.panels[pi]->notes();
+    }
+  }
+}
+
 void StoryboardPanel::saveZtoryc() {
+  syncWidgetsToData();
   QString path = ztoryPath();
   if (path.isEmpty()) return;
   QFile file(path);
@@ -2727,34 +2742,23 @@ void StoryboardPanel::onExportAnimatic() {
   connect(radioRange, &QRadioButton::toggled,
           rangeWidget, &QWidget::setEnabled);
 
-  // Output settings button + summary
-  auto *settingsRow = new QHBoxLayout;
-  auto *settingsBtn = new QPushButton(tr("Output Settings…"), &dlg);
-  settingsBtn->setToolTip(tr("Open the native Output Settings dialog to set\n"
-                             "format, codec, resolution and frame rate."));
-  auto *settingsSummary = new QLabel(&dlg);
-  settingsSummary->setStyleSheet("color:#aaa; font-size:11px;");
-  auto updateSummary = [&]() {
-    int r0, r1, step;
-    prop->getRange(r0, r1, step);
-    int totalFrames = scene->getFrameCount();
-    double fps      = prop->getFrameRate();
+  // Read-only format summary — user configures format via Render > Output Settings
+  {
+    double fps    = prop->getFrameRate();
     TFilePath ppath = prop->getPath();
-    settingsSummary->setText(
-        QString("%1  |  %2 fps  |  %3×%4")
-            .arg(QString::fromStdString(ppath.getType()).toUpper())
+    QString ext   = QString::fromStdString(ppath.getType()).toUpper();
+    if (ext.isEmpty()) ext = "MP4";
+    auto *fmtNote = new QLabel(
+        tr("Format: %1  |  %2 fps  |  %3×%4   "
+           "(change via Render > Output Settings)")
+            .arg(ext)
             .arg(fps, 0, 'f', 0)
             .arg(scene->getCurrentCamera()->getRes().lx)
-            .arg(scene->getCurrentCamera()->getRes().ly));
-  };
-  updateSummary();
-  connect(settingsBtn, &QPushButton::clicked, [&]() {
-    CommandManager::instance()->execute(MI_OutputSettings);
-    updateSummary();
-  });
-  settingsRow->addWidget(settingsBtn);
-  settingsRow->addWidget(settingsSummary, 1);
-  mainLay->addLayout(settingsRow);
+            .arg(scene->getCurrentCamera()->getRes().ly),
+        &dlg);
+    fmtNote->setStyleSheet("color:#aaa; font-size:11px;");
+    mainLay->addWidget(fmtNote);
+  }
 
   // Output folder
   auto *folderRow = new QHBoxLayout;

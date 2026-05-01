@@ -160,6 +160,7 @@ struct Shot {
   void detectAndUpdatePanels(int shotIdx);
   void assignKeepNumbers(int insertAt);
   QString ztoryPath() const;
+  void    syncWidgetsToData();
   void    saveZtoryc();
   void    updateColumnName(int si);
   void    loadZtoryc();
