@@ -110,6 +110,13 @@ jobs:
           rm Resources EDSDK
           ln -s Versions/Current/Resources Resources
           ln -s Versions/Current/EDSDK EDSDK
+      - name: Restore thirdparty apps bundle cache (ffmpeg/rhubarb zips)
+        id: restore-apps-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: thirdparty/apps
+          key: ${{ runner.os }}-apps-${{ hashFiles('ci-scripts/osx/tahoma-get3rdpartyapps.sh') }}
+
       - name: Get 3rd Party Apps
         run: |
           ci-scripts/osx/tahoma-get3rdpartyapps.sh
@@ -253,6 +260,13 @@ jobs:
           path: |
             thirdparty/tiff-4.2.0
           key: ${{ runner.os }}-tiff-${{ hashFiles('ci-scripts/osx/tahoma-build.sh', 'thirdparty/tiff-4.2.0/configure') }}
+
+      - name: Save thirdparty apps bundle cache
+        if: ${{ success() && steps.restore-apps-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: thirdparty/apps
+          key: ${{ runner.os }}-apps-${{ hashFiles('ci-scripts/osx/tahoma-get3rdpartyapps.sh') }}
 
       - name: Save Homebrew downloads cache
         if: ${{ success() && steps.brew-cache-restore.outputs.cache-hit != 'true' }}

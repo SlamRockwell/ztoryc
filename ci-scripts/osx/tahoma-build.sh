@@ -51,11 +51,21 @@ then
 fi
 
 export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:/usr/local/opt/jpeg-turbo/lib/pkgconfig"
-cmake ../sources  $CANON_FLAG \
-      -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+
+NPROC=$(sysctl -n hw.logicalcpu 2>/dev/null || echo 7)
+CMAKE_EXTRA=()
+BUILD_CMD=(make -j7)
+if [ "${GITHUB_ACTIONS:-}" = "true" ] && command -v ninja >/dev/null 2>&1; then
+  CMAKE_EXTRA=(-G Ninja)
+  BUILD_CMD=(ninja -j"${NPROC}")
+  echo "Using Ninja with -j${NPROC} (GitHub Actions)"
+fi
+
+cmake ../sources "${CMAKE_EXTRA[@]}" $CANON_FLAG \
+      -DCMAKE_BUILD_TYPE="${CI_BUILD_TYPE:-RelWithDebInfo}" \
       -DWITH_GPHOTO2=ON \
       -DWITH_SYSTEM_SUPERLU=ON \
       -DQT_PATH=$USEQTLIB \
       -DTIFF_INCLUDE_DIR=../../thirdparty/tiff-4.2.0/libtiff/
 
-make -j7 # runs 7 jobs in parallel
+"${BUILD_CMD[@]}"
