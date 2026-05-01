@@ -65,9 +65,10 @@ jobs:
           path: |
             /usr/local/lib/libopencv*.dylib
             /usr/local/include/opencv4
+            /usr/local/lib/cmake/opencv4
             /usr/local/lib/pkgconfig/opencv4.pc
             thirdparty/opencv
-          key: ${{ runner.os }}-opencv-${{ hashFiles('ci-scripts/osx/tahoma-buildopencv.sh', 'ci-scripts/osx/tahoma-install.sh') }}
+          key: ${{ runner.os }}-opencv-v2-${{ hashFiles('ci-scripts/osx/tahoma-buildopencv.sh', 'ci-scripts/osx/tahoma-install.sh') }}
 
       - name: Restore libgphoto2 dependency cache
         id: restore-gphoto-cache
@@ -227,9 +228,10 @@ jobs:
           path: |
             /usr/local/lib/libopencv*.dylib
             /usr/local/include/opencv4
+            /usr/local/lib/cmake/opencv4
             /usr/local/lib/pkgconfig/opencv4.pc
             thirdparty/opencv
-          key: ${{ runner.os }}-opencv-${{ hashFiles('ci-scripts/osx/tahoma-buildopencv.sh', 'ci-scripts/osx/tahoma-install.sh') }}
+          key: ${{ runner.os }}-opencv-v2-${{ hashFiles('ci-scripts/osx/tahoma-buildopencv.sh', 'ci-scripts/osx/tahoma-install.sh') }}
 
       - name: Save libgphoto2 dependency cache
         if: ${{ steps.restore-gphoto-cache.outputs.cache-hit != 'true' }}
