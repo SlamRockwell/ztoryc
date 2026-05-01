@@ -6,6 +6,36 @@
 > Voci più vecchie di ~2 settimane → spostarle in `CHANGELOG_ARCHIVE.md`.
 
 ---
+## [2026-05-01] — Branding Ztoryc, fix crash panel, fix reorder shot
+### Added
+- `DockWidget::setEmbedded()` in `docklayout.h`: setta `m_floating=false`,
+  `m_parentLayout=nullptr`, rimuove margini floating — impedisce drag-to-float
+  sui panel embedded in `ZtoryLeftPanel` / `ZtoryRightPanel`
+- Doppio click su `ComboViewerPanel` in shot mode → esce dalla shot mode
+  (eventFilter su `ZtoryAnimaticViewerPanel`)
+- Cartella `Ztoryc` su Google Drive con copia CHANGELOG e ANIMATIC_TASKS
+### Fixed
+- **Crash QTextEdit stack overflow**: `ZtoryScriptView::m_textEdit` ora ha
+  `setMinimumSize(80,60)` + `setLineWrapMode(NoWrap)`, evita layout ricorsivo
+  a larghezza zero quando il panel è nascosto in QStackedWidget
+- **Board "sganciato"**: panel embedded in ZtoryLeftPanel/ZtoryRightPanel ora
+  usano `setEmbedded()` + `getTitleBar()->hide()` → non più draggabili come
+  panel floating; null-guard in `mouseDoubleClickEvent` e `maximizeDock`
+- **Room duplicate al Reset**: `layouts.txt` (template + utente) aggiornato
+  a soli `ztoryc.ini` + `browser.ini`; `currentRoom.txt` → `ZTORYC`; rimossi
+  vecchi file `animatic.ini`, `board.ini`, `room1-6.ini` da entrambe le dir
+- **Reorder shot apriva lo shot sbagliato**: in `onMoveShot()`, dopo lo
+  spostamento fisico delle celle xsheet, aggiornamento di
+  `m_shots[i].data.xsheetColumn = i` per tutti gli slot
+### Modified (altra istanza Claude)
+- **About dialog** (`aboutpopup.cpp`, `toonz.qrc`): titolo "About Ztoryc",
+  logo `ztoryc_about.png` (400×400, scalato 80×80), link GitHub
+  `github.com/matitanimata/ztoryc`, licenza GPL v3, note FFmpeg (LGPLv2.1)
+  + Rhubarb Lip Sync (MIT), ringraziamenti team Tahoma2D
+- **Splash screen** (`Resources/tahoma2d_splash.svg`): versione corretta
+  da `v1.0.0` a `v0.2.0`
+
+---
 ## [2026-04-25b] — revert side-fix, mantenuto solo Homebrew SuperLU
 
 ### Modified

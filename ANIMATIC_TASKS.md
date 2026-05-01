@@ -463,14 +463,13 @@ alle sequence del progetto (sq01, sq02…).
 9. ~~**NEW Lock tracce audio**~~ ✅ DONE — lock già funzionante
 10. ~~**NEW Numerazione SQ/SH/P**~~ ✅ DONE 2026-04-25 — sistema completo Sequence/Simple: SQ default "01", SQ nascosto in Simple, resetOnSeqChange, config dialog
 11. ~~**Task 9**~~ ✅ DONE 2026-04-20 — Audio export con shot (fix compilazione + frame offset)
-12. **Task 11** — Viewer toggle (QStackedWidget)
-12b. **BUG Audio toggle in sub-scena** — toggle `MI_ToggleMainAudio` non ferma audio in tempo reale durante play in sub-scena (workaround: stop → toggle → play). Root cause: `TXsheet::scrub()` guard funziona ma il percorso `onNativePlayingStatusChanged` riparte lo streaming. Da investigare con Claude Code.
-13. **NEW Undo/Redo** — TUndoManager su tutte le operazioni CRUD shot (dopo ZtoryModel consolidato)
-14. **Task 13d** — Navigation tags (⚠️ design session prima)
+12. ~~**Task 11**~~ ✅ DONE 2026-05-01 — Viewer toggle: ZtoryAnimaticViewerPanel QStackedWidget, ZtoryLeftPanel (Board/XSheet), ZtoryRightPanel (Script+Browser/Palette), doppio click in/out shot mode, setEmbedded() fix
+12b. **BUG Audio toggle in sub-scena** — toggle `MI_ToggleMainAudio` non ferma audio in tempo reale durante play in sub-scena (workaround: stop → toggle → play). Root cause: `TXsheet::scrub()` guard funziona ma il percorso `onNativePlayingStatusChanged` riparte lo streaming.
+13. **NEW Undo/Redo** — TUndoManager su tutte le operazioni CRUD shot nel Board e Animatic. **← PROSSIMO**
 
 ### Milestone roadmap
-- **M1 Struttura base:** Undo/Redo, StoryStrip Panel, Order Review Panel, Renumber avanzato
-- **M2 Timeline/Animatic:** TFrameHandle dedicato, Zoom ruler adattivo, Export Animatic → render
+- **Early Beta (v0.2):** Undo/Redo (task 13) + fix audio toggle (12b) → rilascio
+- **M2 Timeline/Animatic:** TFrameHandle dedicato per animatic viewer, Zoom ruler adattivo, Export Animatic → render
 - **M3 Shot Editor avanzato:** Quick-shot selector dropdown, Export PDF con preview reali
 - **M4 Room REFERENCE:** canvas PureRef-style (QGraphicsScene), drag&drop immagini/GIF/video,
   salvataggio path nel `.ztoryc` — Qt nativo, no Electron/WebEngine

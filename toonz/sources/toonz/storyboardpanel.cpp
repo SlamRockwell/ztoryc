@@ -2657,53 +2657,112 @@ void StoryboardPanel::onExportAnimatic() {
 
 void StoryboardPanel::onExportPdf() {
   if (m_shots.empty()) {
-    QMessageBox::information(this, "Export PDF", "No shots to export.");
+    QMessageBox::information(this, tr("Export PDF"), tr("No shots to export."));
     return;
   }
-  QString path = QFileDialog::getSaveFileName(this, "Save Storyboard PDF", "", "PDF (*.pdf)");
+
+  // Build a sensible default filename from the scene name.
+  QString defaultPath;
+  ToonzScene *scene = TApp::instance()->getCurrentScene()->getScene();
+  if (scene) {
+    TFilePath sp = scene->getScenePath();
+    QString sceneName = QString::fromStdWString(sp.getWideName());
+    if (sceneName.isEmpty()) sceneName = "storyboard";
+    QString dir = QString::fromStdWString(sp.getParentDir().getWideString());
+    defaultPath = (dir.isEmpty() ? QDir::homePath() : dir)
+                  + "/" + sceneName + "_storyboard.pdf";
+  } else {
+    defaultPath = QDir::homePath() + "/storyboard.pdf";
+  }
+
+  QString path = QFileDialog::getSaveFileName(
+      nullptr, tr("Save Storyboard PDF"), defaultPath, tr("PDF (*.pdf)"));
   if (path.isEmpty()) return;
+
   QPdfWriter writer(path);
   writer.setPageLayout(QPageLayout(QPageSize(QPageSize::A4),
-    QPageLayout::Landscape, QMarginsF(15,15,15,15)));
+      QPageLayout::Landscape, QMarginsF(15, 15, 15, 15)));
   writer.setResolution(150);
+
   QPainter painter(&writer);
-  const int cols = 3, pageW = writer.width(), margin = 40;
-  const int cellW = (pageW - margin*(cols+1))/cols;
-  const int imgH = cellW*9/16;
+  const int cols   = 3;
+  const int pageW  = writer.width();
+  const int pageH  = writer.height();
+  const int margin = 40;
+  const int cellW  = (pageW - margin * (cols + 1)) / cols;
+  const int imgH   = cellW * 9 / 16;
+
+  // Text area heights
+  const int labelH = 14, textH = 40, blockH = labelH + textH + 4;
+  const int cellH  = imgH + 10 + 3 * blockH;  // image + gap + 3 text blocks
+
+  // Rows per page
+  const int rowsPerPage = qMax(1, (pageH - 2 * margin) / (cellH + margin));
+  const int perPage     = cols * rowsPerPage;
+
   bool firstPage = true;
   int pos = 0;
   for (int si = 0; si < (int)m_shots.size(); si++) {
     for (int pi = 0; pi < (int)m_shots[si].panels.size(); pi++) {
-      int col = pos % cols;
-      if (col == 0 && not firstPage) writer.newPage();
+      int idx  = pos % perPage;
+      int col  = idx % cols;
+      int row  = idx / cols;
+      if (pos > 0 && idx == 0) writer.newPage();
       firstPage = false;
+
       PanelWidget *pw = m_shots[si].panels[pi];
-      int x = margin + col*(cellW+margin), y = margin;
+      int x = margin + col * (cellW + margin);
+      int y = margin + row * (cellH + margin);
+
+      // Shot/panel label
+      painter.setPen(Qt::black);
       painter.setFont(QFont("Arial", 8, QFont::Bold));
-      painter.drawText(x, y-6, QString("S:%1 P:%2/%3")
-        .arg(si+1,2,10,QChar(48)).arg(pi+1).arg((int)m_shots[si].panels.size()));
+      painter.drawText(x, y - 4,
+          QString("%1  P%2/%3")
+              .arg(m_shots[si].data.shotNumber)
+              .arg(pi + 1)
+              .arg((int)m_shots[si].panels.size()));
+
+      // Thumbnail frame
       painter.setPen(QPen(Qt::black, 2));
       painter.drawRect(x, y, cellW, imgH);
-      int ty = y+imgH+14;
-      painter.setFont(QFont("Arial", 7, QFont::Bold));
-      painter.drawText(x, ty, "Dialog:");
-      painter.setFont(QFont("Arial", 7));
-      painter.drawText(x, ty+12, cellW, 40, Qt::AlignLeft|Qt::TextWordWrap, pw->dialog());
-      ty += 56;
-      painter.setFont(QFont("Arial", 7, QFont::Bold));
-      painter.drawText(x, ty, "Action Notes:");
-      painter.setFont(QFont("Arial", 7));
-      painter.drawText(x, ty+12, cellW, 40, Qt::AlignLeft|Qt::TextWordWrap, pw->action());
-      ty += 56;
-      painter.setFont(QFont("Arial", 7, QFont::Bold));
-      painter.drawText(x, ty, "Notes:");
-      painter.setFont(QFont("Arial", 7));
-      painter.drawText(x, ty+12, cellW, 40, Qt::AlignLeft|Qt::TextWordWrap, pw->notes());
+
+      // Render thumbnail if available
+      const QPixmap &thumb = pw->previewPixmap();
+      if (!thumb.isNull()) {
+        QPixmap scaled = thumb.scaled(cellW - 4, imgH - 4,
+            Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        int tx = x + (cellW - scaled.width())  / 2;
+        int ty = y + (imgH  - scaled.height()) / 2;
+        painter.drawPixmap(tx, ty, scaled);
+      } else {
+        // No thumbnail yet — draw a placeholder "X"
+        painter.setPen(QPen(QColor(180, 180, 180), 1));
+        painter.drawLine(x, y, x + cellW, y + imgH);
+        painter.drawLine(x + cellW, y, x, y + imgH);
+      }
+
+      // Text fields
+      int ty2 = y + imgH + 14;
+      auto drawField = [&](const QString &label, const QString &text) {
+        painter.setPen(Qt::black);
+        painter.setFont(QFont("Arial", 7, QFont::Bold));
+        painter.drawText(x, ty2, label);
+        painter.setFont(QFont("Arial", 7));
+        painter.drawText(x, ty2 + labelH, cellW, textH,
+            Qt::AlignLeft | Qt::TextWordWrap, text);
+        ty2 += blockH;
+      };
+      drawField(tr("Dialog:"),       pw->dialog());
+      drawField(tr("Action Notes:"), pw->action());
+      drawField(tr("Notes:"),        pw->notes());
+
       pos++;
     }
   }
   painter.end();
-  QMessageBox::information(this, "Export PDF", "Exported to: " + path);
+  QMessageBox::information(this, tr("Export PDF"),
+      tr("Exported to:\n%1").arg(path));
 }
 
 class StoryboardPanelFactory final : public TPanelFactory {

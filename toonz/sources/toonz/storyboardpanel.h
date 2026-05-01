@@ -78,6 +78,7 @@ public:
   QString dialog()     const;
   QString action()     const;
   QString notes()      const;
+  const QPixmap &previewPixmap() const { return m_previewPixmap; }
   bool    isSelected() const { return m_selected; }
   // Returns the full shot label (prefix + number), e.g. "SH020".
   // For Sequence-style combined labels, returns the SH part only.
