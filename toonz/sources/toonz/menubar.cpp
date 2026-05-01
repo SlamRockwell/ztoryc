@@ -690,7 +690,6 @@ void TopBar::loadMenubar() {
   {
     QMenu *ztoryMenu = new QMenu(QObject::tr("Ztoryc"), windowsMenu);
     addMenuItem(ztoryMenu, MI_OpenStoryboard);
-    addMenuItem(ztoryMenu, MI_OpenZtoryBack);
     addMenuItem(ztoryMenu, MI_OpenZtoryAnimatic);
     addMenuItem(ztoryMenu, MI_OpenZtoryAnimaticViewer);
     ztoryMenu->addSeparator();

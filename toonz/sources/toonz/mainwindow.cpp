@@ -2741,7 +2741,7 @@ void MainWindow::defineActions() {
   createMenuWindowsAction(MI_OpenStudioPalette, QT_TR_NOOP("&Studio Palette"),
                           "", "studiopalette");
   createMenuWindowsAction(MI_OpenStoryboard, QT_TR_NOOP("&Storyboard"), "", "Storyboard");
-  createMenuWindowsAction("MI_OpenZtoryBack", QT_TR_NOOP("&Ztoryc Back"), "", "ZtoryBack");
+
   createMenuWindowsAction("MI_OpenZtoryAnimatic", QT_TR_NOOP("&Ztoryc Animatic"), "", "ZtoryAnimatic");
   createMenuWindowsAction("MI_OpenZtoryAnimaticViewer", QT_TR_NOOP("&Ztoryc Viewer"), "", "ZtoryAnimaticViewer");
 

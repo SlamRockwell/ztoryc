@@ -121,7 +121,7 @@
 #define MI_OpenColorModel "MI_OpenColorModel"
 #define MI_OpenStudioPalette "MI_OpenStudioPalette"
 #define MI_OpenStoryboard "MI_OpenStoryboard"
-#define MI_OpenZtoryBack "MI_OpenZtoryBack"
+
 #define MI_OpenZtoryAnimatic "MI_OpenZtoryAnimatic"
 #define MI_OpenZtoryAnimaticViewer "MI_OpenZtoryAnimaticViewer"
 #define MI_OpenZtoryStoryStrip "MI_OpenZtoryStoryStrip"
