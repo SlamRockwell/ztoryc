@@ -6,6 +6,24 @@
 > Voci più vecchie di ~2 settimane → spostarle in `CHANGELOG_ARCHIVE.md`.
 
 ---
+## [2026-05-01d] — Fix audio toggle 12d + onion skin rimosso + mark-out default + nuovi task
+### Fixed
+- **Bug 12d — Audio toggle in sub-scena** (`sceneviewer.cpp`, `ztoryanimatic.h/.cpp`):
+  `execute()` di `MI_ToggleMainAudio` ora chiama `stopNativeAudio()` sul controller
+  per fermare lo streaming avviato da `onNativePlayingStatusChanged`. Aggiunto
+  `restartNativeAudioIfPlaying()` per ri-abilitare l'audio durante il play quando
+  si toglie il mute.
+- **Mark-out a fine timeline all'avvio** (`ztoryanimatic.cpp`): aggiunto
+  `resetPlayRangeToFull()` su `sceneSwitched` in `ZtoryAnimaticPanel` — il mark-out
+  si posiziona automaticamente all'ultimo frame della scena ad ogni caricamento.
+### Removed
+- **Onion skin dalla toolbar animatic** (`ztoryanimatic.cpp`): rimosso `onionBtn`
+  e i relativi connect dalla toolbar di `ZtoryAnimaticPanel`.
+### Added (ANIMATIC_TASKS)
+- Task 16–22: Workflow startup, stop marker immediato, zoom ruler, cursore resize,
+  taglia/copia/incolla audio, volume per traccia, transizioni.
+
+---
 ## [2026-05-01c] — Undo/Redo CRUD completo + fix refresh anteprime Board
 ### Added
 - **Task 13 — Undo/Redo completo** (`ztoryundo.h`, `storyboardpanel.cpp`, `ztoryanimatic.cpp`):

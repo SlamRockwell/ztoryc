@@ -274,6 +274,12 @@ void ZtoryAnimaticController::onNativePlayingStatusChanged() {
   m_nativeAudioPlaying = true;
 }
 
+void ZtoryAnimaticController::restartNativeAudioIfPlaying() {
+  // Re-enter the same logic as onNativePlayingStatusChanged — it already guards
+  // against isMainAudioEnabled() == false, animatic playing, wrong depth, etc.
+  onNativePlayingStatusChanged();
+}
+
 // ---- ZtoryAnimaticController::onNativeFrameSwitched ----
 // Provides per-frame scrub audio from the main xsheet when the user drags
 // the playhead inside a shot sub-scene.  Mirrors the per-frame scrub logic
@@ -655,6 +661,16 @@ void ZtoryAnimaticRuler::syncOnionToGlobal() const {
     osmh->setOnionSkinMask(off);
   }
   osmh->notifyOnionSkinMaskChanged();
+}
+
+void ZtoryAnimaticRuler::resetPlayRangeToFull() {
+  auto *ctrl = ZtoryAnimaticController::instance();
+  TXsheet *xsh = ctrl->mainXsheet();
+  if (!xsh) return;
+  int lastFrame = std::max(0, videoFrameCount(xsh) - 1);
+  ctrl->setAnimaticPlayRange(0, lastFrame);
+  ctrl->notifyPlayRangeChanged();
+  update();
 }
 
 void ZtoryAnimaticRuler::initPlayRangeIfNeeded() {
@@ -2936,29 +2952,7 @@ ZtoryAnimaticPanel::ZtoryAnimaticPanel(QWidget *parent) : TPanel(parent) {
   tbLay->addWidget(addShotBtn);
   tbLay->addWidget(mergeBtn);
   tbLay->addSpacing(12);
-
-  // Onion skin toggle — controls the animatic's local onion state,
-  // independent from the native timeline.
-  QToolButton *onionBtn = new QToolButton(toolbar);
-  onionBtn->setIcon(createQIcon("ztoryc_onion"));
-  onionBtn->setIconSize(QSize(20, 20));
-  onionBtn->setFixedSize(28, 28);
-  onionBtn->setCheckable(true);
-  onionBtn->setChecked(false);
-  onionBtn->setToolTip(tr("Toggle Onion Skin"));
-  onionBtn->setStyleSheet("QToolButton{background:transparent;border:none;border-radius:4px;}QToolButton:hover{background:#555;}QToolButton:checked{background:#666;}");
-  tbLay->addWidget(onionBtn);
   tbLay->addStretch(1);
-
-  // Ruler ↔ button sync (ruler can auto-enable when first marker is placed)
-  connect(m_ruler, &ZtoryAnimaticRuler::onionEnabledChanged,
-          toolbar, [onionBtn](bool on) {
-    onionBtn->blockSignals(true);
-    onionBtn->setChecked(on);
-    onionBtn->blockSignals(false);
-  });
-  connect(onionBtn, &QToolButton::toggled, m_ruler,
-          &ZtoryAnimaticRuler::setOnionEnabled);
 
   connect(selectBtn, &QToolButton::clicked, this, [this, selectBtn, razorBtn](){
     m_track->setTool(ZtoryAnimaticTrack::SelectTool);
@@ -3046,6 +3040,7 @@ ZtoryAnimaticPanel::ZtoryAnimaticPanel(QWidget *parent) : TPanel(parent) {
     ZtoryAnimaticController::instance()->invalidateSoundTrack();
     if (scene->getChildStack()->getAncestorCount() != 0) return;
     refreshFromScene();
+    m_ruler->resetPlayRangeToFull();
   });
   // Animatic panel listens to the controller's dedicated frame handle,
   // NOT the global TApp frame.  This decouples the animatic playhead from

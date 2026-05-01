@@ -466,11 +466,22 @@ alle sequence del progetto (sq01, sq02…).
 12. ~~**Task 11**~~ ✅ DONE 2026-05-01 — Viewer toggle: ZtoryAnimaticViewerPanel QStackedWidget, ZtoryLeftPanel (Board/XSheet), ZtoryRightPanel (Script+Browser/Palette), doppio click in/out shot mode, setEmbedded() fix
 12b. ~~**BUG testi dialog/action/notes persi al reload**~~ ✅ DONE 2026-05-01 — `syncWidgetsToData()` chiamata in `saveZtoryc()` prima del write XML; il handler `dataChanged` non aggiornava `data.panels[pi].dialog/action/notes` prima del salvataggio
 12c. ~~**Export Animatic: rimosso pulsante Output Settings**~~ ✅ DONE 2026-05-01 — sostituito con label read-only formato/fps/res + nota "change via Render > Output Settings"
-12d. **BUG Audio toggle in sub-scena** — toggle `MI_ToggleMainAudio` non ferma audio in tempo reale durante play in sub-scena (workaround: stop → toggle → play). Root cause: `TXsheet::scrub()` guard funziona ma il percorso `onNativePlayingStatusChanged` riparte lo streaming.
+12d. ~~**BUG Audio toggle in sub-scena**~~ ✅ DONE 2026-05-01 — `stopNativeAudio()` in `execute()` + `restartNativeAudioIfPlaying()` su re-enable
 13. ~~**NEW Undo/Redo**~~ ✅ DONE 2026-05-01 — UndoBoardState snapshot-based; Board+Animatic CRUD completo; fix column bug updatePreview; fix Board preview refresh su showEvent e xsheetChanged-in-sub-scene
+14. ~~**FIX Mark-out a fine timeline all'avvio**~~ ✅ DONE 2026-05-01 — `resetPlayRangeToFull()` chiamata su `sceneSwitched` in ZtoryAnimaticPanel
+15. ~~**FIX Onion skin rimosso dalla toolbar animatic**~~ ✅ DONE 2026-05-01 — rimosso onionBtn + connect da ZtoryAnimaticPanel
+
+### Task prossimi
+16. **NEW Workflow startup page** — selezione workflow all'avvio anche per aprire scene esistenti; spunta sul workflow attivo nel menu Workflow
+17. **FIX Stop marker update immediato all'entrata nello shot** — ora aspetta un ripple; deve aggiornare subito in base alla timeline della sub-scena
+18. **FIX Zoom rotella solo sul ruler** — attualmente si attiva anche sulle tracce; limitare al solo ruler widget
+19. **FIX Cursore resize sul margine traccia** — cambiare cursor a `SizeHorCursor` quando hover sul bordo destro di un blocco shot
+20. **NEW Taglia/copia/incolla audio da tastiera** — Cmd+X/C/V/Delete per le tracce audio (analoga logica Board/Animatic video)
+21. **NEW Volume per traccia audio** — slider o knob per il gain per-track (richiede aggiunta campo in ZtoryModel e lettura in TXsheet::scrub)
+22. **NEW Transizioni** — dissolve tra shot con aggiunta automatica di x/2 frame extra nella sub-scena; UI: handle di overlap sul bordo del blocco
 
 ### Milestone roadmap
-- **Early Beta (v0.2):** ~~Undo/Redo (task 13)~~ ✅ + fix audio toggle (12d) → rilascio
+- **Early Beta (v0.2):** ~~Undo/Redo (task 13)~~ ✅ ~~audio toggle (12d)~~ ✅ → rilascio
 - **M2 Timeline/Animatic:** TFrameHandle dedicato per animatic viewer, Zoom ruler adattivo, Export Animatic → render
 - **M3 Shot Editor avanzato:** Quick-shot selector dropdown, Export PDF con preview reali
 - **M4 Room REFERENCE:** canvas PureRef-style (QGraphicsScene), drag&drop immagini/GIF/video,

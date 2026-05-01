@@ -68,6 +68,10 @@ public:
     m_nativeAudioPlaying = false;
   }
 
+  // Re-triggers native sub-scene audio if play is active and audio is enabled.
+  // Call this when un-muting (MI_ToggleMainAudio re-enabled) during playback.
+  void restartNativeAudioIfPlaying();
+
   // Animatic-owned play range — independent from scene->getPreviewProperties()
   // which is shared with (and overwritten by) the native xsheet viewer when
   // entering/leaving sub-scenes.  The ruler and animatic marker logic read
@@ -118,6 +122,7 @@ public:
   void setCurrentFrame(int f) { m_currentFrame = f; update(); }
   int currentFrame() const { return m_currentFrame; }
   void initPlayRangeIfNeeded();
+  void resetPlayRangeToFull();
 
   // Local (independent) onion skin — does NOT share state with native timeline
   void setOnionEnabled(bool on);

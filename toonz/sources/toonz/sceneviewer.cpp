@@ -299,6 +299,11 @@ void ToggleCommandHandler::execute() {
     if (!m_status) {
       ZtoryAnimaticViewer *v = ZtoryAnimaticController::instance()->viewer();
       if (v) v->stopAudio();
+      // Also stop audio started by the controller for sub-scene native playback.
+      ZtoryAnimaticController::instance()->stopNativeAudio();
+    } else {
+      // Re-enabled while playing in a sub-scene: restart streaming audio.
+      ZtoryAnimaticController::instance()->restartNativeAudioIfPlaying();
     }
   }
   // emit sceneChanged WITHOUT dirty flag
