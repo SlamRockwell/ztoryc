@@ -541,6 +541,11 @@ in TXsheetImp.
   void stopScrub();
   void play(TSoundTrackP soundtrack, int s0, int s1, bool loop);
 
+  // Global main-audio enable flag — toggled by MI_ToggleMainAudio (sceneviewer.cpp).
+  // scrub() checks this flag and returns early when audio is disabled.
+  static void setMainAudioEnabled(bool on);
+  static bool isMainAudioEnabled();
+
   /*! Returns microseconds of audio played since the last play() call,
    *  as reported by the hardware DAC clock (TSoundOutputDevice::processedUsecs).
    *  Returns 0 if no audio device is active.  Use this as the master clock

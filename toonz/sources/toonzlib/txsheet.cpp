@@ -39,11 +39,9 @@
 
 #include "toonz/txsheet.h"
 #include "toonz/preferences.h"
-#include "toonzqt/selectioncommandids.h"
 
 // STD includes
 #include <set>
-extern ToggleCommandHandler mainAudioToggle;
 
 using namespace std;
 
@@ -1781,7 +1779,7 @@ TSoundTrack *TXsheet::makeSound(SoundProperties *properties, int col) {
 //-----------------------------------------------------------------------------
 
 void TXsheet::scrub(int frame, bool isPreview) {
-  if (!mainAudioToggle.getStatus()) return;
+  if (!TXsheet::isMainAudioEnabled()) return;
   try {
     double fps =
         getScene()->getProperties()->getOutputProperties()->getFrameRate();
@@ -1825,6 +1823,13 @@ void TXsheet::scrub(int frame, bool isPreview) {
 void TXsheet::stopScrub() {
   if (m_player) m_player->stop();
 }
+
+//-----------------------------------------------------------------------------
+
+static bool s_mainAudioEnabled = true;
+
+void TXsheet::setMainAudioEnabled(bool on) { s_mainAudioEnabled = on; }
+bool TXsheet::isMainAudioEnabled() { return s_mainAudioEnabled; }
 
 //-----------------------------------------------------------------------------
 

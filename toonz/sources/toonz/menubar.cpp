@@ -691,6 +691,9 @@ void TopBar::loadMenubar() {
   addMenuItem(windowsMenu, MI_OpenZtoryAnimatic);
   addMenuItem(windowsMenu, MI_OpenZtoryAnimaticViewer);
   addMenuItem(windowsMenu, MI_OpenZtoryStoryStrip);
+  addMenuItem(windowsMenu, "MI_OpenZtoryScript");
+  addMenuItem(windowsMenu, "MI_OpenZtoryLeftPanel");
+  addMenuItem(windowsMenu, "MI_OpenZtoryRightPanel");
   addMenuItem(windowsMenu, MI_OpenSchematic);
   addMenuItem(windowsMenu, MI_InsertFx);
   addMenuItem(windowsMenu, MI_FxParamEditor);

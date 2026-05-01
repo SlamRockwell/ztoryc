@@ -2,6 +2,7 @@
 #include <QObject>
 #include <QPixmap>
 #include <QString>
+#include <QStringList>
 #include <vector>
 #include <set>
 #include "toonz/txshchildlevel.h"  // for TXshLevelP
@@ -107,6 +108,12 @@ class ZtoryModel : public QObject {
   std::vector<ZtoryClipEntry>       m_sharedClip;
   std::set<int>                     m_sharedSelection;
   NumberingConfig                   m_numberingConfig;
+
+  // Side-panel toggle: which panel types to show in animatic vs shot mode.
+  // Defaults are reasonable; user can customise via ZtoryModel API.
+  QStringList m_animaticSidePanels;  // shown in animatic mode
+  QStringList m_shotSidePanels;      // shown in shot mode
+  bool        m_sidePanelsLinked = true;  // if true, viewer toggle drives side panels
 
   ZtoryModel();
 
@@ -214,6 +221,19 @@ public:
   void onSceneChanged();
   void updateColumnName(int shotIdx);
 
+  // Viewer switch helpers — call these instead of emitting signals directly.
+  // They decouple Board/Timeline from ZtoryAnimaticViewerPanel.
+  void activateShotForViewing(int col);   // emits shotActivatedForViewing
+  void requestReturnToViewer();           // emits returnToViewerMainRequested
+
+  // Side-panel toggle configuration.
+  bool        sidePanelsLinked()    const { return m_sidePanelsLinked; }
+  void        setSidePanelsLinked(bool on) { m_sidePanelsLinked = on; }
+  QStringList animaticSidePanels()  const { return m_animaticSidePanels; }
+  QStringList shotSidePanels()      const { return m_shotSidePanels; }
+  void        setAnimaticSidePanels(const QStringList &l) { m_animaticSidePanels = l; }
+  void        setShotSidePanels(const QStringList &l)     { m_shotSidePanels = l; }
+
 signals:
   void workflowChanged(ZtoryWorkflow workflow);
   void modelReset();                          // tutto cambiato
@@ -223,4 +243,8 @@ signals:
   void shotMoved(int fromIdx, int toIdx);
   void shotDataChanged(int shotIdx);
   void previewUpdated(int shotIdx, int panelIdx);
+  // Viewer-switch signals: emitted by activateShotForViewing / requestReturnToViewer.
+  // ZtoryAnimaticViewerPanel connects to these to switch stack pages.
+  void shotActivatedForViewing(int col);
+  void returnToViewerMainRequested();
 };

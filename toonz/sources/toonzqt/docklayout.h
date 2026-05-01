@@ -259,6 +259,14 @@ public:
   //! It can be reimplemented to build custom-styled dock widgets.
   virtual void setDockedAppearance() {}
 
+  //! Call this when the widget is embedded inside another widget's layout
+  //! (not managed by a DockLayout). Prevents drag-to-float and resize grips.
+  void setEmbedded() {
+    m_floating     = false;
+    m_parentLayout = nullptr;
+    setDockedAppearance();
+  }
+
   virtual bool isDragGrip(QPoint p);
   virtual int isResizeGrip(QPoint) {
     return 0;  // Native deco widgets handle margins and resizes on their own

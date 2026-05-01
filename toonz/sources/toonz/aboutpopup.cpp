@@ -25,7 +25,7 @@ void AboutClickableLabel::mousePressEvent(QMouseEvent* event) {
 AboutPopup::AboutPopup(QWidget* parent)
     : DVGui::Dialog(parent, true, true, "About Ztoryc") {
   setFixedWidth(360);
-  setFixedHeight(383);
+  setFixedHeight(380);
 
   setWindowTitle(tr("About Ztoryc"));
   setTopMargin(0);
@@ -36,21 +36,33 @@ AboutPopup::AboutPopup(QWidget* parent)
   QVBoxLayout* mainLayout = new QVBoxLayout();
 
   QLabel* logo = new QLabel(this);
-
-  logo->setPixmap(QPixmap::fromImage(QImage(":Resources/ztoryc_about.png")));
+  QPixmap logoPixmap = QPixmap::fromImage(
+      QImage(":Resources/ztoryc_about.png")).scaled(
+      80, 80, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+  logo->setPixmap(logoPixmap);
+  logo->setAlignment(Qt::AlignHCenter);
   mainLayout->addWidget(logo);
 
   QString name = QString::fromStdString(TEnv::getApplicationFullName());
   name += "\nBuilt: " __DATE__;
-  mainLayout->addWidget(new QLabel(name));
+  QLabel* nameLabel = new QLabel(name, this);
+  nameLabel->setAlignment(Qt::AlignHCenter);
+  mainLayout->addWidget(nameLabel);
 
-  QLabel* blankLabel = new QLabel(this);
-  blankLabel->setText(tr(" "));
+  QLabel* forkLabel = new QLabel(tr("Fork of Tahoma2D 1.6.0"), this);
+  forkLabel->setAlignment(Qt::AlignHCenter);
+  mainLayout->addWidget(forkLabel);
 
-  mainLayout->addWidget(blankLabel);
+  AboutClickableLabel* githubLink = new AboutClickableLabel(this);
+  githubLink->setText(tr("github.com/matitanimata/ztoryc"));
+  githubLink->setAlignment(Qt::AlignHCenter);
+  connect(githubLink, &AboutClickableLabel::clicked, [=]() {
+    QDesktopServices::openUrl(QUrl("https://github.com/matitanimata/ztoryc"));
+  });
+  mainLayout->addWidget(githubLink);
 
   AboutClickableLabel* licenseLink = new AboutClickableLabel(this);
-  licenseLink->setText(tr("Ztoryc License"));
+  licenseLink->setText(tr("Ztoryc License (GPL v3)"));
 
   connect(licenseLink, &AboutClickableLabel::clicked, [=]() {
     if (TSystem::isUNC(tahomaLicensePath))
@@ -77,34 +89,21 @@ AboutPopup::AboutPopup(QWidget* parent)
 
   mainLayout->addWidget(thirdPartyLink);
 
-  QLabel* ffmpegLabel = new QLabel(this);
-  ffmpegLabel->setText(tr(
-      "Ztoryc ships with FFmpeg.\nFFmpeg is licensed under the LGPLv2.1"));
-  mainLayout->addWidget(ffmpegLabel);
+  QLabel* thirdPartyTools = new QLabel(
+      tr("Ztoryc ships with FFmpeg (LGPLv2.1)\nand Rhubarb Lip Sync (MIT)."), this);
+  thirdPartyTools->setAlignment(Qt::AlignHCenter);
+  mainLayout->addWidget(thirdPartyTools);
 
-  mainLayout->addSpacerItem(new QSpacerItem(this->width(), 10));
+  mainLayout->addSpacerItem(new QSpacerItem(0, 10));
 
-  mainLayout->addWidget(
-      new QLabel(tr("Ztoryc is made possible with the help of "
-                    "patrons.\nSpecial thanks to:")));
-  QLabel* patrons = new QLabel(
-      "<i>Rodney Baker, Hans Jacob Wagner, Pierre Coffin, Adam Earle, MelieConieK</i>");
-  patrons->setTextFormat(Qt::TextFormat::RichText);
-  patrons->setWordWrap(true);
-  mainLayout->addWidget(patrons);
-  mainLayout->addWidget(new QLabel("  "));
+  QLabel* thanksLabel = new QLabel(
+      tr("Special thanks to manongjohn and the entire\n"
+         "Tahoma2D team for the open-source foundation\n"
+         "this project builds upon."), this);
+  thanksLabel->setAlignment(Qt::AlignHCenter);
+  thanksLabel->setWordWrap(true);
+  mainLayout->addWidget(thanksLabel);
 
-  //  AboutClickableLabel* supportLink = new AboutClickableLabel(this);
-  //  supportLink->setText(tr("Please consider supporting Ztoryc on
-  //  Patreon."));
-  //  connect(supportLink, &AboutClickableLabel::clicked, [=]() {
-  //    QDesktopServices::openUrl(QUrl("https://patreon.com/jeremybullock"));
-  //    ;
-  //  });
-  //  supportLink->setToolTip("https://patreon.com/jeremybullock");
-  //  mainLayout->addWidget(supportLink);
-  mainLayout->addWidget(new QLabel(
-      tr("Please consider sponsoring Ztoryc developers on GitHub.")));
   mainLayout->addStretch();
 
   QFrame* mainFrame = new QFrame(this);

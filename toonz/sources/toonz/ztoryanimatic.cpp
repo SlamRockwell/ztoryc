@@ -1,5 +1,7 @@
 
 #include "ztoryanimatic.h"
+#include "viewerpane.h"
+#include "comboviewerpane.h"
 #include "ztorymodel.h"
 #include "toonz/tcolumnhandle.h"
 #include "subscenecommand.h"
@@ -54,6 +56,14 @@
 #include <thread>
 extern ToggleCommandHandler mainAudioToggle;
 #include "toonzqt/selectioncommandids.h"
+#include "pane.h"
+#include "mainwindow.h"
+#include "storyboardpanel.h"
+#include "tpanels.h"
+#include "ztoryscriptpanel.h"
+#include "filebrowser.h"
+#include <QSplitter>
+#include <QApplication>
 
 // Shared label column width — must match ZtoryAudioTrack::labelW (80px).
 // Used by ZtoryAnimaticRuler and ZtoryAnimaticTrack to align with audio tracks.
@@ -249,7 +259,7 @@ void ZtoryAnimaticController::onNativePlayingStatusChanged() {
 
   if (startSample > endSample) return;
 
-  if (!mainAudioToggle.getStatus()) return;
+  if (!TXsheet::isMainAudioEnabled()) return;
   mainXsh->play(st.getPointer(), startSample, endSample, false);
   m_nativeAudioPlaying = true;
 }
@@ -289,7 +299,7 @@ void ZtoryAnimaticController::onNativeFrameSwitched() {
   if (s0 >= totalSamples) return;
   if (s1 >= totalSamples) s1 = totalSamples - 1;
 
-  if (!mainAudioToggle.getStatus()) return;
+  if (!TXsheet::isMainAudioEnabled()) return;
   mainXsh->play(st.getPointer(), s0, s1, false);
 }
 
@@ -1975,7 +1985,7 @@ void ZtoryAnimaticViewer::onDrawFrame(
               stopFr = mr1 + 1;
           }
           TINT32 endSmp = std::min((TINT32)(stopFr * spf3), totalSmp - 1);
-          if (startSmp <= endSmp && mainAudioToggle.getStatus()) {
+          if (startSmp <= endSmp && TXsheet::isMainAudioEnabled()) {
             mainXsh2->play(m_sound, startSmp, endSmp, false);
             m_continuousPlay = true;
           }
@@ -2122,7 +2132,7 @@ void ZtoryAnimaticViewer::refreshAnimaticSound() {
 // no-op so it does not interrupt or replace the streaming buffer.
 void ZtoryAnimaticViewer::playAnimaticAudioFrame(int frame) {
   if (m_continuousPlay) return;   // audio already streaming — do nothing
-  if (!mainAudioToggle.getStatus()) return;  // audio toggle OFF
+  if (!TXsheet::isMainAudioEnabled()) return;  // audio toggle OFF
   if (!m_sound) return;
   if (m_first) {
     m_first           = false;
@@ -2225,7 +2235,7 @@ void ZtoryAnimaticViewer::onAnimaticPlayingStatusChanged(bool playing) {
   // TSoundOutputDeviceImp uses QAudioOutput with a 100 ms hardware buffer,
   // refilled every 50 ms via QAudioOutput::notify.  One call avoids the
   // per-frame m_buffer replacement that caused glitches in the old approach.
-  if (!mainAudioToggle.getStatus()) return;  // audio toggle OFF
+  if (!TXsheet::isMainAudioEnabled()) return;  // audio toggle OFF
   mainXsh->play(m_sound, startSample, endSample, false);
   m_continuousPlay = true;
 }
@@ -2281,7 +2291,7 @@ void ZtoryAnimaticViewer::restartAudioIfPlaying() {
 
   // play() overwrites the QAudioOutput buffer in-place — no stop/restart.
   // QAudioOutput continues streaming; new data replaces the old within ~100ms.
-  if (!mainAudioToggle.getStatus()) return;
+  if (!TXsheet::isMainAudioEnabled()) return;
   mainXsh->play(m_sound, startSample, endSample, false);
 }
 
@@ -2295,7 +2305,7 @@ void ZtoryAnimaticViewer::stopAudio() {
 }
 
 void ZtoryAnimaticViewer::onAudioToggleChanged() {
-  if (!mainAudioToggle.getStatus()) return;  // audio already OFF — nothing to stop
+  if (!TXsheet::isMainAudioEnabled()) return;  // audio already OFF — nothing to stop
   // Audio toggled OFF — stop any active playback immediately
   ZtoryAnimaticController *ctrl = ZtoryAnimaticController::instance();
   TXsheet *mainXsh = ctrl ? ctrl->mainXsheet() : nullptr;
@@ -2397,22 +2407,388 @@ void ZtoryAnimaticViewer::showEvent(QShowEvent *e) {
   if (m_sceneViewer) m_sceneViewer->update();
 }
 
+// ---- ZtoryRightPanel ----
+
+ZtoryRightPanel::ZtoryRightPanel(QWidget *parent)
+    : TPanel(parent) {
+  setWindowTitle(tr("Ztory Right"));
+  setPanelType("ZtoryRightPanel");
+
+  QWidget *container = new QWidget(this);
+  QVBoxLayout *lay   = new QVBoxLayout(container);
+  lay->setContentsMargins(0, 0, 0, 0);
+  lay->setSpacing(0);
+
+  // Toggle bar
+  QWidget *bar      = new QWidget(container);
+  QHBoxLayout *barL = new QHBoxLayout(bar);
+  barL->setContentsMargins(2, 2, 2, 2);
+  barL->setSpacing(2);
+
+  m_toggleBtn = new QToolButton(bar);
+  m_toggleBtn->setText(tr("ANIMATIC | SHOT"));
+  m_toggleBtn->setCheckable(true);
+  m_toggleBtn->setChecked(false);
+  m_toggleBtn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+  m_toggleBtn->setFixedHeight(22);
+  barL->addWidget(m_toggleBtn);
+
+  m_linkBtn = new QToolButton(bar);
+  m_linkBtn->setText(tr("🔗"));
+  m_linkBtn->setCheckable(true);
+  m_linkBtn->setChecked(ZtoryModel::instance()->sidePanelsLinked());
+  m_linkBtn->setFixedSize(28, 22);
+  barL->addWidget(m_linkBtn);
+  lay->addWidget(bar);
+
+  m_stack = new QStackedWidget(container);
+
+  // ── Page 0: animatic mode ─────────────────────────────────────────────────
+  QSplitter *animaticSplit = new QSplitter(Qt::Vertical, m_stack);
+
+  // Script viewer
+  ZtoryScriptView *scriptView = new ZtoryScriptView(animaticSplit);
+  animaticSplit->addWidget(scriptView);
+
+  // File Browser
+  FileBrowser *browser = new FileBrowser(animaticSplit, Qt::WindowFlags(), false, true);
+  animaticSplit->addWidget(browser);
+
+  // Record audio mic button bar
+  QWidget *micBar     = new QWidget(animaticSplit);
+  QHBoxLayout *micLay = new QHBoxLayout(micBar);
+  micLay->setContentsMargins(4, 2, 4, 2);
+  QToolButton *micBtn = new QToolButton(micBar);
+  micBtn->setText(tr("🎙 Record Audio"));
+  micBtn->setToolTip(tr("Open Audio Recording panel"));
+  micBtn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+  micBtn->setFixedHeight(26);
+  micLay->addWidget(micBtn);
+  animaticSplit->addWidget(micBar);
+
+  // Give script 60% of height, browser 35%, mic bar the rest
+  animaticSplit->setStretchFactor(0, 6);
+  animaticSplit->setStretchFactor(1, 35);
+  animaticSplit->setStretchFactor(2, 0);
+
+  m_stack->addWidget(animaticSplit);  // page 0
+
+  lay->addWidget(m_stack, 1);
+  setWidget(container);
+
+  // Mic button → open AudioRecordingPopup (floating dialog, existing Tahoma2D command)
+  connect(micBtn, &QToolButton::clicked, []() {
+    CommandManager::instance()->execute(MI_AudioRecording);
+  });
+
+  // Manual toggle
+  connect(m_toggleBtn, &QToolButton::toggled, this, [this](bool shotMode) {
+    if (shotMode) showShotMode();
+    else          showAnimaticMode();
+  });
+
+  connect(m_linkBtn, &QToolButton::toggled, this, [](bool on) {
+    ZtoryModel::instance()->setSidePanelsLinked(on);
+  });
+
+  // Viewer-driven auto-switch
+  connect(ZtoryModel::instance(), &ZtoryModel::shotActivatedForViewing,
+          this, &ZtoryRightPanel::showShotMode);
+  connect(ZtoryModel::instance(), &ZtoryModel::returnToViewerMainRequested,
+          this, &ZtoryRightPanel::showAnimaticMode);
+  connect(TApp::instance()->getCurrentXsheet(), &TXsheetHandle::xsheetSwitched,
+          this, [this]() {
+    if (m_stack->currentIndex() != 1) return;
+    ToonzScene *scene = TApp::instance()->getCurrentScene()->getScene();
+    if (scene && scene->getChildStack()->getAncestorCount() == 0)
+      showAnimaticMode();
+  });
+}
+
+void ZtoryRightPanel::showAnimaticMode() {
+  if (!ZtoryModel::instance()->sidePanelsLinked()) return;
+  m_stack->setCurrentIndex(0);
+  m_toggleBtn->blockSignals(true);
+  m_toggleBtn->setChecked(false);
+  m_toggleBtn->setText(tr("ANIMATIC | SHOT"));
+  m_toggleBtn->blockSignals(false);
+}
+
+void ZtoryRightPanel::showShotMode(int /*col*/) {
+  if (!ZtoryModel::instance()->sidePanelsLinked()) return;
+  // Lazy-create shot-mode panels on first activation
+  if (!m_styleEditor) {
+    QSplitter *shotSplit = new QSplitter(Qt::Vertical, m_stack);
+
+    m_studioPalette = new StudioPaletteViewerPanel(shotSplit);
+    m_studioPalette->getTitleBar()->hide();
+    m_studioPalette->setEmbedded();
+    shotSplit->addWidget(m_studioPalette);
+
+    m_styleEditor = new StyleEditorPanel(shotSplit);
+    m_styleEditor->getTitleBar()->hide();
+    m_styleEditor->setEmbedded();
+    shotSplit->addWidget(m_styleEditor);
+
+    m_levelPalette = new PaletteViewerPanel(shotSplit);
+    m_levelPalette->getTitleBar()->hide();
+    m_levelPalette->setEmbedded();
+    shotSplit->addWidget(m_levelPalette);
+
+    shotSplit->setStretchFactor(0, 3);
+    shotSplit->setStretchFactor(1, 4);
+    shotSplit->setStretchFactor(2, 3);
+
+    m_stack->addWidget(shotSplit);  // page 1
+  }
+  m_stack->setCurrentIndex(1);
+  m_toggleBtn->blockSignals(true);
+  m_toggleBtn->setChecked(true);
+  m_toggleBtn->setText(tr("SHOT | ANIMATIC"));
+  m_toggleBtn->blockSignals(false);
+}
+
+// ---- ZtoryLeftPanel ----
+
+ZtoryLeftPanel::ZtoryLeftPanel(QWidget *parent)
+    : TPanel(parent) {
+  setWindowTitle(tr("Ztory Left"));
+  setPanelType("ZtoryLeftPanel");
+
+  QWidget *container  = new QWidget(this);
+  QVBoxLayout *lay    = new QVBoxLayout(container);
+  lay->setContentsMargins(0, 0, 0, 0);
+  lay->setSpacing(0);
+
+  // Toggle bar: [BOARD | XSHEET (checkable)] [🔗 link]
+  QWidget *bar      = new QWidget(container);
+  QHBoxLayout *barL = new QHBoxLayout(bar);
+  barL->setContentsMargins(2, 2, 2, 2);
+  barL->setSpacing(2);
+
+  m_toggleBtn = new QToolButton(bar);
+  m_toggleBtn->setText(tr("BOARD | XSHEET"));
+  m_toggleBtn->setToolTip(tr("Toggle between Board (storyboard) and XSheet views"));
+  m_toggleBtn->setCheckable(true);
+  m_toggleBtn->setChecked(false);  // false = Board, true = XSheet
+  m_toggleBtn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+  m_toggleBtn->setFixedHeight(22);
+  barL->addWidget(m_toggleBtn);
+
+  m_linkBtn = new QToolButton(bar);
+  m_linkBtn->setText(tr("🔗"));
+  m_linkBtn->setToolTip(tr("Link to viewer toggle\n"
+                            "When active, switches with the Animatic/Shot viewer"));
+  m_linkBtn->setCheckable(true);
+  m_linkBtn->setChecked(ZtoryModel::instance()->sidePanelsLinked());
+  m_linkBtn->setFixedSize(28, 22);
+  barL->addWidget(m_linkBtn);
+
+  lay->addWidget(bar);
+
+  // Stack: page 0 = Board, page 1 = XSheet (lazy)
+  m_stack = new QStackedWidget(container);
+
+  m_boardPanel = new StoryboardPanel(m_stack);
+  m_boardPanel->getTitleBar()->hide();
+  m_boardPanel->setEmbedded();  // prevents drag-to-float when inside ZtoryLeftPanel
+  m_stack->addWidget(m_boardPanel);  // page 0
+
+  lay->addWidget(m_stack, 1);
+  setWidget(container);
+
+  // Manual toggle button
+  connect(m_toggleBtn, &QToolButton::toggled, this, [this](bool xsheetMode) {
+    if (xsheetMode) {
+      // Lazy-create XSheet panel on first switch
+      if (!m_xsheetPanel) {
+        m_xsheetPanel = new XsheetViewerPanel(m_stack);
+        m_xsheetPanel->getTitleBar()->hide();
+        m_xsheetPanel->setEmbedded();
+        m_xsheetPanel->reset();
+        m_stack->addWidget(m_xsheetPanel);  // page 1
+      }
+      m_stack->setCurrentIndex(1);
+    } else {
+      m_stack->setCurrentIndex(0);
+    }
+    m_toggleBtn->setText(xsheetMode ? tr("XSHEET | BOARD") : tr("BOARD | XSHEET"));
+  });
+
+  // Link button syncs state to ZtoryModel
+  connect(m_linkBtn, &QToolButton::toggled, this, [](bool on) {
+    ZtoryModel::instance()->setSidePanelsLinked(on);
+  });
+
+  // Viewer mode signals — only react when linked
+  connect(ZtoryModel::instance(), &ZtoryModel::shotActivatedForViewing,
+          this, &ZtoryLeftPanel::showShotMode);
+  connect(ZtoryModel::instance(), &ZtoryModel::returnToViewerMainRequested,
+          this, &ZtoryLeftPanel::showBoardMode);
+  // Edge case: xsheet navigated back to main by any path
+  connect(TApp::instance()->getCurrentXsheet(), &TXsheetHandle::xsheetSwitched,
+          this, [this]() {
+    if (m_stack->currentIndex() != 1) return;
+    ToonzScene *scene = TApp::instance()->getCurrentScene()->getScene();
+    if (scene && scene->getChildStack()->getAncestorCount() == 0)
+      showBoardMode();
+  });
+}
+
+void ZtoryLeftPanel::showBoardMode() {
+  if (!ZtoryModel::instance()->sidePanelsLinked()) return;
+  m_stack->setCurrentIndex(0);
+  m_toggleBtn->blockSignals(true);
+  m_toggleBtn->setChecked(false);
+  m_toggleBtn->setText(tr("BOARD | XSHEET"));
+  m_toggleBtn->blockSignals(false);
+}
+
+void ZtoryLeftPanel::showShotMode(int /*col*/) {
+  if (!ZtoryModel::instance()->sidePanelsLinked()) return;
+  if (!m_xsheetPanel) {
+    m_xsheetPanel = new XsheetViewerPanel(m_stack);
+    m_xsheetPanel->getTitleBar()->hide();
+    m_xsheetPanel->setEmbedded();
+    m_xsheetPanel->reset();
+    m_stack->addWidget(m_xsheetPanel);  // page 1
+  }
+  m_stack->setCurrentIndex(1);
+  m_toggleBtn->blockSignals(true);
+  m_toggleBtn->setChecked(true);
+  m_toggleBtn->setText(tr("XSHEET | BOARD"));
+  m_toggleBtn->blockSignals(false);
+}
+
 // ---- ZtoryAnimaticViewerPanel ----
 
 ZtoryAnimaticViewerPanel::ZtoryAnimaticViewerPanel(QWidget *parent)
     : TPanel(parent) {
   setWindowTitle("Ztory Viewer");
-  m_viewer = new ZtoryAnimaticViewer(this);
+
+  // Container: back button (top, hidden in animatic mode) + stacked viewer (below)
+  QWidget *container = new QWidget(this);
+  QVBoxLayout *lay   = new QVBoxLayout(container);
+  lay->setContentsMargins(0, 0, 0, 0);
+  lay->setSpacing(0);
+
+  // Top bar: [← Back to Animatic (expanding)] [🔗 link side panels (fixed)]
+  // The whole bar is hidden in animatic mode and shown in shot mode.
+  QWidget *topBar   = new QWidget(container);
+  QHBoxLayout *barLay = new QHBoxLayout(topBar);
+  barLay->setContentsMargins(0, 0, 0, 0);
+  barLay->setSpacing(2);
+
+  m_backBtn = new QToolButton(topBar);
+  m_backBtn->setText(tr("← Back to Animatic"));
+  m_backBtn->setToolTip(tr("Return to Animatic viewer and close sub-scene"));
+  m_backBtn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+  m_backBtn->setFixedHeight(22);
+  barLay->addWidget(m_backBtn);
+
+  m_linkBtn = new QToolButton(topBar);
+  m_linkBtn->setText(tr("🔗"));
+  m_linkBtn->setToolTip(tr("Link side panels to viewer toggle\n"
+                            "When active, Board/Xsheet and other panels\n"
+                            "switch automatically with the viewer"));
+  m_linkBtn->setCheckable(true);
+  m_linkBtn->setChecked(ZtoryModel::instance()->sidePanelsLinked());
+  m_linkBtn->setFixedSize(28, 22);
+  barLay->addWidget(m_linkBtn);
+
+  m_topBar = topBar;
+  m_topBar->hide();  // hidden until user enters a shot
+  lay->addWidget(m_topBar);
+
+  // QStackedWidget: page 0 = animatic viewer (always present),
+  // page 1 = shot viewer (created lazily on first enterShotMode call).
+  m_stack = new QStackedWidget(container);
+
+  m_viewer = new ZtoryAnimaticViewer(m_stack);
   m_viewer->setMinimumHeight(120);
-  setWidget(m_viewer);
-  // Add camera stand / camera view / preview buttons to the panel title bar.
-  // Must be called after setWidget() so getTitleBar() is valid.
+  m_stack->addWidget(m_viewer);  // index 0
+
+  lay->addWidget(m_stack, 1);
+  setWidget(container);
+
+  // Title bar buttons for the animatic viewer.
   m_viewer->initializeAnimaticTitleBar(getTitleBar());
+
+  // Back button → return to animatic mode.
+  connect(m_backBtn, &QToolButton::clicked,
+          this, &ZtoryAnimaticViewerPanel::returnToAnimaticMode);
+
+  // Link button → persist the linked state in ZtoryModel.
+  connect(m_linkBtn, &QToolButton::toggled, this, [](bool on) {
+    ZtoryModel::instance()->setSidePanelsLinked(on);
+  });
+
+  // Model signals: double-click anywhere (board or timeline) triggers enterShotMode;
+  // any "back to main" request triggers returnToAnimaticMode.
+  connect(ZtoryModel::instance(), &ZtoryModel::shotActivatedForViewing,
+          this, &ZtoryAnimaticViewerPanel::enterShotMode);
+  connect(ZtoryModel::instance(), &ZtoryModel::returnToViewerMainRequested,
+          this, &ZtoryAnimaticViewerPanel::returnToAnimaticMode);
+
+  // Edge case: user navigates back to main xsheet via any path other than the
+  // back button (e.g., double-click on empty area in the Board panel, or
+  // MI_CloseChild from keyboard/menu).  When we detect the xsheet switched back
+  // to main level (ancestorCount == 0) while we are in shot view, auto-return.
+  connect(TApp::instance()->getCurrentXsheet(), &TXsheetHandle::xsheetSwitched,
+          this, [this]() {
+    if (m_stack->currentIndex() != 1) return;  // already in animatic mode
+    ToonzScene *scene = TApp::instance()->getCurrentScene()->getScene();
+    if (scene && scene->getChildStack()->getAncestorCount() == 0) {
+      // Already at main level — just update the viewer, no need to close child.
+      m_stack->setCurrentIndex(0);
+      m_topBar->hide();
+    }
+  });
+}
+
+void ZtoryAnimaticViewerPanel::enterShotMode(int /*col*/) {
+  // Caller (onShotDoubleClicked / onEditShot) has already opened the sub-scene.
+  // Here we only switch the viewer page, show the top bar, and (if linked)
+  // switch the side panels to shot mode.
+  if (!m_shotViewer) {
+    m_shotViewer = new ComboViewerPanel(m_stack);
+    m_shotViewer->setMinimumHeight(120);
+    m_stack->addWidget(m_shotViewer);  // index 1
+    // Double-click on the shot viewer returns to animatic mode,
+    // mirroring the double-click-to-enter gesture.
+    m_shotViewer->installEventFilter(this);
+  }
+  m_stack->setCurrentIndex(1);
+  m_topBar->show();
+}
+
+bool ZtoryAnimaticViewerPanel::eventFilter(QObject *obj, QEvent *e) {
+  // Double-click anywhere on the shot viewer exits shot mode —
+  // mirrors the double-click-to-enter gesture on the board/timeline.
+  if (m_shotViewer &&
+      obj == m_shotViewer &&
+      e->type() == QEvent::MouseButtonDblClick) {
+    returnToAnimaticMode();
+    return true;  // consume event
+  }
+  return TPanel::eventFilter(obj, e);
+}
+
+void ZtoryAnimaticViewerPanel::returnToAnimaticMode() {
+  // Close any open sub-scene, switch back to the animatic viewer page, and
+  // (if linked) restore the side panels to animatic mode.
+  ToonzScene *scene = TApp::instance()->getCurrentScene()->getScene();
+  if (scene) {
+    while (scene->getChildStack()->getAncestorCount() > 0)
+      CommandManager::instance()->execute("MI_CloseChild");
+  }
+  m_stack->setCurrentIndex(0);
+  m_topBar->hide();
 }
 
 void ZtoryAnimaticViewerPanel::showEvent(QShowEvent *e) {
   TPanel::showEvent(e);
-  m_viewer->show();
+  // QStackedWidget manages visibility of the current page; no manual show() needed.
 }
 
 // ---- ZtoryStoryStripPanel ----
@@ -3197,6 +3573,8 @@ void ZtoryAnimaticPanel::onShotDoubleClicked(int col) {
     // Keep the animatic controller's frame at the shot's main-xsheet row
     // so the animatic viewer renders at the correct position.
     ZtoryAnimaticController::instance()->setCurrentFrame(r0);
+    // Switch the viewer panel to shot view (ZtoryAnimaticViewerPanel listens).
+    ZtoryModel::instance()->activateShotForViewing(col);
   }
 }
 
@@ -3205,6 +3583,9 @@ void ZtoryAnimaticPanel::onReturnToMain() {
   if (!scene) return;
   while (scene->getChildStack()->getAncestorCount() > 0)
     CommandManager::instance()->execute("MI_CloseChild");
+  // returnToAnimaticMode() in the viewer panel will also close the sub-scene,
+  // but since we already closed it above it becomes a no-op there.
+  ZtoryModel::instance()->requestReturnToViewer();
 }
 
 void ZtoryAnimaticPanel::onShotMoved(int col, int newStartFrame) {
@@ -4212,5 +4593,29 @@ public:
   }
   void initialize(TPanel *panel) override { assert(0); }
 } ztoryStoryStripPanelFactory;
+
+class ZtoryRightPanelFactory final : public TPanelFactory {
+public:
+  ZtoryRightPanelFactory() : TPanelFactory("ZtoryRightPanel") {}
+  TPanel *createPanel(QWidget *parent) override {
+    TPanel *panel = new ZtoryRightPanel(parent);
+    panel->setObjectName("ZtoryRightPanel");
+    panel->setWindowTitle("Ztoryc Script/Palette");
+    return panel;
+  }
+  void initialize(TPanel *panel) override { assert(0); }
+} ztoryRightPanelFactory;
+
+class ZtoryLeftPanelFactory final : public TPanelFactory {
+public:
+  ZtoryLeftPanelFactory() : TPanelFactory("ZtoryLeftPanel") {}
+  TPanel *createPanel(QWidget *parent) override {
+    TPanel *panel = new ZtoryLeftPanel(parent);
+    panel->setObjectName("ZtoryLeftPanel");
+    panel->setWindowTitle("Ztoryc Board/XSheet");
+    return panel;
+  }
+  void initialize(TPanel *panel) override { assert(0); }
+} ztoryLeftPanelFactory;
 
 

@@ -582,7 +582,7 @@ void BaseViewerPanel::getPreviewButtonStates(bool &prev, bool &subCamPrev) {
 //-----------------------------------------------------------------------------
 
 void BaseViewerPanel::enableFullPreview(bool enabled) {
-  m_subcameraPreviewButton->setPressed(false);
+  if (m_subcameraPreviewButton) m_subcameraPreviewButton->setPressed(false);
   if (CommandManager::instance()
           ->getAction(MI_ToggleViewerSubCameraPreview)
           ->isChecked())
@@ -605,7 +605,7 @@ void BaseViewerPanel::enableFullPreview(bool enabled) {
 //-----------------------------------------------------------------------------
 
 void BaseViewerPanel::enableSubCameraPreview(bool enabled) {
-  m_previewButton->setPressed(false);
+  if (m_previewButton) m_previewButton->setPressed(false);
   if (CommandManager::instance()
           ->getAction(MI_ToggleViewerPreview)
           ->isChecked())
@@ -854,8 +854,8 @@ void BaseViewerPanel::onXsheetSoundChanged() {
 //-----------------------------------------------------------------------------
 
 void BaseViewerPanel::onSceneSwitched() {
-  m_previewButton->setPressed(false);
-  m_subcameraPreviewButton->setPressed(false);
+  if (m_previewButton) m_previewButton->setPressed(false);
+  if (m_subcameraPreviewButton) m_subcameraPreviewButton->setPressed(false);
   enableFlipConsoleForCamerastand(false);
   m_sceneViewer->enablePreview(SceneViewer::NO_PREVIEW);
   m_flipConsole->setChecked(FlipConsole::eDefineSubCamera, false);
@@ -896,8 +896,8 @@ void BaseViewerPanel::onFrameTypeChanged() {
   if (TApp::instance()->getCurrentFrame()->getFrameType() ==
       TFrameHandle::LevelFrame) {
     if (m_sceneViewer->isPreviewEnabled()) {
-      m_previewButton->setPressed(false);
-      m_subcameraPreviewButton->setPressed(false);
+      if (m_previewButton) m_previewButton->setPressed(false);
+      if (m_subcameraPreviewButton) m_subcameraPreviewButton->setPressed(false);
       enableFlipConsoleForCamerastand(false);
       m_sceneViewer->enablePreview(SceneViewer::NO_PREVIEW);
     }

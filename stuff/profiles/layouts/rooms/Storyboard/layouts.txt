@@ -1,3 +1,2 @@
-board.ini
-animatic.ini
+ztoryc.ini
 browser.ini

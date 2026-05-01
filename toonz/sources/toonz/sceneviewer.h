@@ -49,7 +49,8 @@ class FullScreenWidget;
 //=====================================================================
 
 class ToggleCommandHandler final : public MenuItemHandler {
-  int m_status;
+  int       m_status;
+  CommandId m_id;
 
 public:
   ToggleCommandHandler(CommandId id, bool startStatus);

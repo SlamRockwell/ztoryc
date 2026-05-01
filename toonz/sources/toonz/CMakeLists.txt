@@ -110,6 +110,7 @@ set(MOC_HEADERS
     ztorybackpanel.h
     ztorymodel.h
     ztoryanimatic.h
+    ztoryscriptpanel.h
     ztorystartup.h
     trackerpopup.h
 	vectorguideddrawingpane.h
@@ -243,6 +244,7 @@ set(SOURCES
     ztorybackpanel.cpp
     ztorymodel.cpp
     ztoryanimatic.cpp
+    ztoryscriptpanel.cpp
     ztorystartup.cpp
     xshcellmover.cpp
     xshcellviewer.cpp

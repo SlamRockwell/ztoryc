@@ -92,7 +92,12 @@ QString NumberingConfig::shotName(int idx) const {
 
 // ─── Singleton ────────────────────────────────────────────────────────────────
 
-ZtoryModel::ZtoryModel() : m_fps(24) {}
+ZtoryModel::ZtoryModel() : m_fps(24) {
+  // Default side-panel sets: Storyboard shows in animatic mode;
+  // Xsheet + Script show in shot mode.
+  m_animaticSidePanels = QStringList{ "Storyboard" };
+  m_shotSidePanels     = QStringList{ "Xsheet", "ZtoryScriptPanel" };
+}
 
 // ─── Sequences ────────────────────────────────────────────────────────────────
 
@@ -779,3 +784,6 @@ void ZtoryModel::updateColumnName(int si) {
 // (see StoryboardPanel). See AGENTS.md: "Thumbnail refresh = on frameSwitched".
 void ZtoryModel::onXsheetChanged() { /* thumbnails updated via frameSwitched debounce */ }
 void ZtoryModel::onSceneChanged()  { refreshFromScene(); load(); }
+
+void ZtoryModel::activateShotForViewing(int col) { emit shotActivatedForViewing(col); }
+void ZtoryModel::requestReturnToViewer()         { emit returnToViewerMainRequested(); }

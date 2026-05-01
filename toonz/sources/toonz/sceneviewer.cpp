@@ -288,14 +288,18 @@ const TRectD InvalidateAllRect(0, 0, -1, -1);
 //-----------------------------------------------------------------------------
 
 ToggleCommandHandler::ToggleCommandHandler(CommandId id, bool startStatus)
-    : MenuItemHandler(id), m_status(startStatus) {}
+    : MenuItemHandler(id), m_status(startStatus), m_id(id) {}
 
 void ToggleCommandHandler::execute() {
   m_status = !m_status;
-  // If audio toggle switched OFF, stop any active audio immediately
-  if (std::string(m_id) == MI_ToggleMainAudio && !m_status) {
-    ZtoryAnimaticViewer *v = ZtoryAnimaticController::instance()->viewer();
-    if (v) v->stopAudio();
+  if (std::string(m_id) == MI_ToggleMainAudio) {
+    // Mirror state to TXsheet so scrub() in libtoonzlib can check it
+    // without depending on sceneviewer.h (cross-module constraint).
+    TXsheet::setMainAudioEnabled(m_status);
+    if (!m_status) {
+      ZtoryAnimaticViewer *v = ZtoryAnimaticController::instance()->viewer();
+      if (v) v->stopAudio();
+    }
   }
   // emit sceneChanged WITHOUT dirty flag
   TApp::instance()->getCurrentScene()->notifySceneChanged(false);

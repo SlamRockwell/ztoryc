@@ -2184,6 +2184,8 @@ void StoryboardPanel::onEditShot(int shotIdx) {
   app->getCurrentColumn()->setColumnIndex(col);
   app->getCurrentFrame()->setFrame(row);
   CommandManager::instance()->execute("MI_OpenChild");
+  // Switch the viewer panel to shot view (ZtoryAnimaticViewerPanel listens).
+  ZtoryModel::instance()->activateShotForViewing(col);
 }
 
 void StoryboardPanel::onMatchDuration(int shotIdx) {
@@ -2330,6 +2332,9 @@ void StoryboardPanel::onMoveShot(int fromShot, int toShot) {
       }
       xsh->updateFrameCount();
       app->getCurrentXsheet()->notifyXsheetChanged();
+      // Cells were physically rearranged: update xsheetColumn to match new positions.
+      for (int i = 0; i < numCols; i++)
+        m_shots[i].data.xsheetColumn = i;
     }
   }
   renumberAll();

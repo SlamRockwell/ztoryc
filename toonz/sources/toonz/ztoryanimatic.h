@@ -18,6 +18,8 @@
 #include <QKeyEvent>
 #include <QMap>
 #include <QSet>
+#include <QStackedWidget>
+#include <QToolButton>
 
 // ---- ZtoryAnimaticController ----
 // Singleton that owns the dedicated frame state for the animatic timeline
@@ -58,6 +60,14 @@ public:
   // No-op if a build is already in progress or the track is already cached.
   void preBuildSoundTrackAsync();
 
+  // Stops native-viewer audio that the controller is streaming on behalf of
+  // sub-scene playback. Called by ZtoryAnimaticViewer::stopAudio().
+  void stopNativeAudio() {
+    TXsheet *xsh = mainXsheet();
+    if (xsh) xsh->stopScrub();
+    m_nativeAudioPlaying = false;
+  }
+
   // Animatic-owned play range — independent from scene->getPreviewProperties()
   // which is shared with (and overwritten by) the native xsheet viewer when
   // entering/leaving sub-scenes.  The ruler and animatic marker logic read
@@ -95,11 +105,6 @@ private:
   ZtoryAnimaticViewer  *m_viewer = nullptr;
   // True while we are streaming main-xsheet audio on behalf of the native viewer.
   bool m_nativeAudioPlaying  = false;
-  void stopNativeAudio() {
-    TXsheet *xsh = mainXsheet();
-    if (xsh) xsh->stopScrub();
-    m_nativeAudioPlaying = false;
-  }
   // Guards against launching a second async build while one is already running.
   bool m_soundBuildPending   = false;
 };
@@ -459,18 +464,89 @@ private:
   QMetaObject::Connection m_audioConn;
 };
 
+// ---- ZtoryRightPanel ----
+// Single panel that shows the animatic-mode or shot-mode right column.
+//   Page 0 (animatic): Script viewer + File Browser + Record Audio button
+//   Page 1 (shot):     Studio Palette + Style Editor + Level Palette
+// Links to the viewer toggle via ZtoryModel::shotActivatedForViewing.
+class ZtoryScriptView;
+class FileBrowser;
+class StyleEditorPanel;
+class StudioPaletteViewerPanel;
+class PaletteViewerPanel;
+class ZtoryRightPanel : public TPanel {
+  Q_OBJECT
+public:
+  ZtoryRightPanel(QWidget *parent = nullptr);
+
+public slots:
+  void showAnimaticMode();
+  void showShotMode(int col = -1);
+
+private:
+  QStackedWidget        *m_stack      = nullptr;
+  QToolButton           *m_toggleBtn  = nullptr;
+  QToolButton           *m_linkBtn    = nullptr;
+  // Shot-mode panels (lazy)
+  StyleEditorPanel      *m_styleEditor    = nullptr;
+  StudioPaletteViewerPanel *m_studioPalette = nullptr;
+  PaletteViewerPanel    *m_levelPalette  = nullptr;
+};
+
+// ---- ZtoryLeftPanel ----
+// Single panel that shows Board (page 0) or XSheet (page 1) in the same space.
+// A toggle button switches between them; an optional 🔗 links the switch to the
+// viewer toggle (ZtoryModel::shotActivatedForViewing / returnToViewerMainRequested).
+class StoryboardPanel;
+class XsheetViewerPanel;
+class ZtoryLeftPanel : public TPanel {
+  Q_OBJECT
+public:
+  ZtoryLeftPanel(QWidget *parent = nullptr);
+
+public slots:
+  void showBoardMode();       // switch to page 0 (Board)
+  void showShotMode(int col = -1);  // switch to page 1 (XSheet)
+
+private:
+  StoryboardPanel   *m_boardPanel  = nullptr;
+  XsheetViewerPanel *m_xsheetPanel = nullptr;
+  QStackedWidget    *m_stack       = nullptr;
+  QToolButton       *m_toggleBtn   = nullptr;
+  QToolButton       *m_linkBtn     = nullptr;
+};
+
 // ---- ZtoryAnimaticViewerPanel ----
-// Standalone TPanel wrapper for ZtoryAnimaticViewer
-class ZtoryAnimaticViewerPanel : public TPanel {
+// Standalone TPanel wrapper for ZtoryAnimaticViewer.
+// Contains a QStackedWidget with two pages:
+//   Page 0: ZtoryAnimaticViewer — animatic view (main xsheet, dedicated frame handle)
+//   Page 1: ComboViewerPanel    — shot view (current sub-scene, drawing toolbar)
+// A toggle button at the top switches between modes and auto-opens/closes the sub-scene.
+class ComboViewerPanel;
+class ZtoryAnimaticViewerPanel : public TPanel {  // forward-decl already above
   Q_OBJECT
 public:
   ZtoryAnimaticViewerPanel(QWidget *parent = nullptr);
 
+public slots:
+  // Triggered by ZtoryModel::shotActivatedForViewing — switch to shot view page.
+  // Caller has already opened the sub-scene; this only switches the stack page.
+  void enterShotMode(int col);
+  // Triggered by m_toggleBtn click or ZtoryModel::returnToViewerMainRequested —
+  // close sub-scene and switch back to animatic view page.
+  void returnToAnimaticMode();
+
 protected:
   void showEvent(QShowEvent *e) override;
+  bool eventFilter(QObject *obj, QEvent *e) override;
 
 private:
-  ZtoryAnimaticViewer *m_viewer;
+  ZtoryAnimaticViewer *m_viewer     = nullptr;
+  ComboViewerPanel    *m_shotViewer = nullptr;
+  QStackedWidget      *m_stack      = nullptr;
+  QWidget             *m_topBar     = nullptr;  // back btn + link btn bar
+  QToolButton         *m_backBtn    = nullptr;
+  QToolButton         *m_linkBtn    = nullptr;
 };
 
 // ---- ZtoryAnimaticPanel ----

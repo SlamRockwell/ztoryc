@@ -1379,16 +1379,16 @@ void MainWindow::onWorkflowStoryboard() {
   if (sm && sm->m_liveViewStatus > StopMotion::LiveViewClosed)
     sm->stopLiveView();
   switchRoomChoice("Storyboard");
-  if (switchToFirstRoom(this, {"BOARD", "Storyboard", "ANIMATIC", "SHOTEDITOR"}))
+  if (switchToFirstRoom(this, {"ZTORYC", "BOARD", "Storyboard", "ANIMATIC", "SHOTEDITOR", "Browser"}))
     return;
 
   // If rooms are still missing, reset storyboard layouts to template once.
   if (ensureStoryboardRoomsTemplate("Storyboard")) {
     switchRoomChoice("Storyboard");
-    if (switchToFirstRoom(this, {"BOARD", "Storyboard", "ANIMATIC", "SHOTEDITOR"}))
+    if (switchToFirstRoom(this, {"ZTORYC", "BOARD", "Storyboard", "ANIMATIC", "SHOTEDITOR", "Browser"}))
       return;
   }
-  DVGui::warning(tr("Storyboard rooms not found.\nPlease create a BOARD/ANIMATIC room first."));
+  DVGui::warning(tr("Storyboard rooms not found.\nPlease create a ZTORYC or BOARD/ANIMATIC room first."));
 }
 
 void MainWindow::onWorkflow2D() {
@@ -2745,6 +2745,9 @@ void MainWindow::defineActions() {
   createMenuWindowsAction("MI_OpenZtoryAnimatic", QT_TR_NOOP("&Ztoryc Animatic"), "", "ZtoryAnimatic");
   createMenuWindowsAction("MI_OpenZtoryAnimaticViewer", QT_TR_NOOP("&Ztoryc Viewer"), "", "ZtoryAnimaticViewer");
   createMenuWindowsAction("MI_OpenZtoryStoryStrip", QT_TR_NOOP("&Ztoryc Story Strip"), "", "ZtoryStoryStrip");
+  createMenuWindowsAction("MI_OpenZtoryScript", QT_TR_NOOP("&Ztoryc Script"), "", "ZtoryScriptPanel");
+  createMenuWindowsAction("MI_OpenZtoryLeftPanel", QT_TR_NOOP("&Ztoryc Board/XSheet"), "", "ZtoryLeftPanel");
+  createMenuWindowsAction("MI_OpenZtoryRightPanel", QT_TR_NOOP("&Ztoryc Script/Palette"), "", "ZtoryRightPanel");
   createMenuWindowsAction(MI_WorkflowStoryboard, QT_TR_NOOP("&Storyboard Mode"), "", "");
   createMenuWindowsAction(MI_Workflow2D, QT_TR_NOOP("&2D Tradigital Mode"), "", "");
   createMenuWindowsAction(MI_WorkflowCutout, QT_TR_NOOP("&Cutout Digital Mode"), "", "");
