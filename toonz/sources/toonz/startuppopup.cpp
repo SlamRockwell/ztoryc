@@ -785,7 +785,10 @@ void StartupPopup::onExistingSceneClicked(int index) {
     m_scenesTab->setCurrentIndex(1);
     m_nameFld->setFocus();
   } else {
-    // Apply the selected workflow before loading
+    TApp::instance()->getCurrentScene()->setDirtyFlag(false);
+    IoCmd::loadScene(TFilePath(path.toStdWString()), true, true);
+    // Apply the selected workflow AFTER loading so rooms are not cleared
+    // while the scene load is still in progress (caused black screen on switch).
     {
       static const char *kCmds[] = {
         MI_WorkflowStoryboard, MI_Workflow2D,
@@ -795,8 +798,6 @@ void StartupPopup::onExistingSceneClicked(int index) {
       const char *cmd = (wfIdx >= 0 && wfIdx < 4) ? kCmds[wfIdx] : MI_WorkflowStoryboard;
       CommandManager::instance()->execute(cmd);
     }
-    TApp::instance()->getCurrentScene()->setDirtyFlag(false);
-    IoCmd::loadScene(TFilePath(path.toStdWString()), true, true);
     hide();
   }
 }
@@ -877,10 +878,9 @@ void StartupPopup::onCreateButton() {
     // Trigger the appropriate MI_Workflow* command — this calls the protected
     // switchRoomChoice() + room switch through the normal command path.
     static const char *kCmds[] = {
-      MI_WorkflowStoryboard, MI_Workflow2D,
-      MI_WorkflowCutout,     MI_WorkflowStopMotion
+      MI_WorkflowStoryboard, MI_Workflow2D, MI_WorkflowCutout
     };
-    const char *cmd = (wfIdx >= 0 && wfIdx < 4) ? kCmds[wfIdx] : MI_WorkflowStoryboard;
+    const char *cmd = (wfIdx >= 0 && wfIdx < 3) ? kCmds[wfIdx] : MI_WorkflowStoryboard;
     CommandManager::instance()->execute(cmd);
   }
 
