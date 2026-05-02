@@ -21,6 +21,7 @@
 #include "timage_io.h"
 
 // Qt includes
+#include <QFile>
 #include <QSettings>
 #include <QStringList>
 #include <QAction>
@@ -62,6 +63,24 @@ inline QColor stringToColor(const QString &str) {
   QStringList values = str.split(' ');
   return QColor(values[0].toInt(), values[1].toInt(), values[2].toInt(),
                 values[3].toInt());
+}
+
+//-----------------------------------------------------------------
+
+/** Load <config>/qss/<name>/<name>.qss; set absolute folder for url(...) rewriting. */
+static QString themeStyleSheetBody(const QString &themeName,
+                                   QString *absoluteThemeFolderOut) {
+  if (themeName.isEmpty()) return QString();
+  TFilePath qssRoot(TEnv::getConfigDir() + "qss");
+  QString folder =
+      qssRoot.getQString().replace("\\", "/") + "/" + themeName;
+  QString fp = folder + "/" + themeName + ".qss";
+  QFile f(fp);
+  if (!f.open(QFile::ReadOnly | QFile::Text)) return QString();
+  QTextStream ts(&f);
+  QString body = ts.readAll();
+  if (absoluteThemeFolderOut) *absoluteThemeFolderOut = folder;
+  return body;
 }
 
 inline TPixel colorToTPixel(const QColor &color) {
@@ -341,6 +360,7 @@ void Preferences::initializeOptions() {
   }
 
   // load styles
+  m_styleSheetList.clear();
   TFilePath path(TEnv::getConfigDir() + "qss");
   TFilePathSet fpset;
   try {
@@ -371,6 +391,52 @@ void Preferences::initializeOptions() {
     }
   } catch (...) {
   }
+}
+
+//-----------------------------------------------------------------
+
+void Preferences::refreshStyleSheetThemeIndex() {
+  m_styleSheetList.clear();
+  TFilePath qssRoot(TEnv::getConfigDir() + "qss");
+  TFilePathSet fpset;
+  try {
+    TSystem::readDirectory(fpset, qssRoot, true, false);
+    for (auto const &newPath : fpset) {
+      if (newPath == qssRoot) continue;
+      m_styleSheetList.append(
+          QString::fromStdWString(newPath.getWideName()));
+    }
+  } catch (...) {
+  }
+
+  QString cur = getStringValue(CurrentStyleSheetName);
+  auto themeFileExists = [&](const QString &name) -> bool {
+    if (name.isEmpty()) return false;
+    QString p =
+        qssRoot.getQString() + "/" + name + "/" + name + ".qss";
+    return QFile::exists(p);
+  };
+
+  if (themeFileExists(cur)) return;
+
+  QString fix;
+  static const char *kBuiltinPriority[] = {"Dark", "Medium", "Neutral"};
+  for (const char *p : kBuiltinPriority) {
+    QString s = QString::fromLatin1(p);
+    if (themeFileExists(s)) {
+      fix = s;
+      break;
+    }
+  }
+  if (fix.isEmpty()) {
+    for (const QString &name : m_styleSheetList) {
+      if (themeFileExists(name)) {
+        fix = name;
+        break;
+      }
+    }
+  }
+  if (!fix.isEmpty()) setValue(CurrentStyleSheetName, fix);
 }
 
 //-----------------------------------------------------------------
@@ -1063,17 +1129,7 @@ QString Preferences::getCurrentLanguage() const {
 //-----------------------------------------------------------------
 
 QString Preferences::getCurrentStyleSheet() const {
-  QString currentStyleSheetName = getStringValue(CurrentStyleSheetName);
-  if (currentStyleSheetName.isEmpty()) return QString();
-  TFilePath path(TEnv::getConfigDir() + "qss");
-  QString string = currentStyleSheetName + QString("/") +
-                   currentStyleSheetName + QString(".qss");
-  QString styleSheetPath = path.getQString() + "/" + string;
-
-  // Set base stylesheet settings. This is used to correct QT styling
-  // issues between different versions/OSes. Stylesheets and Additional
-  // stylesheets can override these settings.
-  QString baseSheetStr = "";
+  QString baseSheetStr;
 
   // Qt has a bug in recent versions that Menu item Does not show correctly
   // (QTBUG-90242) Since the current OT is made to handle such issue, so we need
@@ -1089,28 +1145,39 @@ QString Preferences::getCurrentStyleSheet() const {
   baseSheetStr += "QWidget{ font: 12px; }QToolTip{ font: 12px; }";
 #endif
 
-
   QString styleSheetStr = baseSheetStr;
 
-  // Load style sheet from the file and add to base style sheet
-  QFile f(styleSheetPath);
-  if (f.open(QFile::ReadOnly | QFile::Text)) {
-    QTextStream ts(&f);
-    styleSheetStr += ts.readAll();
+  QString preferred = getStringValue(CurrentStyleSheetName);
+  QStringList candidates;
+  if (!preferred.isEmpty()) candidates.append(preferred);
+
+  static const char *kBuiltinPriority[] = {"Dark", "Medium", "Neutral"};
+  for (const char *p : kBuiltinPriority) {
+    QString s = QString::fromLatin1(p);
+    if (!candidates.contains(s)) candidates.append(s);
+  }
+  for (const QString &s : m_styleSheetList) {
+    if (!candidates.contains(s)) candidates.append(s);
   }
 
-  // If there is any additional style sheet, append to loaded stylesheet
+  QString loaded;
+  QString themeFolderForUrls;
+  for (const QString &name : candidates) {
+    QString folder;
+    loaded = themeStyleSheetBody(name, &folder);
+    if (!loaded.isEmpty()) {
+      themeFolderForUrls = folder;
+      break;
+    }
+  }
+  styleSheetStr += loaded;
+
   styleSheetStr += getStringValue(additionalStyleSheet);
 
-  // here we will convert all relative paths to absolute paths
-  // or Qt will look for images relative to the current working directory
-  // since it has no idea where the style sheet comes from.
-
-  QString currentStyleFolderPath =
-      path.getQString().replace("\\", "/") + "/" + currentStyleSheetName;
-
-  styleSheetStr.replace(QRegExp("url\\(['\"]([^'\"]+)['\"]\\)"),
-                        "url(\"" + currentStyleFolderPath + QString("/\\1\")"));
+  if (!themeFolderForUrls.isEmpty()) {
+    styleSheetStr.replace(QRegExp("url\\(['\"]([^'\"]+)['\"]\\)"),
+                          "url(\"" + themeFolderForUrls + QString("/\\1\")"));
+  }
 
   return styleSheetStr;
 }

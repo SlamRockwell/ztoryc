@@ -612,6 +612,10 @@ int main(int argc, char *argv[]) {
   // Toonz environment
   initToonzEnv(argumentPathValues);
 
+  // Rescan stuff/config/qss now that ZTORYCROOT/stuff is validated; fix theme
+  // preference if the saved .qss file is missing (avoids empty/broken QSS load).
+  Preferences::instance()->refreshStyleSheetThemeIndex();
+
   // prepare for 30bit display
   if (Preferences::instance()->is30bitDisplayEnabled()) {
     QSurfaceFormat sFmt = QSurfaceFormat::defaultFormat();

@@ -140,6 +140,9 @@ public:
 
   QMap<PreferencesItemId, PreferencesItem> m_items;
   void initializeOptions();
+  /** Rescan stuff/config/qss and persist a valid CurrentStyleSheetName when the
+   *  saved theme file is missing. Call after stuff paths are ready (after initToonzEnv). */
+  void refreshStyleSheetThemeIndex();
   void definePreferenceItems();
   void define(PreferencesItemId id, QString idString, QMetaType::Type type,
               QVariant defaultValue, QVariant min = 0, QVariant max = -1);
