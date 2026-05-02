@@ -6,6 +6,32 @@
 > Voci più vecchie di ~2 settimane → spostarle in `CHANGELOG_ARCHIVE.md`.
 
 ---
+## [2026-05-02b] — Task 19 completato: cursore resize su video e audio track
+
+### Fixed
+- **SIGABRT dyld crash** (`build_and_deploy.sh`): le dylib nella root di `build/`
+  sono stale; tutti i path aggiornati a usare le sottodirectory (`build/tnzcore/`,
+  `build/toonzlib/`, ecc.) dove ninja deposita le build aggiornate.
+- **Compile error `mx` undefined** (`ztoryanimatic.cpp`): `int mx = e->x() - kLabelW`
+  spostato all'inizio di `ZtoryAnimaticTrack::mouseMoveEvent`; rimossa la ridefinizione
+  duplicata nel blocco RazorTool.
+
+### Added
+- **Task 19 — Cursore resize audio track** (`ztoryanimatic.cpp`): `ZtoryAudioTrack`
+  ora mostra `SizeHorCursor` quando il mouse si avvicina ai bordi di un segmento audio.
+  Implementato via `setAttribute(Qt::WA_Hover)` + override di `event()` con
+  `QEvent::HoverMove`/`HoverLeave`. Helper statico `nearSegmentEdge()` aggiunto.
+- **Task 19 — Cursore resize video track** (`ztoryanimatic.cpp`): `ZtoryAnimaticTrack`
+  mostra `SizeHorCursor` quando il mouse si avvicina al bordo destro di un blocco shot
+  in `mouseMoveEvent` (zona ±6px). Cursore resettato in `leaveEvent`.
+
+### Modified
+- **`SystemVar.ini`** (`toonz/install/`): risolto conflict rebase; accettata versione
+  remote con chiavi `ZTORYC*` e path `/Applications/Ztoryc/Ztoryc_stuff`.
+- **`postinstall-script.sh`**: fallback per entrambi i nomi file (`ztorycstuffdirloc` /
+  `tahoma2dstuffdirloc`) dall'AppleScript dell'installer.
+
+---
 ## [2026-05-02] — Task 16/17/18 completati; Task 19 cursor ancora irrisolto
 ### Added
 - **Task 16:** Workflow combo nel tab "Open Existing Scene" della StartupPopup —

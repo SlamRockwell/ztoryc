@@ -49,6 +49,7 @@
 | BUG-CAMRESIZE | Camera resize non scala più il disegno (Edit In Place spento) | 2026-04-05 |
 | WEBCAM-SELECT | Webcam: selectCamera() forzata prima di ogni switch — fix deadlock/feed perso | 2026-04-05 |
 | 16 | Audio sync: QAudioOutput::processedUSecs() come master clock in onDrawFrame | 2026-03-28 |
+| 19 | Cursore SizeHorCursor sul bordo destro blocchi video + bordi segmenti audio | 2026-05-02 |
 
 ---
 
@@ -472,10 +473,10 @@ alle sequence del progetto (sq01, sq02…).
 15. ~~**FIX Onion skin rimosso dalla toolbar animatic**~~ ✅ DONE 2026-05-01 — rimosso onionBtn + connect da ZtoryAnimaticPanel
 
 ### Task prossimi
-16. **NEW Workflow startup page** — selezione workflow all'avvio anche per aprire scene esistenti; spunta sul workflow attivo nel menu Workflow
-17. **FIX Stop marker update immediato all'entrata nello shot** — ora aspetta un ripple; deve aggiornare subito in base alla timeline della sub-scena
-18. **FIX Zoom rotella solo sul ruler** — attualmente si attiva anche sulle tracce; limitare al solo ruler widget
-19. **FIX Cursore resize sul margine traccia** — cambiare cursor a `SizeHorCursor` quando hover sul bordo destro di un blocco shot
+16. ~~**NEW Workflow startup page**~~ ✅ DONE 2026-05-02
+17. ~~**FIX Stop marker update immediato all'entrata nello shot**~~ ✅ DONE 2026-05-02
+18. ~~**FIX Zoom rotella solo sul ruler**~~ ✅ DONE 2026-05-02
+19. ~~**FIX Cursore resize sul margine traccia**~~ ✅ DONE 2026-05-02 — SizeHorCursor su video (mouseMoveEvent) e audio (WA_Hover + event())
 20. **NEW Taglia/copia/incolla audio da tastiera** — Cmd+X/C/V/Delete per le tracce audio (analoga logica Board/Animatic video)
 21. **NEW Volume per traccia audio** — slider o knob per il gain per-track (richiede aggiunta campo in ZtoryModel e lettura in TXsheet::scrub)
 22. **NEW Transizioni** — dissolve tra shot con aggiunta automatica di x/2 frame extra nella sub-scena; UI: handle di overlap sul bordo del blocco
