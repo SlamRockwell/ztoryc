@@ -62,7 +62,8 @@ class StartupPopup final : public DVGui::Dialog {
   bool m_updating                   = false;
 
   // Ztoryc: workflow + shot numbering
-  QComboBox *m_workflowCB;   // 4-entry: Storyboard/2D Tradigital/Cutout/StopMotion
+  QComboBox *m_workflowCB;       // in "Create" tab
+  QComboBox *m_loadWorkflowCB;   // in "Load" tab
   QComboBox *m_numberingStyleCB;
   QSpinBox *m_numberingStepSB;
   QLineEdit *m_seqPrefixFld;

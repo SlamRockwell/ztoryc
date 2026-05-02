@@ -131,6 +131,7 @@ public:
 
 protected:
   void paintEvent(QPaintEvent *) override;
+  void wheelEvent(QWheelEvent *e) override;
   void mousePressEvent(QMouseEvent *) override;
   void mouseMoveEvent(QMouseEvent *) override;
   void mouseReleaseEvent(QMouseEvent *) override;
@@ -138,6 +139,7 @@ protected:
   void contextMenuEvent(QContextMenuEvent *) override;
 signals:
   void frameChanged(int frame);
+  void zoomChanged(double ppf);
   void onionEnabledChanged(bool on);
 private:
   double m_fps = 24.0;

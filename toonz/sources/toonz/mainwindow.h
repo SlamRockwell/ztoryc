@@ -244,6 +244,7 @@ protected slots:
   void onWorkflowCutout();
   void onWorkflowStopMotion();
   void switchRoomChoice(const QString &choice);
+  void updateWorkflowMenuChecks();
   void clearRooms();
 
   // make InkCheck and Ink#1Check exclusive.

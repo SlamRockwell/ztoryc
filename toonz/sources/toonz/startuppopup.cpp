@@ -233,8 +233,25 @@ StartupPopup::StartupPopup()
     m_projectBox->setLayout(projectLay);
     guiLay->addWidget(m_projectBox, 1, 0, 1, 1, Qt::AlignCenter);
 
-    //--- Existing scenes
-    m_scenesTab->addTab(m_existingList, tr("Open Existing Scene"));
+    //--- Existing scenes (with workflow selector)
+    {
+      QWidget *loadWidget = new QWidget();
+      QVBoxLayout *loadLay = new QVBoxLayout(loadWidget);
+      loadLay->setContentsMargins(8, 8, 8, 4);
+      loadLay->setSpacing(6);
+      QHBoxLayout *wfRow = new QHBoxLayout();
+      wfRow->setSpacing(8);
+      wfRow->addWidget(new QLabel(tr("Workflow:")));
+      m_loadWorkflowCB = new QComboBox(loadWidget);
+      m_loadWorkflowCB->addItem(tr("Storyboard Mode"));
+      m_loadWorkflowCB->addItem(tr("2D Tradigital Mode"));
+      m_loadWorkflowCB->addItem(tr("Cutout Digital Mode"));
+      m_loadWorkflowCB->addItem(tr("Stop-Motion Mode"));
+      wfRow->addWidget(m_loadWorkflowCB, 1);
+      loadLay->addLayout(wfRow);
+      loadLay->addWidget(m_existingList, 1);
+      m_scenesTab->addTab(loadWidget, tr("Open Existing Scene"));
+    }
 
     //--- New scene
     newSceneLay->setContentsMargins(8, 8, 8, 8);;
@@ -551,6 +568,14 @@ void StartupPopup::showEvent(QShowEvent *) {
   // clear items if they exist first
   refreshRecentScenes();
   refreshExistingScenes();
+  // Sync workflow combos to the currently active workflow
+  {
+    static const QStringList kChoices = {"Storyboard","Tradigital","Cutout","StopMotion"};
+    int idx = kChoices.indexOf(Preferences::instance()->getCurrentRoomChoice());
+    if (idx < 0) idx = 0;
+    m_workflowCB->setCurrentIndex(idx);
+    m_loadWorkflowCB->setCurrentIndex(idx);
+  }
   // center window
   QScreen *currentScreen = TApp::instance()->getMainWindow()->screen();
   QPoint activeMonitorCenter = currentScreen->availableGeometry().center();
@@ -760,7 +785,16 @@ void StartupPopup::onExistingSceneClicked(int index) {
     m_scenesTab->setCurrentIndex(1);
     m_nameFld->setFocus();
   } else {
-    // Clear dirty flag so no "save untitled?" dialog appears
+    // Apply the selected workflow before loading
+    {
+      static const char *kCmds[] = {
+        MI_WorkflowStoryboard, MI_Workflow2D,
+        MI_WorkflowCutout,     MI_WorkflowStopMotion
+      };
+      int wfIdx = m_loadWorkflowCB->currentIndex();
+      const char *cmd = (wfIdx >= 0 && wfIdx < 4) ? kCmds[wfIdx] : MI_WorkflowStoryboard;
+      CommandManager::instance()->execute(cmd);
+    }
     TApp::instance()->getCurrentScene()->setDirtyFlag(false);
     IoCmd::loadScene(TFilePath(path.toStdWString()), true, true);
     hide();

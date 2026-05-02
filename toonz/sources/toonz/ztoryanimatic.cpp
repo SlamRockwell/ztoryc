@@ -728,6 +728,14 @@ void ZtoryAnimaticRuler::contextMenuEvent(QContextMenuEvent *e) {
   update();
 }
 
+void ZtoryAnimaticRuler::wheelEvent(QWheelEvent *e) {
+  int delta = e->angleDelta().y();
+  double factor = (delta > 0) ? 1.15 : (1.0 / 1.15);
+  double newPpf = qBound(2.0, m_ppf * factor, 64.0);
+  emit zoomChanged(newPpf);
+  e->accept();
+}
+
 // ---- ZtoryAudioTrack ----
 
 ZtoryAudioTrack::ZtoryAudioTrack(int col, const QString &name, QWidget *parent)
@@ -735,6 +743,7 @@ ZtoryAudioTrack::ZtoryAudioTrack(int col, const QString &name, QWidget *parent)
   setFixedHeight(m_trackHeight);
   setMinimumWidth(100);
   setFocusPolicy(Qt::ClickFocus);
+  setMouseTracking(true);
 
   // L/M/S state is driven purely via paintEvent + mousePressEvent hit-test.
   // No child QToolButton widgets — they don't render reliably inside custom-
@@ -1171,16 +1180,22 @@ void ZtoryAudioTrack::mouseMoveEvent(QMouseEvent *e) {
     return;
   }
 
-  // Hover cursor: show SizeHorCursor near segment edges (pixel-based, no frame rounding)
+  // Hover cursor: show SizeHorCursor near segment edges
   {
     int mx = e->x();
     auto segs = findSegments();
     bool nearEdge = false;
     for (auto &s : segs) {
-      int xLeft  = kLabelW + (int)(s.r0 * m_ppf);
-      int xRight = kLabelW + (int)((s.r1 + 1) * m_ppf);
-      if ((mx >= xLeft - 1 && mx < xLeft + 6) ||
-          (mx > xRight - 7 && mx <= xRight + 1)) {
+      int xLeft    = kLabelW + (int)(s.r0 * m_ppf);
+      int xRightRaw = kLabelW + (int)((s.r1 + 1) * m_ppf);
+      // Cap to widget width — getVisibleEndFrame() returns full file duration
+      // for uncut audio (endOffset=0), making xRightRaw far off-screen.
+      int xRight = qMin(xRightRaw, width() - 1);
+      bool nearLeft  = (mx >= xLeft && mx < xLeft + 8);
+      // Only show right-edge cursor when the actual audio end is on-screen.
+      bool nearRight = (xRightRaw < width()) &&
+                       (mx > xRight - 8 && mx <= xRight + 1);
+      if (nearLeft || nearRight) {
         nearEdge = true;
         break;
       }
@@ -1723,11 +1738,7 @@ void ZtoryAnimaticTrack::mouseDoubleClickEvent(QMouseEvent *e) {
 }
 
 void ZtoryAnimaticTrack::wheelEvent(QWheelEvent *e) {
-  int delta = e->angleDelta().y();
-  double factor = (delta > 0) ? 1.15 : (1.0 / 1.15);
-  double newPpf = qBound(2.0, m_ppf * factor, 64.0);
-  emit zoomChanged(newPpf);
-  e->accept();
+  e->ignore();  // zoom is handled by the ruler only
 }
 
 // ---- ZtoryStoryStrip ----
@@ -3005,6 +3016,8 @@ ZtoryAnimaticPanel::ZtoryAnimaticPanel(QWidget *parent) : TPanel(parent) {
           });
   connect(m_track, &ZtoryAnimaticTrack::zoomChanged,
           this, &ZtoryAnimaticPanel::onZoomChanged);
+  connect(m_ruler, &ZtoryAnimaticRuler::zoomChanged,
+          this, &ZtoryAnimaticPanel::onZoomChanged);
   connect(m_zoomSlider, &QSlider::valueChanged, this, [this](int v){
     onZoomChanged(v / 10.0);
   });
@@ -3612,6 +3625,14 @@ void ZtoryAnimaticPanel::onShotDoubleClicked(int col) {
   if (cell.m_level && cell.m_level->getChildLevel()) {
     app->getCurrentFrame()->setFrame(r0);
     CommandManager::instance()->execute("MI_OpenChild");
+    // Set the native play range to the sub-scene's frame count so the
+    // stop marker lands at the last frame of this shot automatically.
+    {
+      TXsheet *subXsh = app->getCurrentXsheet()->getXsheet();
+      int subFrames = subXsh ? subXsh->getFrameCount() : 0;
+      if (subFrames > 0)
+        XsheetGUI::setPlayRange(0, subFrames - 1, 1, false);
+    }
     // Keep the animatic controller's frame at the shot's main-xsheet row
     // so the animatic viewer renders at the correct position.
     ZtoryAnimaticController::instance()->setCurrentFrame(r0);

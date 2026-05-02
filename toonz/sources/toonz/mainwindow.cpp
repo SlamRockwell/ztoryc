@@ -1354,6 +1354,21 @@ void MainWindow::switchRoomChoice(const QString &choice) {
   connect(roomTabWidget, SIGNAL(currentChanged(int)), m_stackedWidget,
           SLOT(setCurrentIndex(int)));
   m_isSwitchingRooms = false;
+  updateWorkflowMenuChecks();
+}
+
+void MainWindow::updateWorkflowMenuChecks() {
+  QString current = Preferences::instance()->getCurrentRoomChoice();
+  struct { const char *id; const char *choice; } wf[] = {
+    {MI_WorkflowStoryboard, "Storyboard"},
+    {MI_Workflow2D,         "Tradigital"},
+    {MI_WorkflowCutout,     "Cutout"},
+    {MI_WorkflowStopMotion, "StopMotion"},
+  };
+  for (auto &w : wf) {
+    QAction *a = CommandManager::instance()->getAction(w.id);
+    if (a) a->setChecked(current == QLatin1String(w.choice));
+  }
 }
 
 static bool switchToFirstRoom(MainWindow *mw, const QStringList &names) {
@@ -2748,10 +2763,28 @@ void MainWindow::defineActions() {
   createMenuWindowsAction("MI_OpenZtoryScript", QT_TR_NOOP("&Ztoryc Script"), "", "ZtoryScriptPanel");
   createMenuWindowsAction("MI_OpenZtoryLeftPanel", QT_TR_NOOP("&Ztoryc Board/XSheet"), "", "ZtoryLeftPanel");
   createMenuWindowsAction("MI_OpenZtoryRightPanel", QT_TR_NOOP("&Ztoryc Script/Palette"), "", "ZtoryRightPanel");
-  createMenuWindowsAction(MI_WorkflowStoryboard, QT_TR_NOOP("&Storyboard Mode"), "", "");
-  createMenuWindowsAction(MI_Workflow2D, QT_TR_NOOP("&2D Tradigital Mode"), "", "");
-  createMenuWindowsAction(MI_WorkflowCutout, QT_TR_NOOP("&Cutout Digital Mode"), "", "");
-  createMenuWindowsAction(MI_WorkflowStopMotion, QT_TR_NOOP("&Stop-Motion Mode"), "", "");
+  // Workflow actions — checkable so the active mode shows a checkmark in the menu.
+  // setCheckable must be called after createMenuWindowsAction (which creates the QAction).
+  for (const char *id : {MI_WorkflowStoryboard, MI_Workflow2D,
+                          MI_WorkflowCutout,     MI_WorkflowStopMotion}) {
+    createMenuWindowsAction(id, "", "", "");
+  }
+  // Fix display names and make them checkable
+  {
+    struct { const char *id; const char *name; } wf[] = {
+      {MI_WorkflowStoryboard, QT_TR_NOOP("&Storyboard Mode")},
+      {MI_Workflow2D,         QT_TR_NOOP("&2D Tradigital Mode")},
+      {MI_WorkflowCutout,     QT_TR_NOOP("&Cutout Digital Mode")},
+      {MI_WorkflowStopMotion, QT_TR_NOOP("&Stop-Motion Mode")},
+    };
+    for (auto &w : wf) {
+      QAction *a = CommandManager::instance()->getAction(w.id);
+      if (!a) continue;
+      a->setText(tr(w.name));
+      a->setCheckable(true);
+    }
+  }
+  updateWorkflowMenuChecks();
   createMenuWindowsAction(MI_OpenSchematic, QT_TR_NOOP("&Schematic"), "",
                           "schematic");
   createMenuWindowsAction(MI_InsertFx, QT_TR_NOOP("&FX Browser"), "Ctrl+F",
