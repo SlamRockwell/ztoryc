@@ -480,6 +480,7 @@ alle sequence del progetto (sq01, sq02…).
 20. **NEW Taglia/copia/incolla audio da tastiera** — Cmd+X/C/V/Delete per le tracce audio (analoga logica Board/Animatic video)
 21. **NEW Volume per traccia audio** — slider o knob per il gain per-track (richiede aggiunta campo in ZtoryModel e lettura in TXsheet::scrub)
 22. **NEW Transizioni** — dissolve tra shot con aggiunta automatica di x/2 frame extra nella sub-scena; UI: handle di overlap sul bordo del blocco
+23. ~~**NEW Layout template per ogni workflow**~~ ✅ DONE 2026-05-02 (Storyboard) — template Storyboard aggiornato con layout produzione di francobianco (ztoryc.ini + browser.ini). StopMotion già aveva template DragonFrame-style. Tradigital/Cutout: room1-6.ini già in repo, nessun aggiornamento necessario ora. Il meccanismo getRoomsFile() con fallback da user dir a template dir è già in produzione.
 
 ### Milestone roadmap
 - **Early Beta (v0.2):** ~~Undo/Redo (task 13)~~ ✅ ~~audio toggle (12d)~~ ✅ → rilascio

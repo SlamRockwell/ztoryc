@@ -6,6 +6,27 @@
 > Voci più vecchie di ~2 settimane → spostarle in `CHANGELOG_ARCHIVE.md`.
 
 ---
+## [2026-05-02d] — Fix writeRoomList/renameRoom crash + Storyboard layout template
+
+### Fixed
+- `writeRoomList` salta rooms con path vuota: le "fallback rooms" create durante
+  un workflow switch prima che `makePrivate()` assegni i path scrivevano "." in
+  layouts.txt corrompendolo → crash "room not found" al prossimo switch
+- `renameRoom` guarded: salva il file INI solo se la room ha un path valido
+  (preveniva crash al rename su room senza path)
+
+### Modified
+- Template Storyboard (`stuff/profiles/layouts/rooms/Storyboard/ztoryc.ini` e
+  `browser.ini`) aggiornati con il layout produzione di francobianco: Board a
+  sinistra, Viewer al centro, RightPanel a destra, Animatic in basso
+  Gerarchia corretta: `-1 1 [ [ 0 1 2 ] 3 ]` (era `-1 1 [ [ [ 0 1 2 ] 3 ] ]`)
+
+### Notes
+- Il meccanismo di fallback `getRoomsFile()` (user dir → template dir) è già
+  in produzione. Nuovi utenti e CI builds ora ricevono il layout corretto.
+- Task 23 completato per Storyboard; StopMotion già aveva template DragonFrame.
+
+---
 ## [2026-05-02c] — Fix workflow combo "Open Existing Scene" + rimossa regressione StopMotion
 
 ### Fixed
