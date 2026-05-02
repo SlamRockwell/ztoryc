@@ -20,12 +20,18 @@ echo "→ Copia binario..."
 cp "$BUILD/toonz/Ztoryc.app/Contents/MacOS/Ztoryc" "$MACOS/Ztoryc"
 
 echo "→ Copia dylib Ztoryc..."
-# Dylib modificate da Ztoryc — aggiornate ad ogni build:
-cp "$BUILD/libtoonzlib.dylib"           "$MACOS/"
-cp "$BUILD/libtnzcore.dylib"            "$MACOS/"
-cp "$BUILD/tnzbase/libtnzbase.dylib"    "$MACOS/"
-cp "$BUILD/sound/libsound.dylib"        "$MACOS/"
-cp "$BUILD/tnztools/libtnztools.dylib"  "$MACOS/"
+# Usa sempre i path espliciti nelle sottodirectory — le copie nella root di
+# build/ sono stale (non aggiornate da ninja dopo il primo link).
+cp "$BUILD/toonzlib/libtoonzlib.dylib"          "$MACOS/"
+cp "$BUILD/tnzcore/libtnzcore.dylib"             "$MACOS/"
+cp "$BUILD/tnzbase/libtnzbase.dylib"             "$MACOS/"
+cp "$BUILD/sound/libsound.dylib"                 "$MACOS/"
+cp "$BUILD/tnztools/libtnztools.dylib"           "$MACOS/"
+cp "$BUILD/tnzext/libtnzext.dylib"               "$MACOS/"
+cp "$BUILD/colorfx/libcolorfx.dylib"             "$MACOS/"
+cp "$BUILD/stdfx/libtnzstdfx.dylib"              "$MACOS/"
+cp "$BUILD/toonzqt/libtoonzqt.dylib"             "$MACOS/"
+cp "$BUILD/toonzfarm/tfarm/libtfarm.dylib"       "$MACOS/"
 
 echo "→ Patch rpath libimage (libtiff: /usr/local/lib → @executable_path)..."
 install_name_tool -change \
@@ -33,14 +39,6 @@ install_name_tool -change \
   @executable_path/libtiff.5.dylib \
   "$BUILD/image/libimage.dylib" 2>/dev/null || true
 cp "$BUILD/image/libimage.dylib" "$MACOS/"
-
-# Dylib secondarie (raramente cambiate) — aggiorna dal build tree se presente
-for lib in libcolorfx.dylib libtnzstdfx.dylib libtoonzqt.dylib libtfarm.dylib libtnzext.dylib; do
-  actual=$(find "$BUILD" -name "$lib" -not -path "*/Ztoryc.app/*" -not -path "*CMakeFiles*" 2>/dev/null | head -1)
-  if [ -n "$actual" ]; then
-    cp "$actual" "$MACOS/"
-  fi
-done
 
 echo "→ Copia risorse..."
 # SystemVar.ini: path assoluti alle risorse (stuff dir).

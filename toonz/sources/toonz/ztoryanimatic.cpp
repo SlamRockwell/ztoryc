@@ -744,6 +744,7 @@ ZtoryAudioTrack::ZtoryAudioTrack(int col, const QString &name, QWidget *parent)
   setMinimumWidth(100);
   setFocusPolicy(Qt::ClickFocus);
   setMouseTracking(true);
+  setAttribute(Qt::WA_Hover);
 
   // L/M/S state is driven purely via paintEvent + mousePressEvent hit-test.
   // No child QToolButton widgets — they don't render reliably inside custom-
@@ -1035,6 +1036,33 @@ void ZtoryAudioTrack::setRazorHoverFrame(int frame) {
 }
 
 // ---- ZtoryAudioTrack mouse events (12c: preview bar, razor) ----
+
+static bool nearSegmentEdge(int mx, double ppf, const std::vector<ZtoryAudioTrack::Segment> &segs, int widgetW) {
+  for (auto &s : segs) {
+    int xLeft    = kLabelW + (int)(s.r0 * ppf);
+    int xRightRaw = kLabelW + (int)((s.r1 + 1) * ppf);
+    if (mx >= xLeft && mx < xLeft + 10) return true;
+    if (xRightRaw < widgetW && mx > xRightRaw - 10 && mx <= xRightRaw + 1) return true;
+  }
+  return false;
+}
+
+bool ZtoryAudioTrack::event(QEvent *e) {
+  // WA_Hover delivers HoverMove/HoverLeave even without mouse button — more
+  // reliable than setMouseTracking inside QScrollArea on macOS.
+  if (e->type() == QEvent::HoverMove && m_dragMode == NoDrag && !m_razorActive) {
+    auto *he = static_cast<QHoverEvent *>(e);
+    int mx = he->pos().x();
+    bool near = nearSegmentEdge(mx, m_ppf, findSegments(), width());
+    setCursor(near ? Qt::SizeHorCursor : Qt::ArrowCursor);
+    return true;
+  }
+  if (e->type() == QEvent::HoverLeave) {
+    unsetCursor();
+    return true;
+  }
+  return QWidget::event(e);
+}
 
 void ZtoryAudioTrack::mousePressEvent(QMouseEvent *e) {
   // L/M/S button hit-test — must match coordinates in paintEvent exactly
@@ -1649,8 +1677,9 @@ void ZtoryAnimaticTrack::mousePressEvent(QMouseEvent *e) {
 }
 
 void ZtoryAnimaticTrack::mouseMoveEvent(QMouseEvent *e) {
+  int mx = e->x() - kLabelW;
   if (m_draggingCol >= 0) {
-    int dx = (e->x() - kLabelW) - m_dragStartX;
+    int dx = mx - m_dragStartX;
     int delta = (int)(dx / m_ppf);
     int newF1 = qMax(m_dragOrigF1 + delta, 0);
     int newDuration = newF1 + 1;
@@ -1672,9 +1701,19 @@ void ZtoryAnimaticTrack::mouseMoveEvent(QMouseEvent *e) {
     return;
   }
 
+  // Hover cursor: SizeHorCursor near right edge of each shot block (resize handle)
+  if (m_tool != RazorTool) {
+    bool nearEdge = false;
+    for (auto &b : m_blocks) {
+      int duration = b.f1 - b.f0 + 1;
+      int bx1 = (int)((b.startFrameInMain + duration) * m_ppf);
+      if (mx >= bx1 - 6 && mx <= bx1 + 2) { nearEdge = true; break; }
+    }
+    setCursor(nearEdge ? Qt::SizeHorCursor : Qt::ArrowCursor);
+  }
+
   // Razor hover: snap the indicator to the nearest frame boundary
   if (m_tool == RazorTool) {
-    int mx = e->x() - kLabelW;
     int frame = (mx >= 0) ? (int)(mx / m_ppf) : -1;
     // Only show hover if cursor is over a valid cut position inside a block
     int hoverFrame = -1;
@@ -1698,6 +1737,7 @@ void ZtoryAnimaticTrack::mouseMoveEvent(QMouseEvent *e) {
 }
 
 void ZtoryAnimaticTrack::leaveEvent(QEvent *) {
+  unsetCursor();
   if (m_tool == RazorTool && m_razorHoverFrame >= 0) {
     m_razorHoverFrame = -1;
     update();
@@ -2997,6 +3037,10 @@ ZtoryAnimaticPanel::ZtoryAnimaticPanel(QWidget *parent) : TPanel(parent) {
   scroll->setWidgetResizable(true);
   scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
   scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+  // On macOS, mouse-move events without button press only reach child widgets
+  // if every ancestor up to the scroll viewport also has mouse tracking.
+  scroll->viewport()->setMouseTracking(true);
+  m_scrollContent->setMouseTracking(true);
 
   // Layout: toolbar on top, scroll below
   lay->addWidget(toolbar);
