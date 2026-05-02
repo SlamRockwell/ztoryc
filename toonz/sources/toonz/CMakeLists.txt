@@ -632,9 +632,13 @@ if(BUILD_ENV_APPLE)
     get_target_property(loc Ztoryc MACOSX_BUNDLE_NAME)
     message(" ==> App Bundle: " ${loc})
     message(" ==> Helpers copy into Ztoryc.app/Contents/MacOS (avoid CMAKE_BINARY_DIR / tcomposer/ name clash)")
+    # Re-incremental builds: bundled dylibs can be read-only; plain "cp" then fails with Permission denied.
+    add_custom_command(TARGET Ztoryc POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E env chmod -Rf u+w $<TARGET_FILE_DIR:Ztoryc>)
     foreach(lib ${EXTRA_LIBS})
         message(" copy:" ${lib})
-        add_custom_command(TARGET Ztoryc POST_BUILD COMMAND cp ${lib} $<TARGET_FILE_DIR:Ztoryc>)
+        add_custom_command(TARGET Ztoryc POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy ${lib} $<TARGET_FILE_DIR:Ztoryc>)
     endforeach()
 
     add_custom_command(TARGET Ztoryc POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:tcomposer> $<TARGET_FILE_DIR:Ztoryc> DEPENDS tcomposer)
@@ -647,6 +651,19 @@ if(BUILD_ENV_APPLE)
     add_custom_command(TARGET Ztoryc POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/../install/SystemVar.ini $<TARGET_FILE_DIR:Ztoryc>/../Resources)
 
     add_custom_command(TARGET Ztoryc POST_BUILD COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/qss)
+
+    # Linux \"make install\" ships stuff/share; macOS ninja builds do not unless we copy.
+    # Themes live under stuff/config/qss — sync into Ztoryc.app/tahomastuff so portable mode finds them.
+    option(ZTORYC_BUNDLE_STUFF "Copy repo stuff/ into Ztoryc.app/tahomastuff after link (local dev themes)" ON)
+    if(ZTORYC_BUNDLE_STUFF)
+        set(ZTORY_STUFF_TREE "${CMAKE_SOURCE_DIR}/../../stuff")
+        add_custom_command(
+            TARGET Ztoryc POST_BUILD
+            COMMAND bash -c "rm -rf \"$<TARGET_FILE_DIR:Ztoryc>/../../tahomastuff\""
+            COMMAND ${CMAKE_COMMAND} -E copy_directory "${ZTORY_STUFF_TREE}" $<TARGET_FILE_DIR:Ztoryc>/../../tahomastuff
+            COMMENT "Bundling stuff → Ztoryc.app/tahomastuff (ZTORYC_BUNDLE_STUFF=ON)"
+        )
+    endif()
 
     add_custom_command(TARGET Ztoryc
         POST_BUILD COMMAND

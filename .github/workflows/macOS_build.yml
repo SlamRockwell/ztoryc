@@ -156,6 +156,10 @@ jobs:
         run: |
           export PATH="/usr/local/opt/ccache/libexec:$PATH"
           ci-scripts/osx/tahoma-build.sh
+      - name: Verify stuff/themes present before packaging
+        run: |
+          test -f stuff/config/qss/Dark/Dark.qss
+          test "$(find stuff/config/qss -name '*.qss' | wc -l | tr -d ' ')" -ge 1
       - name: Create Package
         run: bash ./ci-scripts/osx/tahoma-buildpkg.sh
       - uses: actions/upload-artifact@v4

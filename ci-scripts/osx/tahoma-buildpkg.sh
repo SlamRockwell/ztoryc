@@ -1,5 +1,26 @@
 #!/bin/bash
+# Bundles the full repo "stuff" tree (themes live in stuff/config/qss/). Paths must
+# not depend on the caller's cwd — GitHub Actions runs from repo root, but local
+# runs may not.
 export TAHOMA2DVERSION=1.6
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+STUFF_SRC="$REPO_ROOT/stuff"
+
+if [[ ! -f "$STUFF_SRC/config/qss/Dark/Dark.qss" ]]; then
+  echo "ERROR: Theme files missing — expected $STUFF_SRC/config/qss/Dark/Dark.qss"
+  echo "       (/checkout may be incomplete; verify stuff/config/qss is in git)"
+  ls -la "$STUFF_SRC/config/qss" 2>&1 || true
+  exit 1
+fi
+QSS_N="$(find "$STUFF_SRC/config/qss" -name '*.qss' 2>/dev/null | wc -l | tr -d ' ')"
+echo ">>> Packaging stuff from $STUFF_SRC ($QSS_N theme .qss file(s) under config/qss)"
+
+cd "$REPO_ROOT" || {
+  echo "ERROR: cannot cd to REPO_ROOT=$REPO_ROOT"
+  exit 1
+}
 
 if [ -d /usr/local/Cellar/qt@5 ]
 then
@@ -180,16 +201,21 @@ mv $TOONZDIR/DSYM $TOONZDIR/Ztoryc.app
 
 echo ">>> Creating Ztoryc-install-osx.pkg"
 
-toonz/installer/osx/app.rb $TOONZDIR stuff toonz/installer/osx/scripts $TAHOMA2DVERSION
+toonz/installer/osx/app.rb "$TOONZDIR" "$STUFF_SRC" toonz/installer/osx/scripts $TAHOMA2DVERSION
 
 mv $TOONZDIR/Ztoryc-install-osx.pkg $TOONZDIR/..
 
 echo ">>> Creating Ztoryc-portable-osx.dmg"
 
-cp -R stuff $TOONZDIR/Ztoryc.app/tahomastuff
-chmod -R 777 $TOONZDIR/Ztoryc.app/tahomastuff
+cp -R "$STUFF_SRC" "$TOONZDIR/Ztoryc.app/tahomastuff"
+chmod -R 777 "$TOONZDIR/Ztoryc.app/tahomastuff"
 
-find $TOONZDIR/Ztoryc.app/tahomastuff -name .gitkeep -exec rm -f {} \;
+find "$TOONZDIR/Ztoryc.app/tahomastuff" -name .gitkeep -exec rm -f {} \;
+
+if [[ ! -f "$TOONZDIR/Ztoryc.app/tahomastuff/config/qss/Dark/Dark.qss" ]]; then
+  echo "ERROR: After copy, portable bundle missing $TOONZDIR/Ztoryc.app/tahomastuff/config/qss/Dark/Dark.qss"
+  exit 1
+fi
 
 cd $TOONZDIR
 

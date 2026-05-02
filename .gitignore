@@ -87,6 +87,9 @@ thirdparty/superlu/SuperLU_4.1/lib/*.a
 toonz/Tahoma2D.app.extras/
 .aider*
 
+# Local toolchain (e.g. scripts/install_ccache_local.sh)
+.tools/
+
 # Ztoryc
 .claude/
 /toonz/Ztoryc.app/

@@ -95,6 +95,13 @@ public:
     QSettings settings(settingsPath, QSettings::IniFormat);
     QString qStr      = QString::fromStdString(varName);
     QString systemVar = settings.value(qStr).toString();
+    // Ztoryc uses ZTORYC* keys in code; many bundles still only ship TAHOMA2D*
+    // from upstream SystemVar.ini — fall back so stuff dir resolves.
+    if (systemVar.isEmpty() && varName.size() > 6 &&
+        varName.compare(0, 6, "ZTORYC") == 0) {
+      const std::string altKey = std::string("TAHOMA2D") + varName.substr(6);
+      systemVar = settings.value(QString::fromStdString(altKey)).toString();
+    }
     // printf("getSystemVarPath: path:%s key:%s var:%s\n",
     // settingsPath.toStdString().data(), varName.data(),
     // systemVar.toStdString().data());

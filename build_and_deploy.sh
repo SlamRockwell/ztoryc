@@ -2,10 +2,27 @@
 # build_and_deploy.sh
 # Compila Ztoryc e aggiorna Ztoryc.app
 # Uso: ./build_and_deploy.sh [file.cpp opzionale da toccare]
+#
+# Workspace: default macchina Cowork; override con export ZTORYC_WORKSPACE=/path/to/repo
+# oppure si usa automaticamente la directory del clone se il path default non esiste.
 
-WORKSPACE="/Volumes/ZioSam/tahoma2d-workspace/tahoma2d"
+SCRIPT_DIR="${0:A:h}"
+DEFAULT_WS="/Volumes/ZioSam/tahoma2d-workspace/tahoma2d"
+if [[ -n "${ZTORYC_WORKSPACE:-}" ]]; then
+  WORKSPACE="$ZTORYC_WORKSPACE"
+elif [[ -d "$DEFAULT_WS/toonz/build" ]]; then
+  WORKSPACE="$DEFAULT_WS"
+else
+  WORKSPACE="$SCRIPT_DIR"
+fi
+
 BUILD="$WORKSPACE/toonz/build"
-APP="$WORKSPACE/toonz/Ztoryc.app"
+# Bundle prodotto da Ninja: toonz/build/toonz/Ztoryc.app (legacy: toonz/Ztoryc.app accanto a build/)
+if [[ -d "$WORKSPACE/toonz/Ztoryc.app" ]]; then
+  APP="$WORKSPACE/toonz/Ztoryc.app"
+else
+  APP="$BUILD/toonz/Ztoryc.app"
+fi
 MACOS="$APP/Contents/MacOS"
 
 if [ -n "$1" ]; then
@@ -57,8 +74,10 @@ ZTORYCCONFIG=$STUFF/config
 EOF
 
 echo "→ Copia helper LZO..."
-cp "$BUILD/lzocompress"   "$MACOS/lzocompress"
-cp "$BUILD/lzodecompress" "$MACOS/lzodecompress"
+LZO_DIR="$BUILD"
+[[ -f "$BUILD/lzodriver/lzocompress" ]] && LZO_DIR="$BUILD/lzodriver"
+cp "$LZO_DIR/lzocompress"   "$MACOS/lzocompress"
+cp "$LZO_DIR/lzodecompress" "$MACOS/lzodecompress"
 
 echo "→ Rimozione xattr e runtime artifacts prima della firma..."
 # Rimuove attributi estesi (com.apple.provenance ecc.) che invalidano il seal
@@ -69,9 +88,11 @@ rm -rf "$APP/profiles" "$APP/cache" "$APP/logs" 2>/dev/null || true
 
 echo "→ Firma codice (dylib prima, poi bundle)..."
 # Prima firma ogni dylib singolarmente
+setopt nullglob
 for f in "$MACOS"/*.dylib; do
   codesign --force --sign - "$f" 2>/dev/null
 done
+unsetopt nullglob
 # Poi firma i binari helper
 codesign --force --sign - "$MACOS/lzocompress"   2>/dev/null
 codesign --force --sign - "$MACOS/lzodecompress" 2>/dev/null

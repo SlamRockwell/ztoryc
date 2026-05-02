@@ -3,6 +3,21 @@ set(CMAKE_POLICY_DEFAULT_CMP0141 NEW)
 
 cmake_minimum_required(VERSION 2.8.11)
 
+# ccache speeds up rebuilds; must be set before project() (CMake >= 3.4).
+# Install: optional PATH (brew, etc.) or run scripts/install_ccache_local.sh → .tools/ccache/bin
+if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.4")
+  option(USE_CCACHE "Use ccache as C/C++ compiler launcher when found" ON)
+  if(USE_CCACHE)
+    set(_TAHOMA_CCACHE_HINTS "${CMAKE_SOURCE_DIR}/../../.tools/ccache/bin")
+    find_program(CCACHE_PROGRAM NAMES ccache HINTS ${_TAHOMA_CCACHE_HINTS})
+    if(CCACHE_PROGRAM)
+      set(CMAKE_C_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+      set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+      message(STATUS "Using compiler launcher (ccache): ${CCACHE_PROGRAM}")
+    endif()
+  endif()
+endif()
+
 set(CMAKE_BUILD_TYPE_INIT Release)
 
 project(Tahoma2D)
