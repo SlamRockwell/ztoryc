@@ -6,6 +6,29 @@
 > Voci più vecchie di ~2 settimane → spostarle in `CHANGELOG_ARCHIVE.md`.
 
 ---
+## [2026-05-02] — Task 16/17/18 completati; Task 19 cursor ancora irrisolto
+### Added
+- **Task 16:** Workflow combo nel tab "Open Existing Scene" della StartupPopup —
+  scelta workflow viene applicata prima di caricare la scena; entrambi i combo
+  (Create + Load) si sincronizzano al workflow corrente all'apertura del dialog.
+- **Task 16:** Voci workflow nel menu Windows ora sono checkable e mostrano
+  spunta sul workflow attivo; `updateWorkflowMenuChecks()` chiamata ogni volta
+  che `switchRoomChoice()` cambia il layout.
+- **Task 17:** All'apertura di una sotto-scena (doppio-click shot nell'animatic),
+  il play-range viene impostato automaticamente su `[0, subFrameCount-1]` via
+  `XsheetGUI::setPlayRange()`.
+- **Task 18:** Zoom con rotella del mouse spostato dal `ZtoryAnimaticTrack` al
+  `ZtoryAnimaticRuler`; il track ignora ora la wheel (`e->ignore()`). Aggiunto
+  signal `zoomChanged(double)` al ruler, connesso a `onZoomChanged` nel panel.
+### Notes
+- **Task 19 (cursor resize audio):** `setMouseTracking(true)` aggiunto al
+  costruttore di `ZtoryAudioTrack`; logica hover aggiornata per cappare `xRight`
+  alla larghezza del widget. Risultato non ancora visibile — da investigare.
+- Reverted tutte le modifiche problematiche della sessione precedente (audio
+  cut/paste/undo + `#include "ztoryanimatic.h"` in storyboardpanel.cpp che
+  causava board panel regression) con `git restore .` prima di re-implementare.
+
+---
 ## [2026-05-01d] — Fix audio toggle 12d + onion skin rimosso + mark-out default + nuovi task
 ### Fixed
 - **Bug 12d — Audio toggle in sub-scena** (`sceneviewer.cpp`, `ztoryanimatic.h/.cpp`):
