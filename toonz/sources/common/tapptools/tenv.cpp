@@ -236,18 +236,19 @@ public:
     m_isPortable = portableStatus.doesExist();
 
 #ifdef MACOSX
-    // macOS 10.12 (Sierra) translocates applications before running them
-    // depending on how it was installed. This separates the app from the
-    // tahomastuff folder and we don't know where it is so we stop treating it
-    // as a portable. Placing stuff inside Tahoma.app will keep
-    // everything together when it translocates.
+    // On macOS the CWD at launch is often "/" (not the app dir), so the check
+    // above fails. Also, Sierra+ translocates apps. Look for tahomastuff
+    // inside the .app bundle: applicationDirPath() = .../Ztoryc.app/Contents/MacOS
+    // so ../../tahomastuff resolves to .../Ztoryc.app/tahomastuff.
     if (!m_isPortable) {
-      portableCheck =
-          TFilePath(m_workingDirectory) + "tahomastuff";
-      portableStatus = TFileStatus(portableCheck);
-      m_isPortable   = portableStatus.doesExist();
-      if (m_isPortable)
-        m_workingDirectory = portableCheck.getParentDir().getQString();
+      QString appDir = QCoreApplication::applicationDirPath();
+      if (!appDir.isEmpty()) {
+        portableCheck  = TFilePath(appDir) + "../../tahomastuff";
+        portableStatus = TFileStatus(portableCheck);
+        m_isPortable   = portableStatus.doesExist();
+        if (m_isPortable)
+          m_workingDirectory = portableCheck.getParentDir().getQString();
+      }
     }
 #endif
   }

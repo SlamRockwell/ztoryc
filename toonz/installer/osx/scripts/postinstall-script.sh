@@ -4,6 +4,9 @@ STUFF_DIR="/Applications/Ztoryc/Ztoryc_stuff"
 if [ -f ztorycstuffdirloc ]
 then
    STUFF_DIR=`cat ztorycstuffdirloc`
+elif [ -f tahoma2dstuffdirloc ]
+then
+   STUFF_DIR=`cat tahoma2dstuffdirloc`
 fi
 
 tar xzvf stuff.tar.bz2
