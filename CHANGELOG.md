@@ -6,6 +6,20 @@
 > Voci più vecchie di ~2 settimane → spostarle in `CHANGELOG_ARCHIVE.md`.
 
 ---
+## [2026-05-02c] — Fix workflow combo "Open Existing Scene" + rimossa regressione StopMotion
+
+### Fixed
+- **Bug workflow popup "Open Existing Scene"** (`startuppopup.cpp`): `CommandManager::execute(cmd)`
+  spostato DOPO `IoCmd::loadScene` invece che prima — il `switchRoomChoice` (clearRooms +
+  readSettings) avveniva mentre la scena era ancora in caricamento, causando schermata nera
+  per StopMotion e potenziali interferenze per tutti i workflow.
+- **Regressione StopMotion rimossa**: in un passaggio intermedio era stato erroneamente
+  eliminato "Stop-Motion Mode" dai combo del popup — ripristinato correttamente.
+
+### Notes
+- Feedback utente ricevuto: chiedere conferma PRIMA di rimuovere funzionalità esistenti.
+
+---
 ## [2026-05-02b] — Task 19 completato: cursore resize su video e audio track
 
 ### Fixed
