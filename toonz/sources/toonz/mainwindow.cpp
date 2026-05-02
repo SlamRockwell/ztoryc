@@ -166,9 +166,14 @@ void writeRoomList(std::vector<TFilePath> &roomPaths) {
 //-----------------------------------------------------------------------------
 
 void writeRoomList(std::vector<Room *> &rooms) {
+  // Skip rooms without a path (fallback rooms created during a workflow switch
+  // before makePrivate assigns them a file). Writing empty paths would corrupt
+  // layouts.txt with "." entries and cause "room not found" on next switch.
   std::vector<TFilePath> roomPaths;
-  for (int i = 0; i < (int)rooms.size(); i++)
-    roomPaths.push_back(rooms[i]->getPath());
+  for (int i = 0; i < (int)rooms.size(); i++) {
+    TFilePath p = rooms[i]->getPath();
+    if (p != TFilePath()) roomPaths.push_back(p);
+  }
   writeRoomList(roomPaths);
 }
 
@@ -1573,7 +1578,7 @@ void MainWindow::deleteRoom(int index) {
 void MainWindow::renameRoom(int index, const QString name) {
   Room *room = getRoom(index);
   room->setName(name);
-  if (m_saveSettingsOnQuit) room->save();
+  if (m_saveSettingsOnQuit && room->getPath() != TFilePath()) room->save();
 }
 
 //-----------------------------------------------------------------------------

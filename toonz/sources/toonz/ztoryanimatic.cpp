@@ -3319,8 +3319,6 @@ void ZtoryAnimaticPanel::showEvent(QShowEvent *e) {
   TPanel::showEvent(e);
   refreshFromScene();
   m_ruler->initPlayRangeIfNeeded();
-  // Restore animatic-local onion skin state to global handle so the viewer
-  // shows the correct onion frames (overrides any native-timeline state).
   m_ruler->syncOnionToGlobal();
 }
 
