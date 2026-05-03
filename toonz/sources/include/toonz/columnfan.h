@@ -37,7 +37,8 @@ class DVAPI ColumnFan {
     bool m_active;
     int m_pos;
     bool m_visible;
-    Column() : m_active(true), m_pos(0), m_visible(true) {}
+    int m_width;  // 0 = use m_unfolded default
+    Column() : m_active(true), m_pos(0), m_visible(true), m_width(0) {}
   };
   std::vector<Column> m_columns;
   std::map<int, int> m_table;
@@ -49,6 +50,8 @@ class DVAPI ColumnFan {
   Called by activate() and deactivate() to update columns coordinates.
   */
   void update();
+
+  int getColWidth(int i) const;
 
 public:
   /*!
@@ -107,6 +110,12 @@ of column identified by \b col.
   bool isVisible(int col) const;
 
   void initializeCol(int col);
+
+  //! Set a fixed pixel width for column \b col (used to make peg columns narrow
+  //! like the camera column). Pass 0 to reset to default m_unfolded width.
+  void setColumnWidth(int col, int width);
+
+  int getCameraColumnDim() const { return m_cameraColumnDim; }
 };
 
 #endif

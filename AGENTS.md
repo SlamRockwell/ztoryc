@@ -252,6 +252,7 @@ cd toonz/sources && ./beautification.sh
    - Mesh sub-scenes wrong folder (`meshifypopup.cpp`)
    - New Scene missing save dialog (`iocommand.cpp`)
    - Wrong column header thumbnail when sub-scenes share a name (`icongenerator.cpp` — `XsheetIconRenderer::getId` usa puntatore invece di nome)
+   - Set Key (Z) not showing keyframe diamond on peg columns (`cellselectioncommand.cpp` — `TCellSelection::setKeyframes()` usava `ColumnId(col)` invece di `xsh->getColumnObjectId(col)` che ritorna `PegbarId` per le peg)
 4. Commit format — Conventional Commits:
    - `feat:` new feature
    - `fix:` bug fix

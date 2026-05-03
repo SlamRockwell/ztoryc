@@ -30,31 +30,40 @@ void ColumnFan::setDimensions(int unfolded, int cameraColumn) {
 
 //-----------------------------------------------------------------------------
 
+int ColumnFan::getColWidth(int i) const {
+  if (i >= 0 && i < (int)m_columns.size() && m_columns[i].m_width > 0)
+    return m_columns[i].m_width;
+  return m_unfolded;
+}
+
 void ColumnFan::update() {
-  int lastPos     = -m_unfolded;
-  bool lastActive = true;
+  int lastWidth   = m_unfolded;  // width of the virtual column before index 0
+  int lastPos     = -lastWidth;
+  bool lastActive  = true;
   bool lastVisible = true;
-  int m           = m_columns.size();
+  int m            = m_columns.size();
   int i;
   for (i = 0; i < m; i++) {
     bool visible = m_columns[i].m_visible;
     bool active  = m_columns[i].m_active;
     if (lastVisible) {
       if (lastActive)
-        lastPos += m_unfolded;
+        lastPos += lastWidth;
       else if (active)
         lastPos += m_folded;
     }
     m_columns[i].m_pos = lastPos;
     lastActive         = active;
     lastVisible        = visible;
+    lastWidth          = getColWidth(i);
   }
-  m_firstFreePos = lastPos + (lastVisible ? (lastActive ? m_unfolded : m_folded) : 0);
+  m_firstFreePos = lastPos + (lastVisible ? (lastActive ? lastWidth : m_folded) : 0);
   m_table.clear();
   for (i = 0; i < m; i++) {
     int pos = -1;
+    int w   = getColWidth(i);
     if (m_columns[i].m_active && m_columns[i].m_visible)
-      pos = m_columns[i].m_pos + m_unfolded - 1;
+      pos = m_columns[i].m_pos + w - 1;
     else if (i + 1 < m && m_columns[i + 1].m_active)
       pos = m_columns[i + 1].m_pos - 1;
     else if (i + 1 == m)
@@ -62,6 +71,12 @@ void ColumnFan::update() {
 
     if (pos >= 0 && m_table.find(pos) == m_table.end()) m_table[pos] = i;
   }
+}
+
+void ColumnFan::setColumnWidth(int col, int width) {
+  while ((int)m_columns.size() <= col) m_columns.push_back(Column());
+  m_columns[col].m_width = width;
+  update();
 }
 
 //-----------------------------------------------------------------------------
@@ -375,6 +390,7 @@ void ColumnFan::shiftFoldedStates(int col, int shift) {
     for (int c = newCol - 1; c >= col; c--) {
       m_columns[c].m_active  = true;
       m_columns[c].m_visible = true;
+      m_columns[c].m_width   = 0;  // new slot: reset to default width
     }
   }
   update();

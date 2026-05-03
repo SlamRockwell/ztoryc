@@ -1523,6 +1523,17 @@ void TXsheet::loadData(TIStream &is) {
     is.closeChild();
   }
   updateFrameCount();
+
+  // Restore peg column widths — not stored in file, must be reapplied on load
+  {
+    ColumnFan &vtFan = m_imp->m_columnFans[0];
+    int n = getColumnCount();
+    for (int c = 0; c < n; c++) {
+      TXshColumn *col = getColumn(c);
+      if (col && col->getPegbarColumn())
+        vtFan.setColumnWidth(c, vtFan.getCameraColumnDim());
+    }
+  }
 }
 
 //-----------------------------------------------------------------------------
@@ -1608,6 +1619,9 @@ void TXsheet::insertColumn(int col, TXshColumn *column) {
   for (ColumnFan &columnFan : m_imp->m_columnFans) {
     columnFan.shiftFoldedStates(col, 1);
   }
+  // Peg columns are rendered as narrow as the camera column in vertical timeline
+  if (column->getPegbarColumn())
+    m_imp->m_columnFans[0].setColumnWidth(col, m_imp->m_columnFans[0].getCameraColumnDim());
 
   notify(TXsheetColumnChange(TXsheetColumnChange::Insert, col));
 }

@@ -953,8 +953,10 @@ void ColumnArea::DrawHeader::drawBaseFill(const QColor &columnColor,
   // check if the column is reference
   bool isEditingSpline = app->getCurrentObject()->isSpline();
 
-  QRect rect = o->rect((col < 0) ? PredefinedRect::CAMERA_LAYER_HEADER
-                                 : PredefinedRect::LAYER_HEADER)
+  bool isPegNarrow = col >= 0 && column && column->getPegbarColumn() &&
+                     o->isVerticalTimeline();
+  QRect rect = o->rect((col < 0 || isPegNarrow) ? PredefinedRect::CAMERA_LAYER_HEADER
+                                                 : PredefinedRect::LAYER_HEADER)
                    .translated(orig);
   if (!o->isVerticalTimeline())
     rect.adjust(isEmpty ? 0 : 73, 0, m_viewer->getTimelineBodyOffset() - 1, 0);
@@ -1403,9 +1405,12 @@ void ColumnArea::DrawHeader::drawColumnName() const {
       name =
     ::to_string(zColumn->getZeraryColumnFx()->getZeraryFx()->getName());
   */
-  QRect columnName = o->rect((col < 0) ? PredefinedRect::CAMERA_LAYER_NAME
+  bool isPegNarrow = col >= 0 && column && column->getPegbarColumn() &&
+                     o->isVerticalTimeline();
+  QRect columnName =
+      o->rect((col < 0 || isPegNarrow) ? PredefinedRect::CAMERA_LAYER_NAME
                                        : PredefinedRect::LAYER_NAME)
-                         .translated(orig);
+          .translated(orig);
   if (!o->isVerticalTimeline()) {
     if (Preferences::instance()->isShowColumnNumbersEnabled()) {
       int shiftRight = o->rect(PredefinedRect::LAYER_NUMBER).width();
@@ -1472,15 +1477,15 @@ void ColumnArea::DrawHeader::drawColumnName() const {
   } else
     p.setPen(m_viewer->getColumnTextColor());
 
-  if (o->isVerticalTimeline() && col < 0) {
-    QString cameraName = QString::fromStdString(name);
+  if (o->isVerticalTimeline() && (col < 0 || isPegNarrow)) {
+    QString rotatedName = QString::fromStdString(name);
     p.save();
     p.translate(columnName.topRight());
     p.rotate(90);
     p.drawText(columnName.translated(-columnName.topLeft())
                    .transposed()
                    .adjusted(5, 0, 0, 0),
-               Qt::AlignLeft | valign, cameraName);
+               Qt::AlignLeft | valign, rotatedName);
     p.restore();
     return;
   }
@@ -1589,9 +1594,10 @@ void ColumnArea::DrawHeader::drawThumbnail(QPixmap &iconPixmap) const {
     return;
   }
 
-  // pegbar thubnail
+  // pegbar thumbnail — no icon in vertical timeline (column is narrow)
   if (column->getPegbarColumn()) {
-    p.drawPixmap(thumbnailImageRect, iconPixmap);
+    if (!o->isVerticalTimeline())
+      p.drawPixmap(thumbnailImageRect, iconPixmap);
     return;
   }
 

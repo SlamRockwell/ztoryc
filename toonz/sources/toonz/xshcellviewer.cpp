@@ -3314,8 +3314,10 @@ void CellArea::drawPegbarColumn(QPainter &p, int r0, int r1, int col) {
     }
 
     QPoint frameAdj = m_viewer->getFrameZoomAdjustment();
+    // Peg columns are narrow (camera width) in vertical timeline
     QRect cellRect =
-        o->rect((col < 0) ? PredefinedRect::CAMERA_CELL : PredefinedRect::CELL)
+        o->rect((col < 0 || o->isVerticalTimeline()) ? PredefinedRect::CAMERA_CELL
+                                                      : PredefinedRect::CELL)
             .translated(QPoint(x, y));
     cellRect.adjust(0, 0, -frameAdj.x(), -frameAdj.y());
     QRect rect = cellRect.adjusted(
@@ -3381,9 +3383,13 @@ void CellArea::drawKeyframe(QPainter &p, const QRect toBeUpdated) {
     row0 = std::max(row0, r0);
     row1 = std::min(row1, r1);
 
+    TXshColumn *pegCol = col >= 0 ? xsh->getColumn(col) : nullptr;
+    bool isPegNarrow   = pegCol && pegCol->getPegbarColumn() &&
+                         o->isVerticalTimeline();
     QRect tmpKeyRect =
-        (col >= 0) ? keyRect : o->rect(PredefinedRect::CAMERA_KEY_ICON)
-                                   .translated(-frameAdj / 2);
+        (col < 0 || isPegNarrow) ? o->rect(PredefinedRect::CAMERA_KEY_ICON)
+                                       .translated(-frameAdj / 2)
+                                 : keyRect;
     if (!Preferences::instance()->isShowDragBarsEnabled() &&
         !o->isVerticalTimeline()) {
       int adjust = col < 0 ? 4 : 1;
@@ -3474,7 +3480,8 @@ void CellArea::drawKeyframe(QPainter &p, const QRect toBeUpdated) {
           }
         }
 
-        drawFrameMarker(p, QPoint(x, y), color, true, (col < 0),
+        drawFrameMarker(p, QPoint(x, y), color, true,
+                        (col < 0 || isPegNarrow),
                         (m_keyHighlight == QPoint(row, col)));
       }
     }
@@ -3545,10 +3552,15 @@ void CellArea::drawKeyframe(QPainter &p, const QRect toBeUpdated) {
 void CellArea::drawKeyframeLine(QPainter &p, int col,
                                 const NumberRange &rows) const {
   QPoint frameAdj      = m_viewer->getFrameZoomAdjustment();
-  const QRect &keyRect = m_viewer->orientation()
-                             ->rect((col < 0) ? PredefinedRect::CAMERA_KEY_ICON
+  TXshColumn *pegColLine = col >= 0
+                              ? m_viewer->getXsheet()->getColumn(col) : nullptr;
+  bool isPegNarrowLine   = pegColLine && pegColLine->getPegbarColumn() &&
+                           m_viewer->orientation()->isVerticalTimeline();
+  const QRect &keyRect =
+      m_viewer->orientation()
+          ->rect((col < 0 || isPegNarrowLine) ? PredefinedRect::CAMERA_KEY_ICON
                                               : PredefinedRect::KEY_ICON)
-                             .translated(-frameAdj / 2);
+          .translated(-frameAdj / 2);
   QPoint begin =
       keyRect.center() + m_viewer->positionToXY(CellPosition(rows.from(), col));
   QPoint end =
@@ -3672,9 +3684,13 @@ void CellArea::paintEvent(QPaintEvent *event) {
   int row         = m_viewer->getCurrentRow();
   int col         = m_viewer->getCurrentColumn();
   QPoint xy       = m_viewer->positionToXY(CellPosition(row, col));
+  TXshColumn *focusCol    = col >= 0 ? m_viewer->getXsheet()->getColumn(col) : nullptr;
+  bool focusIsPegNarrow   = focusCol && focusCol->getPegbarColumn() &&
+                            m_viewer->orientation()->isVerticalTimeline();
   QRect rect =
       m_viewer->orientation()
-          ->rect((col < 0) ? PredefinedRect::CAMERA_CELL : PredefinedRect::CELL)
+          ->rect((col < 0 || focusIsPegNarrow) ? PredefinedRect::CAMERA_CELL
+                                               : PredefinedRect::CELL)
           .translated(xy)
           .adjusted(0, 0, -1 - frameAdj.x(), -frameAdj.y());
   p.setPen(m_viewer->getCellFocusColor());
@@ -3731,11 +3747,14 @@ bool CellArea::isKeyFrameArea(int col, int row, QPoint mouseInCell,
   const Orientation *o = m_viewer->orientation();
   QPoint frameAdj      = m_viewer->getFrameZoomAdjustment();
 
-  if (o->isVerticalTimeline())
-    return o->rect((col < 0) ? PredefinedRect::CAMERA_CELL
-                             : PredefinedRect::KEYFRAME_AREA)
+  if (o->isVerticalTimeline()) {
+    TXshColumn *pegColKf = col >= 0 ? xsh->getColumn(col) : nullptr;
+    bool isPegNarrowKf   = pegColKf && pegColKf->getPegbarColumn();
+    return o->rect((col < 0 || isPegNarrowKf) ? PredefinedRect::CAMERA_CELL
+                                               : PredefinedRect::KEYFRAME_AREA)
                .contains(mouseInCell) &&
            row < k1 + 1;
+  }
 
   bool showDragBars = Preferences::instance()->isShowDragBarsEnabled();
   bool isMinimumLayout =
@@ -3926,8 +3945,12 @@ void CellArea::mousePressEvent(QMouseEvent *event) {
                              row <= k1 + 1;
       bool accept = false;
 
-      QRect loopRect = o->rect((col < 0) ? PredefinedRect::CAMERA_LOOP_ICON
-                                         : PredefinedRect::LOOP_ICON);
+      TXshColumn *pegColLoop1 = col >= 0 ? xsh->getColumn(col) : nullptr;
+      bool isPegNarrowLoop1   = pegColLoop1 && pegColLoop1->getPegbarColumn() &&
+                                o->isVerticalTimeline();
+      QRect loopRect = o->rect((col < 0 || isPegNarrowLoop1)
+                                   ? PredefinedRect::CAMERA_LOOP_ICON
+                                   : PredefinedRect::LOOP_ICON);
       if (!Preferences::instance()->isShowDragBarsEnabled() &&
           !o->isVerticalTimeline()) {
         int adjustY = col < 0 ? 4 : 1;
@@ -4288,8 +4311,12 @@ void CellArea::mouseMoveEvent(QMouseEvent *event) {
       Preferences::instance()->isShowKeyframesOnXsheetCellAreaEnabled() &&
       pegbar && pegbar->getKeyframeRange(k0, k1) && k0 <= row && row <= k1 + 1;
 
-  QRect loopRect = o->rect((col < 0) ? PredefinedRect::CAMERA_LOOP_ICON
-                                     : PredefinedRect::LOOP_ICON);
+  TXshColumn *pegColLoop2 = col >= 0 ? xsh->getColumn(col) : nullptr;
+  bool isPegNarrowLoop2   = pegColLoop2 && pegColLoop2->getPegbarColumn() &&
+                            o->isVerticalTimeline();
+  QRect loopRect = o->rect((col < 0 || isPegNarrowLoop2)
+                               ? PredefinedRect::CAMERA_LOOP_ICON
+                               : PredefinedRect::LOOP_ICON);
   if (!Preferences::instance()->isShowDragBarsEnabled() &&
       !o->isVerticalTimeline()) {
     int adjustY = col < 0 ? 4 : 1;

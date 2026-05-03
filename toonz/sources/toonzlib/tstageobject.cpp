@@ -941,6 +941,10 @@ void TStageObject::setKeyframeWithoutUndo(int frame) {
   setkey(m_shearx, frame);
   setkey(m_sheary, frame);
 
+  // setkey() writes into each TDoubleParam but does not update m_keyframes
+  // in the lazy data. Invalidate so isKeyframe() / getKeyframeRange() rebuild.
+  invalidate();
+
   // Plastic keys are currently not *created* by xsheet commands.
 
   /*if(m_skeletonDeformation)
