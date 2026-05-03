@@ -358,6 +358,7 @@ void TKeyframeSelection::setKeyframes() {
   }
   TApp::instance()->getCurrentScene()->setDirtyFlag(true);
   TApp::instance()->getCurrentObject()->notifyObjectIdChanged(false);
+  TApp::instance()->getCurrentXsheet()->notifyXsheetChanged();
 }
 
 //-----------------------------------------------------------------------------
