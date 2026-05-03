@@ -251,6 +251,7 @@ cd toonz/sources && ./beautification.sh
    - getPreviewButtonStates null crash (`viewerpane.cpp`)
    - Mesh sub-scenes wrong folder (`meshifypopup.cpp`)
    - New Scene missing save dialog (`iocommand.cpp`)
+   - Wrong column header thumbnail when sub-scenes share a name (`icongenerator.cpp` — `XsheetIconRenderer::getId` usa puntatore invece di nome)
 4. Commit format — Conventional Commits:
    - `feat:` new feature
    - `fix:` bug fix
