@@ -1,6 +1,7 @@
 
 
 // TnzCore includes
+#include <cstdint>
 #include "tfilepath.h"
 #include "tfiletype.h"
 #include "tstream.h"
@@ -866,7 +867,11 @@ public:
   }
 
   static std::string getId(TXshChildLevel *level, int row) {
-    return "sub:" + ::to_string(level->getName()) + std::to_string(row);
+    // Use pointer address instead of name: multiple child levels can share
+    // the same name (e.g. imported sub-scenes), causing cache collisions that
+    // return the wrong thumbnail for sibling columns.
+    return "sub:" + std::to_string((uintptr_t)level) + "_" +
+           std::to_string(row);
   }
 
   TRaster32P generateRaster(const TDimension &iconSize) const;
