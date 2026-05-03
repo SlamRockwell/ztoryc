@@ -28,8 +28,8 @@ designed to work natively inside an animation application.
 ```
 ~/ZtorYc/
 ├── AGENTS.md                    ← questo file (canonical)
-├── CHANGELOG.md                 ← log di tutte le sessioni
-├── ANIMATIC_TASKS.md            ← task list tecnica corrente
+├── CHANGELOG.md                 ← symlink → Google Drive/Ztoryc/CHANGELOG.md
+├── ANIMATIC_TASKS.md            ← symlink → Google Drive/Ztoryc/ANIMATIC_TASKS.md
 ├── DESIGN.md                    ← specifica funzionale
 ├── README.md                    ← readme pubblico
 ├── tahoma2d-workspace_local/    ← backup codice (rsync da ZioSam dopo ogni commit)
@@ -37,6 +37,12 @@ designed to work natively inside an animation application.
 └── tahoma2d-workspace_bak/      ← snapshot storico (non modificare)
     └── tahoma2d/
 ```
+
+> **CHANGELOG.md e ANIMATIC_TASKS.md sono symlink a Google Drive** (`Il mio Drive/Ztoryc/`).
+> Qualsiasi scrittura su questi file aggiorna automaticamente Drive e quindi
+> è visibile a Claudio Paddei (Claude su iPad). All'avvio di "nuova sessione"
+> leggere sempre da `~/ZtorYc/` — se Claudio ha fatto modifiche su iPad,
+> Drive le avrà sincronizzate e saranno già presenti via symlink.
 
 -----
 
@@ -350,6 +356,9 @@ When the user says **"sessione chiusa"**, automatically:
    cp ~/ZtorYc/ANIMATIC_TASKS.md /Volumes/ZioSam/tahoma2d-workspace/tahoma2d/ANIMATIC_TASKS.md
    cp ~/ZtorYc/AGENTS.md /Volumes/ZioSam/tahoma2d-workspace/tahoma2d/AGENTS.md
    ```
+   > CHANGELOG.md e ANIMATIC_TASKS.md sono symlink a Google Drive — il `cp` qui
+   > legge da Drive e scrive nel repo. Drive è già aggiornato automaticamente
+   > da ogni scrittura via `~/ZtorYc/`. Non serve un passo separato per Drive.
 
 5. Confirm to the user: commit hash + files synced.
 
