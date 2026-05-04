@@ -146,6 +146,27 @@ bool readRoomList(std::vector<TFilePath> &roomPaths,
     roomPaths.push_back(roomPath);
   }
 
+  // Storyboard: private layouts/Storyboard/layouts.txt overrides the template.
+  // Older installs often listed only browser.ini — prepend bundled ztoryc.ini
+  // so the ZTORYC room (Board + Animatic + viewer) always appears like a fresh
+  // install / coworker setup.
+  if (argumentLayoutFileName.isEmpty() &&
+      Preferences::instance()->getCurrentRoomChoice() ==
+          QLatin1String("Storyboard")) {
+    const TFilePath templateZtoryc =
+        ToonzFolder::getRoomsDir() + TFilePath("Storyboard/ztoryc.ini");
+    if (TFileStatus(templateZtoryc).doesExist()) {
+      bool haveZtoryc = false;
+      for (const TFilePath &p : roomPaths) {
+        if (p.getWideName() == L"ztoryc.ini") {
+          haveZtoryc = true;
+          break;
+        }
+      }
+      if (!haveZtoryc) roomPaths.insert(roomPaths.begin(), templateZtoryc);
+    }
+  }
+
   return argumentLayoutFileLoaded;
 }
 
@@ -313,6 +334,8 @@ void Room::setName(QString name) {
     m_trName = tr("History");
   else if (m_name == "New Room")
     m_trName = tr("New Room");
+  else if (m_name == "ZTORYC" || m_name == "Ztoryc")
+    m_trName = tr("Ztoryc");
 }
 
 void Room::save() {

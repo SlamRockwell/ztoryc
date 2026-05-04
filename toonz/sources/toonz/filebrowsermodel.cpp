@@ -376,7 +376,9 @@ DvDirModelNode *DvDirModelFileFolderNode::getNodeByPath(const TFilePath &path) {
   if (!m_path.isAncestorOf(path)) return 0;
   int i, n = getChildCount();
   for (i = 0; i < n; i++) {
-    DvDirModelNode *node = getChild(i)->getNodeByPath(path);
+    DvDirModelNode *child = getChild(i);
+    if (!child) continue;
+    DvDirModelNode *node = child->getNodeByPath(path);
     if (node) return node;
   }
   return 0;
@@ -1128,8 +1130,11 @@ DvDirModelRootNode::DvDirModelRootNode()
     , m_myComputerNode(0)
     , m_networkNode(0)
     , m_currentProjectNode(0)
-    , m_sandboxProjectNode(0) {
+    , m_sandboxProjectNode(0)
+    , m_sceneFolderNode(
+          new DvDirModelSceneFolderNode(this, L"Scene Folder", TFilePath())) {
   m_nodeType = "Root";
+  m_sceneFolderNode->setPixmap(QPixmap(":Resources/clapboard.png"));
 }
 
 //-----------------------------------------------------------------------------
@@ -1269,11 +1274,6 @@ void DvDirModelRootNode::refreshChildren() {
       m_versionControlNodes.push_back(node);
       addChild(node);
     }
-
-    // scenefolder node (access to the parent folder of the current scene file)
-    m_sceneFolderNode =
-        new DvDirModelSceneFolderNode(this, L"Scene Folder", TFilePath());
-    m_sceneFolderNode->setPixmap(QPixmap(":Resources/clapboard.png"));
   } else {
     RecentFiles *recent        = RecentFiles::instance();
     QList<QString> recentFiles = recent->getFilesNameList(RecentFiles::Project);
@@ -1315,7 +1315,7 @@ DvDirModelNode *DvDirModelRootNode::getNodeByPath(const TFilePath &path) {
   // check for the scene folder if it is the first priority
   Preferences::PathAliasPriority priority =
       Preferences::instance()->getPathAliasPriority();
-  if (priority == Preferences::SceneFolderAlias &&
+  if (priority == Preferences::SceneFolderAlias && m_sceneFolderNode &&
       !m_sceneFolderNode->getPath().isEmpty()) {
     node = m_sceneFolderNode->getNodeByPath(path);
     if (node) return node;
@@ -1329,19 +1329,9 @@ DvDirModelNode *DvDirModelRootNode::getNodeByPath(const TFilePath &path) {
     // search in the project folders
     if (projectNode) {
       if (projectNode->getPath() == path) return node;
-      for (int j = 0; j < m_projectNodes[i]->getChildCount(); j++) {
-        // for the normal folder in the project folder
-        node = projectNode->getNodeByPath(path);
-        if (node) return node;
-
-        if (projectNode->isCurrent()) {
-          // for the aliases in the project folder ("+drawings" etc.)
-          for (int k = 0; k < projectNode->getChildCount(); k++) {
-            node = projectNode->getChild(k)->getNodeByPath(path);
-            if (node) return node;
-          }
-        }
-      }
+      // getNodeByPath already walks all child folders (including +aliases).
+      node = projectNode->getNodeByPath(path);
+      if (node) return node;
     }
   }
 
@@ -1360,14 +1350,15 @@ DvDirModelNode *DvDirModelRootNode::getNodeByPath(const TFilePath &path) {
     return m_sandboxProjectNode;
   if (m_sandboxProjectNode) {
     for (i = 0; i < m_sandboxProjectNode->getChildCount(); i++) {
-      DvDirModelNode *node =
-          m_sandboxProjectNode->getChild(i)->getNodeByPath(path);
+      DvDirModelNode *child = m_sandboxProjectNode->getChild(i);
+      if (!child) continue;
+      DvDirModelNode *node = child->getNodeByPath(path);
       if (node) return node;
     }
   }
 
   // check for the scene folder if it is the second priority
-  if (priority == Preferences::ProjectFolderAliases &&
+  if (priority == Preferences::ProjectFolderAliases && m_sceneFolderNode &&
       !m_sceneFolderNode->getPath().isEmpty()) {
     node = m_sceneFolderNode->getNodeByPath(path);
     if (node) return node;
@@ -1388,7 +1379,9 @@ DvDirModelNode *DvDirModelRootNode::getNodeByPath(const TFilePath &path) {
   // it could be a regular folder, somewhere in the file system
   if (m_myComputerNode) {
     for (i = 0; i < m_myComputerNode->getChildCount(); i++) {
-      DvDirModelNode *node = m_myComputerNode->getChild(i)->getNodeByPath(path);
+      DvDirModelNode *child = m_myComputerNode->getChild(i);
+      if (!child) continue;
+      DvDirModelNode *node = child->getNodeByPath(path);
       if (node) return node;
     }
   }
@@ -1398,7 +1391,9 @@ DvDirModelNode *DvDirModelRootNode::getNodeByPath(const TFilePath &path) {
     QString pathStr = path.getQString();
     if (pathStr.startsWith("\\\\") || pathStr.startsWith("//")) {
       for (i = 0; i < m_networkNode->getChildCount(); i++) {
-        DvDirModelNode *node = m_networkNode->getChild(i)->getNodeByPath(path);
+        DvDirModelNode *child = m_networkNode->getChild(i);
+        if (!child) continue;
+        DvDirModelNode *node = child->getNodeByPath(path);
         if (node) return node;
       }
 
@@ -1417,6 +1412,7 @@ DvDirModelNode *DvDirModelRootNode::getNodeByPath(const TFilePath &path) {
 // update the path of sceneLocationNode
 
 void DvDirModelRootNode::setSceneLocation(const TFilePath &path) {
+  if (!m_sceneFolderNode) return;
   if (path == m_sceneFolderNode->getPath()) return;
   m_sceneFolderNode->setPath(path);
 
@@ -1430,6 +1426,7 @@ void DvDirModelRootNode::setSceneLocation(const TFilePath &path) {
 //-----------------------------------------------------------------------------
 
 void DvDirModelRootNode::updateSceneFolderNodeVisibility(bool forceHide) {
+  if (!m_sceneFolderNode) return;
   bool show = (forceHide) ? false : !m_sceneFolderNode->getPath().isEmpty();
   if (show && m_sceneFolderNode->getRow() == -1) {
     int row = getChildCount();
