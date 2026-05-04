@@ -156,11 +156,22 @@ public:
     else {
       m_importQuestionAsked = true;
 
-      QString label =
-          QObject::tr(
-              "File %1 doesn't belong to the current project.\n"
-              "Do you want to import it or load it from its original location?")
-              .arg(QString::fromStdWString(path.getWideString()));
+      // Check whether the file is actually outside the current project.
+      // isExternPath() skips the "scenes" folder, so check that separately.
+      ToonzScene *curScene = TApp::instance()->getCurrentScene()->getScene();
+      bool isExternal      = curScene->isExternPath(path);
+      if (isExternal) {
+        TFilePath scenesDir = curScene->decodeFilePath(TFilePath("+scenes"));
+        if (scenesDir.isAncestorOf(path)) isExternal = false;
+      }
+
+      QString label = isExternal
+          ? QObject::tr(
+                "File \"%1\" doesn't belong to the current project.\n"
+                "Do you want to import it or load it from its original location?")
+                .arg(QString::fromStdWString(path.getWideString()))
+          : QObject::tr(
+                "Do you want to import it or load it from its current location?");
       QString checkBoxLabel = QObject::tr("Always do this action.");
       QStringList buttons;
       buttons << QObject::tr("Import") << QObject::tr("Load")

@@ -481,6 +481,13 @@ alle sequence del progetto (sq01, sq02…).
 21. **NEW Volume per traccia audio** — slider o knob per il gain per-track (richiede aggiunta campo in ZtoryModel e lettura in TXsheet::scrub)
 22. **NEW Transizioni** — dissolve tra shot con aggiunta automatica di x/2 frame extra nella sub-scena; UI: handle di overlap sul bordo del blocco
 23. ~~**NEW Layout template per ogni workflow**~~ ✅ DONE 2026-05-02 (Storyboard) — template Storyboard aggiornato con layout produzione di francobianco (ztoryc.ini + browser.ini). StopMotion già aveva template DragonFrame-style. Tradigital/Cutout: room1-6.ini già in repo, nessun aggiornamento necessario ora. Il meccanismo getRoomsFile() con fallback da user dir a template dir è già in produzione.
+24. **NEW Startup popup come hub scene management** — Riusare ZtoryStartup per New/Load/Subscene:
+    - `New Scene` → apre popup tab "Create New" (comportamento attuale)
+    - `Load Scene` → apre popup tab "Open Scene" (lista .tnz senza browser classico)
+    - `Load Scene as Subscene` → stessa tab "Open Scene" ma carica come sub-scene della scena corrente
+    - Bottone **Cancel** contestuale: se nessuna scena aperta (avvio) → "Quit Ztoryc?"; se scena aperta → chiude popup
+    - `File > Import > Import Assets...` → browser classico (per import asset avanzato)
+    - Vantaggi: un solo widget, mostra solo .tnz, UX più pulita rispetto al file browser nativo
 
 ### Milestone roadmap
 - **Early Beta (v0.2):** ~~Undo/Redo (task 13)~~ ✅ ~~audio toggle (12d)~~ ✅ → rilascio

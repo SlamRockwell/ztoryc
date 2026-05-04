@@ -88,6 +88,7 @@ public:
   void onLoadScene();
   void onSaveSceneVersion();
   void onLoadSubScene();
+  void onImportAssets();
   void resetRoomsLayout();
   void maximizePanel();
   void fullScreenWindow();

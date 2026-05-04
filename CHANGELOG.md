@@ -6,6 +6,24 @@
 > Voci più vecchie di ~2 settimane → spostarle in `CHANGELOG_ARCHIVE.md`.
 
 ---
+## [2026-05-03] — Peg columns narrow (22px) + Set Key fix
+
+### Fixed
+- **Set Key (Z) su peg columns**: `TCellSelection::setKeyframes()` usava `ColumnId(col)` invece di `xsh->getColumnObjectId(col)` → il keyframe veniva impostato sullo stage object sbagliato, nessun diamante visibile. Fix: una riga in `cellselectioncommand.cpp`
+- **`setKeyframeWithoutUndo(int frame)`**: aggiunto `invalidate()` alla fine così `isKeyframe()` riflette subito le modifiche (lazy cache `m_lazyData` non veniva refreshata)
+- **Peg columns narrow in vertical timeline**: colonne peg ora larghe 22px come camera. Modifiche:
+  - `ColumnFan`: per-column width support (`m_width`, `setColumnWidth()`, `getCameraColumnDim()`, `getColWidth()`) con `update()` che usa larghezze per-colonna
+  - `TXsheet`: peg columns marchiate 22px su `insertColumn()` e al termine di `loadData()`
+  - `xshcolumnviewer`: peg in vertical timeline usa `CAMERA_LAYER_HEADER`/`CAMERA_LAYER_NAME`, nome ruotato 90°, nessuna icona
+  - `xshcellviewer`: celle/keyframe/selection/focus border usano `CAMERA_CELL`/`CAMERA_KEY_ICON`/`CAMERA_LOOP_ICON` per peg in vertical timeline
+
+### Added
+- **Task 24** in ANIMATIC_TASKS: Startup popup come hub scene management (New/Load/Subscene + Cancel contestuale + Import Assets in File > Import)
+
+### Upstream candidates
+- Set Key (Z) non mostra diamante su peg columns — `cellselectioncommand.cpp` una riga
+
+---
 ## [2026-05-02d] — Fix writeRoomList/renameRoom crash + Storyboard layout template
 
 ### Fixed

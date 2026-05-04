@@ -584,6 +584,7 @@ centralWidget->setLayout(centralWidgetLayout);*/
   setCommandHandler("MI_SaveSceneVersion", this, &MainWindow::onSaveSceneVersion);
   setCommandHandler("MI_LoadScene", this, &MainWindow::onLoadScene);
   setCommandHandler("MI_LoadSubSceneFile", this, &MainWindow::onLoadSubScene);
+  setCommandHandler(MI_ImportAssets, this, &MainWindow::onImportAssets);
   setCommandHandler("MI_ResetRoomLayout", this, &MainWindow::resetRoomsLayout);
   setCommandHandler(MI_WorkflowStoryboard, this, &MainWindow::onWorkflowStoryboard);
   setCommandHandler(MI_Workflow2D, this, &MainWindow::onWorkflow2D);
@@ -1184,7 +1185,8 @@ void MainWindow::onRedo() {
 //-----------------------------------------------------------------------------
 
 void MainWindow::onNewScene() {
-  IoCmd::newScene();
+  // Don't call IoCmd::newScene() here — the popup's "Create Scene" button
+  // will do it so the current scene isn't discarded if the user cancels.
   CommandManager *cm = CommandManager::instance();
   cm->setChecked(MI_ShiftTrace, false);
   cm->setChecked(MI_EditShift, false);
@@ -1192,25 +1194,33 @@ void MainWindow::onNewScene() {
   cm->setChecked(MI_ShowShiftOrigin, false);
   cm->setChecked(MI_VectorGuidedDrawing, false);
 
-  // Show startup popup so the user can configure the new scene
-  // (camera, workflow, shot numbering) before working.
-  if (Preferences::instance()->isStartupPopupEnabled()) {
-    StartupPopup *popup = new StartupPopup();
-    popup->show();
-    popup->raise();
-    popup->activateWindow();
-  }
+  StartupPopup *popup = new StartupPopup(StartupPopup::CreateMode);
+  popup->show();
+  popup->raise();
+  popup->activateWindow();
 }
 
 //-----------------------------------------------------------------------------
 
-void MainWindow::onLoadScene() { IoCmd::loadScene(); }
+void MainWindow::onLoadScene() {
+  StartupPopup *popup = new StartupPopup(StartupPopup::LoadMode);
+  popup->show();
+  popup->raise();
+  popup->activateWindow();
+}
 
 void MainWindow::onSaveSceneVersion() { IoCmd::saveSceneVersion(); }
 
 //-----------------------------------------------------------------------------
 
-void MainWindow::onLoadSubScene() { IoCmd::loadSubScene(); }
+void MainWindow::onLoadSubScene() {
+  StartupPopup *popup = new StartupPopup(StartupPopup::LoadSubSceneMode);
+  popup->show();
+  popup->raise();
+  popup->activateWindow();
+}
+
+void MainWindow::onImportAssets() { IoCmd::loadScene(); }
 //-----------------------------------------------------------------------------
 
 void MainWindow::onUpgradeTabPro() {}
@@ -2171,6 +2181,9 @@ void MainWindow::defineActions() {
       MI_LoadSubSceneFile, QT_TR_NOOP("&Load As Sub-Scene..."), "",
       "load_as_sub_xsheet",
       tr("Load an existing scene into the current scene as a sub-scene"));
+  createMenuFileAction(
+      MI_ImportAssets, QT_TR_NOOP("&Import Assets..."), "", "",
+      tr("Browse for a scene file to import into the current project."));
   createMenuAction(MI_OpenRecentScene, QT_TR_NOOP("&Open Recent Scene File"),
                    files, tr("Load a recently used scene."));
   createMenuAction(MI_OpenRecentLevel, QT_TR_NOOP("&Open Recent Level File"),

@@ -103,12 +103,18 @@ QString removeZeros(QString srcStr) {
 */
 //-----------------------------------------------------------------------------
 
-StartupPopup::StartupPopup()
-    : Dialog(TApp::instance()->getMainWindow(), true, true, "StartupPopup") {
+StartupPopup::StartupPopup(Mode mode)
+    : Dialog(TApp::instance()->getMainWindow(), true, true, "StartupPopup")
+    , m_mode(mode) {
   setObjectName("StartupPopup");
-  setWindowTitle(tr("Ztoryc Startup"));
-  // Disable the OS-level close button so the user can't dismiss untitled state.
-  setWindowFlag(Qt::WindowCloseButtonHint, false);
+  switch (mode) {
+    case CreateMode:      setWindowTitle(tr("Create New Scene"));        break;
+    case LoadMode:        setWindowTitle(tr("Load Scene"));              break;
+    case LoadSubSceneMode:setWindowTitle(tr("Load Scene as Sub-Scene")); break;
+    default:              setWindowTitle(tr("Ztoryc Startup"));          break;
+  }
+  // Only DefaultMode blocks the OS close button.
+  setWindowFlag(Qt::WindowCloseButtonHint, mode != DefaultMode);
 
   m_projectBox = new QGroupBox(tr("Current Project"), this);
   m_scenesTab  = new QTabWidget();
@@ -248,8 +254,27 @@ StartupPopup::StartupPopup()
       m_loadWorkflowCB->addItem(tr("Cutout Digital Mode"));
       m_loadWorkflowCB->addItem(tr("Stop-Motion Mode"));
       wfRow->addWidget(m_loadWorkflowCB, 1);
+      // Hide workflow selector in sub-scene mode (no room switch needed)
+      if (mode == LoadSubSceneMode) {
+        wfRow->itemAt(0)->widget()->hide();  // label
+        m_loadWorkflowCB->hide();
+      }
       loadLay->addLayout(wfRow);
+
+      if (mode == LoadSubSceneMode) {
+        m_existingList->setSelectionMode(QAbstractItemView::ExtendedSelection);
+        m_existingList->setMultiSelect(true);
+      }
+
       loadLay->addWidget(m_existingList, 1);
+
+      // "Load Selected" button — shown only in LoadSubSceneMode
+      m_loadSelectedButton = new QPushButton(tr("Load Selected"), loadWidget);
+      m_loadSelectedButton->setVisible(mode == LoadSubSceneMode);
+      loadLay->addWidget(m_loadSelectedButton, 0, Qt::AlignRight);
+      connect(m_loadSelectedButton, &QPushButton::clicked,
+              this, &StartupPopup::onLoadSelectedButton);
+
       m_scenesTab->addTab(loadWidget, tr("Open Existing Scene"));
     }
 
@@ -422,8 +447,12 @@ StartupPopup::StartupPopup()
   m_buttonLayout->setContentsMargins(0, 0, 0, 0);
   m_buttonLayout->setSpacing(10);
   {
-    // "Show at startup" removed — startup screen is mandatory
-    // m_buttonLayout->addWidget(m_showAtStartCB, Qt::AlignLeft);
+    m_cancelButton = new QPushButton(tr("Cancel"), this);
+    m_cancelButton->setMinimumSize(65, 25);
+    m_cancelButton->setMaximumHeight(25);
+    m_buttonLayout->addWidget(m_cancelButton, 0, Qt::AlignLeft);
+    connect(m_cancelButton, &QPushButton::clicked, this, &StartupPopup::onCancelButton);
+
     m_buttonLayout->addStretch();
     m_buttonLayout->addWidget(m_autoSaveOnCB);
     m_buttonLayout->addWidget(m_autoSaveTimeFld);
@@ -491,7 +520,39 @@ StartupPopup::StartupPopup()
 void StartupPopup::showEvent(QShowEvent *) {
   loadPresetList();
   updateProjectCB();
-  m_nameFld->setFocus();
+
+  // Show/hide tab bar and side panels based on mode.
+  switch (m_mode) {
+    case CreateMode:
+      m_scenesTab->tabBar()->hide();
+      m_scenesTab->setCurrentIndex(1);
+      m_recentBox->hide();
+      m_nameFld->setFocus();
+      break;
+    case LoadMode:
+      m_scenesTab->tabBar()->hide();
+      m_scenesTab->setCurrentIndex(0);
+      m_existingList->setFocus();
+      break;
+    case LoadSubSceneMode:
+      m_scenesTab->tabBar()->hide();
+      m_scenesTab->setCurrentIndex(0);
+      m_recentBox->hide();
+      m_existingList->setFocus();
+      break;
+    default:  // DefaultMode — everything visible
+      m_scenesTab->tabBar()->show();
+      m_recentBox->show();
+      m_nameFld->setFocus();
+      break;
+  }
+
+  // Cancel label: "Quit" only at cold start (untitled scene in DefaultMode).
+  if (m_cancelButton) {
+    ToonzScene *scene = TApp::instance()->getCurrentScene()->getScene();
+    bool coldStart    = (m_mode == DefaultMode) && scene && scene->isUntitled();
+    m_cancelButton->setText(coldStart ? tr("Quit Ztoryc") : tr("Cancel"));
+  }
   m_pathFld->setPath(TApp::instance()
                          ->getCurrentScene()
                          ->getScene()
@@ -587,7 +648,12 @@ void StartupPopup::showEvent(QShowEvent *) {
 //-----------------------------------------------------------------------------
 
 void StartupPopup::closeEvent(QCloseEvent *e) {
-  // Block closing if the scene is still untitled — user must create or open one.
+  // Load/LoadSubScene modes are opened from a menu — allow closing freely.
+  if (m_mode != DefaultMode) {
+    DVGui::Dialog::closeEvent(e);
+    return;
+  }
+  // DefaultMode: block if still untitled — user must create or open a scene.
   ToonzScene *scene = TApp::instance()->getCurrentScene()->getScene();
   if (scene && scene->isUntitled()) {
     e->ignore();
@@ -596,6 +662,23 @@ void StartupPopup::closeEvent(QCloseEvent *e) {
     return;
   }
   DVGui::Dialog::closeEvent(e);
+}
+
+//-----------------------------------------------------------------------------
+
+void StartupPopup::onCancelButton() {
+  ToonzScene *scene = TApp::instance()->getCurrentScene()->getScene();
+  bool untitled     = scene && scene->isUntitled();
+
+  if (untitled) {
+    // Cold start — confirm quit
+    int ret = DVGui::MsgBox(tr("No scene is open. Quit Ztoryc?"),
+                            tr("Quit"), tr("Back"), 0);
+    if (ret == 1)
+      QApplication::quit();
+  } else {
+    hide();
+  }
 }
 
 //-----------------------------------------------------------------------------
@@ -693,6 +776,16 @@ void StartupPopup::onProjectComboChanged(int index) {
   if (m_updating) return;
   TProjectManager *pm = TProjectManager::instance();
 
+  // In LoadSubSceneMode, just browse scenes from the selected project without
+  // changing the active project or closing the current scene.
+  if (m_mode == LoadSubSceneMode) {
+    TFilePath projectFp = m_projectPaths[index];
+    std::shared_ptr<TProject> proj(new TProject());
+    proj->load(projectFp);
+    refreshExistingScenes(proj->getScenesPath());
+    return;
+  }
+
   TFilePath projectFp = m_projectPaths[index];
 
   pm->setCurrentProjectPath(projectFp);
@@ -741,12 +834,12 @@ void StartupPopup::onProjectComboChanged(int index) {
 
 //-----------------------------------------------------------------------------
 
-void StartupPopup::refreshExistingScenes() {
+void StartupPopup::refreshExistingScenes(TFilePath scenesFolder) {
   m_existingList->clearScenes();
   TFilePathSet files, allFiles;
 
-  TFilePath scenesFolder =
-      TProjectManager::instance()->getCurrentProject()->getScenesPath();
+  if (scenesFolder == TFilePath())
+    scenesFolder = TProjectManager::instance()->getCurrentProject()->getScenesPath();
 
   QFileInfo scenesFolderInfo(toQString(scenesFolder));
   if (scenesFolderInfo.isSymLink()) {
@@ -780,6 +873,9 @@ void StartupPopup::refreshExistingScenes() {
 //-----------------------------------------------------------------------------
 
 void StartupPopup::onExistingSceneClicked(int index) {
+  // In LoadSubSceneMode, single-click only selects — use "Load Selected" button.
+  if (m_mode == LoadSubSceneMode) return;
+
   QString path = m_existingList->getPath(index);
   if (path == ":") {
     m_scenesTab->setCurrentIndex(1);
@@ -789,17 +885,28 @@ void StartupPopup::onExistingSceneClicked(int index) {
     IoCmd::loadScene(TFilePath(path.toStdWString()), true, true);
     // Apply the selected workflow AFTER loading so rooms are not cleared
     // while the scene load is still in progress (caused black screen on switch).
-    {
-      static const char *kCmds[] = {
-        MI_WorkflowStoryboard, MI_Workflow2D,
-        MI_WorkflowCutout,     MI_WorkflowStopMotion
-      };
-      int wfIdx = m_loadWorkflowCB->currentIndex();
-      const char *cmd = (wfIdx >= 0 && wfIdx < 4) ? kCmds[wfIdx] : MI_WorkflowStoryboard;
-      CommandManager::instance()->execute(cmd);
-    }
+    static const char *kCmds[] = {
+      MI_WorkflowStoryboard, MI_Workflow2D,
+      MI_WorkflowCutout,     MI_WorkflowStopMotion
+    };
+    int wfIdx = m_loadWorkflowCB->currentIndex();
+    const char *cmd = (wfIdx >= 0 && wfIdx < 4) ? kCmds[wfIdx] : MI_WorkflowStoryboard;
+    CommandManager::instance()->execute(cmd);
     hide();
   }
+}
+
+//-----------------------------------------------------------------------------
+
+void StartupPopup::onLoadSelectedButton() {
+  QList<QListWidgetItem *> selected = m_existingList->selectedItems();
+  if (selected.isEmpty()) return;
+  for (QListWidgetItem *item : selected) {
+    QString path = item->data(Qt::UserRole).toString();
+    if (path.isEmpty() || path == ":") continue;
+    IoCmd::loadSubScene(TFilePath(path.toStdWString()));
+  }
+  hide();
 }
 
 //-----------------------------------------------------------------------------
@@ -858,9 +965,11 @@ void StartupPopup::onCreateButton() {
       ;
     }
   }
-  // Do NOT call IoCmd::newScene() here — the scene is already blank
-  // (created by TApp::init() at startup, or by MainWindow::onNewScene()
-  // for File > New Scene). Just apply settings to the current scene.
+  // For CreateMode (File > New Scene), create the blank scene now — we
+  // intentionally deferred this so Cancel doesn't destroy the open scene.
+  // For DefaultMode the blank scene was already created by TApp init.
+  if (m_mode == CreateMode) IoCmd::newScene();
+
   TApp *app2    = TApp::instance();
   ToonzScene *s = app2->getCurrentScene()->getScene();
   s->setScenePath(scenePath);
@@ -1586,16 +1695,17 @@ void StartupScenesList::findFirstScenePath(const QList<QString> paths) {
 
 void StartupScenesList::mouseMoveEvent(QMouseEvent *event) {
   QListWidgetItem *it = itemAt(event->pos());
-  if (it)
-    setCursor(Qt::PointingHandCursor);
-  else
-    unsetCursor();
-  setCurrentItem(it);
+  if (it) setCursor(Qt::PointingHandCursor);
+  else    unsetCursor();
+  // In multi-select mode let Qt manage selection normally; don't force hover highlight.
+  if (!m_multiSelect) setCurrentItem(it);
+  QListWidget::mouseMoveEvent(event);
 }
 
 void StartupScenesList::leaveEvent(QEvent *event) {
   unsetCursor();
-  clearSelection();
+  // In multi-select mode preserve selection so the user can Shift/Cmd-click.
+  if (!m_multiSelect) clearSelection();
 }
 
 void StartupScenesList::onItemClicked(QListWidgetItem *item) {

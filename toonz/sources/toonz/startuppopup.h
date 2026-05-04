@@ -28,6 +28,14 @@ class StartupScenesList;
 class StartupPopup final : public DVGui::Dialog {
   Q_OBJECT
 
+public:
+  enum Mode {
+    DefaultMode,       // cold start — both tabs, block close, Quit on Cancel
+    CreateMode,        // File > New Scene — only Create tab, no recent panel
+    LoadMode,          // File > Load Scene — only Load tab, single-click loads
+    LoadSubSceneMode   // File > Load Sub-Scene — only Load tab, multi-select + button
+  };
+
   DVGui::LineEdit *m_nameFld;
   DVGui::FileField *m_pathFld;
   QLabel *m_widthLabel;
@@ -60,6 +68,9 @@ class StartupPopup final : public DVGui::Dialog {
   int m_xRes, m_yRes;
   const int RECENT_SCENES_MAX_COUNT = 10;
   bool m_updating                   = false;
+  Mode m_mode                       = DefaultMode;
+  QPushButton *m_cancelButton       = nullptr;
+  QPushButton *m_loadSelectedButton = nullptr;
 
   // Ztoryc: workflow + shot numbering
   QComboBox *m_workflowCB;       // in "Create" tab
@@ -84,7 +95,7 @@ class StartupPopup final : public DVGui::Dialog {
   StartupScenesList *m_existingList;
 
 public:
-  StartupPopup();
+  explicit StartupPopup(Mode mode = DefaultMode);
 
 protected:
   void showEvent(QShowEvent *) override;
@@ -92,7 +103,7 @@ protected:
   void loadPresetList();
   void savePresetList();
   void refreshRecentScenes();
-  void refreshExistingScenes();
+  void refreshExistingScenes(TFilePath scenesFolder = TFilePath());
   QString aspectRatioValueToString(double value, int width = 0, int height = 0);
   double aspectRatioStringToValue(const QString &s);
   bool parsePresetString(const QString &str, QString &name, int &xres,
@@ -102,6 +113,8 @@ protected:
   void setupProjectChange();
 
 public slots:
+  void onCancelButton();
+  void onLoadSelectedButton();
   void onRecentSceneClicked(int index);
   void onProjectComboChanged(int index);
   void onExistingSceneClicked(int index);
@@ -155,6 +168,8 @@ public:
   void clearScenes();
   void addScene(const QString &name, const QString &path);
   void findFirstScenePath(const QList<QString> paths);
+  // Disables hover-selection and leaveEvent clear — needed for multi-select mode.
+  void setMultiSelect(bool on) { m_multiSelect = on; }
 
 protected:
   QPixmap createScenePreview(const QString &name, const TFilePath &fp);
@@ -162,6 +177,7 @@ protected:
   void leaveEvent(QEvent *event) override;
 
   QSize m_iconSize;
+  bool  m_multiSelect = false;
 
 protected slots:
   void onItemClicked(QListWidgetItem *item);
