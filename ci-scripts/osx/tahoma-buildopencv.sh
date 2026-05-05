@@ -1,4 +1,5 @@
 #!/bin/bash
+BREW_PREFIX="${BREW_PREFIX:-$(brew --prefix)}"
 cd thirdparty
 
 echo ">>> Cloning opencv"
@@ -46,7 +47,7 @@ cmake -DCMAKE_BUILD_TYPE=Release \
       -DBUILD_opencv_python2=OFF \
       -DBUILD_opencv_python3=ON \
       -DCMAKE_MACOS_RPATH=FALSE \
-      -DCMAKE_INSTALL_NAME_DIR=/usr/local/lib \
+      -DCMAKE_INSTALL_NAME_DIR="$BREW_PREFIX/lib" \
       ..
 
 echo ">>> Building opencv"

@@ -30,6 +30,8 @@ then
 fi
 cd build
 
+BREW_PREFIX="${BREW_PREFIX:-$(brew --prefix)}"
+
 if [ -d /usr/local/Cellar/qt@5 ]
 then
    QTVERSION=`ls /usr/local/Cellar/qt@5`
@@ -44,13 +46,14 @@ else
 fi
 
 echo "QT Version detected: $QTVERSION"
+echo "BREW_PREFIX: $BREW_PREFIX"
 
 if [ -d ../../thirdparty/canon/Header ]
 then
    export CANON_FLAG=-DWITH_CANON=ON
 fi
 
-export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:/usr/local/opt/jpeg-turbo/lib/pkgconfig"
+export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$BREW_PREFIX/opt/jpeg-turbo/lib/pkgconfig"
 
 NPROC=$(sysctl -n hw.logicalcpu 2>/dev/null || echo 7)
 CMAKE_EXTRA=()

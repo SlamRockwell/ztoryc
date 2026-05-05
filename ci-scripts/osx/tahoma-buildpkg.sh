@@ -22,6 +22,9 @@ cd "$REPO_ROOT" || {
   exit 1
 }
 
+export BREW_PREFIX="${BREW_PREFIX:-$(brew --prefix)}"
+echo ">>> BREW_PREFIX=$BREW_PREFIX"
+
 if [ -d /usr/local/Cellar/qt@5 ]
 then
    export QTDIR=/usr/local/opt/qt@5
@@ -89,8 +92,8 @@ fi
 if [ ! -d $TOONZDIR/Ztoryc.app/Contents/Frameworks/libgphoto2 ]
 then
    echo ">>> Copying libghoto2 supporting directories to Ztoryc.app/Contents/Frameworks"
-   cp -R /usr/local/lib/libgphoto2 $TOONZDIR/Ztoryc.app/Contents/Frameworks
-   cp -R /usr/local/lib/libgphoto2_port $TOONZDIR/Ztoryc.app/Contents/Frameworks
+   cp -R "$BREW_PREFIX/lib/libgphoto2" $TOONZDIR/Ztoryc.app/Contents/Frameworks
+   cp -R "$BREW_PREFIX/lib/libgphoto2_port" $TOONZDIR/Ztoryc.app/Contents/Frameworks
 
    rm $TOONZDIR/Ztoryc.app/Contents/Frameworks/libgphoto2/print-camera-list
    find $TOONZDIR/Ztoryc.app/Contents/Frameworks/libgphoto2* -name *.la -exec rm -f {} \;
@@ -142,7 +145,7 @@ fi
 echo ">>> Correcting library paths"
 function checkLibFile() {
    local LIBFILE=$1   
-   for DEPFILE in `otool -L $LIBFILE | sed -e "s/ (.*$//" | grep -e"\/usr\/local" -e"@rpath" -e"\.\./\.\./\.\." | grep -v "/qt"`
+   for DEPFILE in `otool -L $LIBFILE | sed -e "s/ (.*$//" | grep -e"$BREW_PREFIX" -e"@rpath" -e"\.\./\.\./\.\." | grep -v "/qt"`
    do
       local Z=`echo $DEPFILE | cut -c 1-1`
       if [ "$Z" = "/" -o "$Z" = "@" ]
@@ -158,10 +161,10 @@ function checkLibFile() {
             if [ "$Z" = "@loader_path/../" ]
             then
                local V=`echo $DEPFILE | sed -e"s/^.*\/\.\.\///"`
-               local SRC=/usr/local/$V
+               local SRC=$BREW_PREFIX/$V
             elif [ "$Z2" = "@rpath" ]
             then
-                local SRC=/usr/local/lib/$Y
+                local SRC=$BREW_PREFIX/lib/$Y
             fi
             echo "Copying $SRC to Frameworks"
             cp $SRC $TOONZDIR/Ztoryc.app/Contents/Frameworks
@@ -181,7 +184,7 @@ function checkLibFile() {
                install_name_tool -change $DEPFILE @executable_path/../Frameworks/$Y $LIBFILE
             fi
          fi
-         FIXCHECK=`otool -D $LIBFILE | grep -v ":" | grep -e"\/usr\/local"`
+         FIXCHECK=`otool -D $LIBFILE | grep -v ":" | grep -F "$BREW_PREFIX"`
          if [ "$FIXCHECK" == "$DEPFILE" ]
          then
             echo "   Fixed ID!"
@@ -199,13 +202,16 @@ done
 echo ">>> Moving DYSM to Ztoryc.app"
 mv $TOONZDIR/DSYM $TOONZDIR/Ztoryc.app
 
-echo ">>> Creating Ztoryc-install-osx.pkg"
+if [ "${SKIP_PKG:-0}" != "1" ]; then
+  echo ">>> Creating Ztoryc-install-osx.pkg"
+  toonz/installer/osx/app.rb "$TOONZDIR" "$STUFF_SRC" toonz/installer/osx/scripts $TAHOMA2DVERSION
+  mv $TOONZDIR/Ztoryc-install-osx.pkg $TOONZDIR/..
+else
+  echo ">>> Skipping PKG (SKIP_PKG=1)"
+fi
 
-toonz/installer/osx/app.rb "$TOONZDIR" "$STUFF_SRC" toonz/installer/osx/scripts $TAHOMA2DVERSION
-
-mv $TOONZDIR/Ztoryc-install-osx.pkg $TOONZDIR/..
-
-echo ">>> Creating Ztoryc-portable-osx.dmg"
+FINAL_DMG_NAME="${ZTORYC_DMG_BASENAME:-Ztoryc-portable-osx.dmg}"
+echo ">>> Creating portable DMG: $FINAL_DMG_NAME"
 
 cp -R "$STUFF_SRC" "$TOONZDIR/Ztoryc.app/tahomastuff"
 chmod -R 777 "$TOONZDIR/Ztoryc.app/tahomastuff"
@@ -235,7 +241,7 @@ do
     if [ -f Ztoryc.dmg ]
     then
        echo ">>> DMG file created successfully"
-       mv Ztoryc.dmg ../Ztoryc-portable-osx.dmg
+       mv Ztoryc.dmg "../$FINAL_DMG_NAME"
        exit 0
     fi
 done

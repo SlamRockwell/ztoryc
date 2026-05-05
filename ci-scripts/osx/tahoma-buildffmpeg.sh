@@ -1,4 +1,5 @@
 #!/bin/bash
+BREW_PREFIX="${BREW_PREFIX:-$(brew --prefix)}"
 cd thirdparty
 
 echo ">>> Cloning aom"
@@ -15,7 +16,7 @@ fi
 cd build
 
 echo ">>> CMaking aom"
-cmake ../aom
+cmake ../aom -DCMAKE_INSTALL_PREFIX="$BREW_PREFIX"
 
 echo ">>> Making aom"
 make
@@ -39,7 +40,7 @@ fi
 cd build
 
 echo ">>> Configuring dav1d (meson)"
-meson ..
+meson .. --prefix="$BREW_PREFIX"
 
 echo ">>> Building dav1d"
 ninja
@@ -56,9 +57,9 @@ cd ffmpeg
 echo "*" >| .gitignore
 
 echo ">>> Configuring to build ffmpeg (shared)"
-export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig
+export PKG_CONFIG_PATH="$BREW_PREFIX/lib/pkgconfig"
 
-./configure  --prefix=/usr/local \
+./configure  --prefix="$BREW_PREFIX" \
       --extra-libs="-lpthread -lm"
       --enable-shared \
       --enable-pthreads \

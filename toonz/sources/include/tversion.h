@@ -20,7 +20,7 @@ public:
 
 private:
   const char *applicationName     = "Ztoryc";
-  const float applicationVersion  = 0.2f;
+  const float applicationVersion  = 0.3f;
   const float applicationRevision = 0;
   const char *applicationNote     = "";
   const char *tahomaBaseVersion   = "1.6";

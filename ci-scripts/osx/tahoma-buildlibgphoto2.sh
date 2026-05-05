@@ -1,4 +1,5 @@
 #!/bin/bash
+BREW_PREFIX="${BREW_PREFIX:-$(brew --prefix)}"
 cd thirdparty
 
 echo ">>> Cloning libgphoto2"
@@ -11,7 +12,7 @@ git checkout tahoma2d-version
 echo ">>> Configuring libgphoto2"
 autoreconf --install --symlink
 
-./configure --prefix=/usr/local
+./configure --prefix="$BREW_PREFIX"
 
 echo ">>> Making libgphoto2"
 make

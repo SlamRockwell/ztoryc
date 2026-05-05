@@ -1,4 +1,4 @@
-set(VERSION 0.2.0)
+set(VERSION 0.3.0)
 
 set(MOC_HEADERS
     aboutpopup.h

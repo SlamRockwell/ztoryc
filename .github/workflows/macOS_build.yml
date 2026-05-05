@@ -4,18 +4,28 @@ on:
   workflow_dispatch:
     inputs:
       publish_release:
-        description: 'Create a versioned GitHub Release and upload DMG + PKG (uses release_tag)'
+        description: 'Create a versioned GitHub Release and upload Intel + Apple Silicon DMGs (uses release_tag)'
         type: boolean
         default: false
       release_tag:
-        description: 'Tag name (e.g. v0.2.0); keep in sync with toonz/sources/include/tversion.h'
+        description: 'Tag name (e.g. v0.3.0); keep in sync with toonz/sources/include/tversion.h + CMakeLists VERSION'
         type: string
         required: true
-        default: 'v0.2.0'
+        default: 'v0.3.0'
 
 jobs:
   macOS:
-    runs-on: macos-15-intel
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Intel (x86_64) — Homebrew in /usr/local
+          - runner: macos-15-intel
+            suffix: mactel
+          # Apple Silicon (arm64) — Homebrew in /opt/homebrew
+          - runner: macos-15
+            suffix: silicon
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: write
     env:
@@ -23,10 +33,22 @@ jobs:
       HOMEBREW_NO_ANALYTICS: '1'
       CCACHE_MAXSIZE: 5G
       CCACHE_COMPRESS: 'true'
+      SKIP_PKG: '1'
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Set portable DMG name from tversion.h (semver)
+        run: |
+          set -euo pipefail
+          VER=$(grep -E 'applicationVersion\s*=' toonz/sources/include/tversion.h | grep -oE '[0-9]+\.[0-9]+' | head -1)
+          REV=$(grep -E 'applicationRevision\s*=' toonz/sources/include/tversion.h | grep -oE '[0-9]+' | head -1)
+          SEMVER="${VER}.${REV}"
+          echo "ZTORYC_RELEASE_SEMVER=${SEMVER}" >> $GITHUB_ENV
+          echo "ZTORYC_DMG_BASENAME=Ztoryc-${SEMVER}-portable-osx-${{ matrix.suffix }}.dmg" >> $GITHUB_ENV
+          echo "DMG output: Ztoryc-${SEMVER}-portable-osx-${{ matrix.suffix }}.dmg"
+      - name: Homebrew prefix (cache paths + deps)
+        run: echo "BREW_PREFIX=$(brew --prefix)" >> $GITHUB_ENV
       - name: Setup cmake
         uses: jwlawson/actions-setup-cmake@v2
         with:
@@ -38,9 +60,9 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ~/Library/Caches/Homebrew
-          key: ${{ runner.os }}-brew-${{ hashFiles('ci-scripts/osx/tahoma-install.sh') }}
+          key: ${{ runner.arch }}-${{ runner.os }}-brew-${{ hashFiles('ci-scripts/osx/tahoma-install.sh') }}
           restore-keys: |
-            ${{ runner.os }}-brew-
+            ${{ runner.arch }}-${{ runner.os }}-brew-
       - name: Explain macOS CI hot vs cold paths
         run: |
           echo "Cold (deps cache miss): ffmpeg + opencv + libgphoto2 + TIFF (often ~1h+)."
@@ -53,52 +75,52 @@ jobs:
         with:
           path: |
             /Users/runner/.ccache
-          key: ${{ runner.os }}-ccache-5G-${{ github.ref }}
+          key: ${{ runner.arch }}-${{ runner.os }}-ccache-5G-${{ github.ref }}
           restore-keys: |
-            ${{ runner.os }}-ccache-5G-
-            ${{ runner.os }}-
+            ${{ runner.arch }}-${{ runner.os }}-ccache-5G-
+            ${{ runner.arch }}-${{ runner.os }}-
       - name: Restore ffmpeg dependency cache
         id: restore-ffmpeg-cache
         uses: actions/cache/restore@v4
         with:
           path: |
-            /usr/local/bin/ffmpeg
-            /usr/local/bin/ffprobe
-            /usr/local/lib/libav*.dylib
-            /usr/local/lib/libsw*.dylib
-            /usr/local/lib/libpostproc*.dylib
-            /usr/local/lib/pkgconfig/libav*.pc
-            /usr/local/lib/pkgconfig/libsw*.pc
-            /usr/local/lib/pkgconfig/libpostproc.pc
+            ${{ env.BREW_PREFIX }}/bin/ffmpeg
+            ${{ env.BREW_PREFIX }}/bin/ffprobe
+            ${{ env.BREW_PREFIX }}/lib/libav*.dylib
+            ${{ env.BREW_PREFIX }}/lib/libsw*.dylib
+            ${{ env.BREW_PREFIX }}/lib/libpostproc*.dylib
+            ${{ env.BREW_PREFIX }}/lib/pkgconfig/libav*.pc
+            ${{ env.BREW_PREFIX }}/lib/pkgconfig/libsw*.pc
+            ${{ env.BREW_PREFIX }}/lib/pkgconfig/libpostproc.pc
             thirdparty/aom
             thirdparty/dav1d
             thirdparty/ffmpeg
-          key: ${{ runner.os }}-ffmpeg-${{ hashFiles('ci-scripts/osx/tahoma-buildffmpeg.sh', 'ci-scripts/osx/tahoma-install.sh') }}
+          key: ${{ runner.arch }}-${{ runner.os }}-ffmpeg-${{ hashFiles('ci-scripts/osx/tahoma-buildffmpeg.sh', 'ci-scripts/osx/tahoma-install.sh') }}
 
       - name: Restore OpenCV dependency cache
         id: restore-opencv-cache
         uses: actions/cache/restore@v4
         with:
           path: |
-            /usr/local/lib/libopencv*.dylib
-            /usr/local/include/opencv4
-            /usr/local/lib/cmake/opencv4
-            /usr/local/lib/pkgconfig/opencv4.pc
+            ${{ env.BREW_PREFIX }}/lib/libopencv*.dylib
+            ${{ env.BREW_PREFIX }}/include/opencv4
+            ${{ env.BREW_PREFIX }}/lib/cmake/opencv4
+            ${{ env.BREW_PREFIX }}/lib/pkgconfig/opencv4.pc
             thirdparty/opencv
-          key: ${{ runner.os }}-opencv-v2-${{ hashFiles('ci-scripts/osx/tahoma-buildopencv.sh', 'ci-scripts/osx/tahoma-install.sh') }}
+          key: ${{ runner.arch }}-${{ runner.os }}-opencv-v2-${{ hashFiles('ci-scripts/osx/tahoma-buildopencv.sh', 'ci-scripts/osx/tahoma-install.sh') }}
 
       - name: Restore libgphoto2 dependency cache
         id: restore-gphoto-cache
         uses: actions/cache/restore@v4
         with:
           path: |
-            /usr/local/lib/libgphoto2*.dylib
-            /usr/local/lib/libgphoto2
-            /usr/local/lib/libgphoto2_port
-            /usr/local/include/gphoto2
-            /usr/local/lib/pkgconfig/libgphoto2*.pc
+            ${{ env.BREW_PREFIX }}/lib/libgphoto2*.dylib
+            ${{ env.BREW_PREFIX }}/lib/libgphoto2
+            ${{ env.BREW_PREFIX }}/lib/libgphoto2_port
+            ${{ env.BREW_PREFIX }}/include/gphoto2
+            ${{ env.BREW_PREFIX }}/lib/pkgconfig/libgphoto2*.pc
             thirdparty/libgphoto2_src
-          key: ${{ runner.os }}-gphoto-${{ hashFiles('ci-scripts/osx/tahoma-buildlibgphoto2.sh', 'ci-scripts/osx/tahoma-install.sh') }}
+          key: ${{ runner.arch }}-${{ runner.os }}-gphoto-${{ hashFiles('ci-scripts/osx/tahoma-buildlibgphoto2.sh', 'ci-scripts/osx/tahoma-install.sh') }}
 
       - name: Restore TIFF build cache
         id: restore-tiff-cache
@@ -106,7 +128,7 @@ jobs:
         with:
           path: |
             thirdparty/tiff-4.2.0
-          key: ${{ runner.os }}-tiff-${{ hashFiles('ci-scripts/osx/tahoma-build.sh', 'thirdparty/tiff-4.2.0/configure') }}
+          key: ${{ runner.arch }}-${{ runner.os }}-tiff-${{ hashFiles('ci-scripts/osx/tahoma-build.sh', 'thirdparty/tiff-4.2.0/configure') }}
       - name: Install Dependencies
         run: |
           ci-scripts/osx/tahoma-install.sh
@@ -132,7 +154,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: thirdparty/apps
-          key: ${{ runner.os }}-apps-${{ hashFiles('ci-scripts/osx/tahoma-get3rdpartyapps.sh') }}
+          key: ${{ runner.arch }}-${{ runner.os }}-apps-${{ hashFiles('ci-scripts/osx/tahoma-get3rdpartyapps.sh') }}
 
       - name: Get 3rd Party Apps
         run: |
@@ -140,21 +162,21 @@ jobs:
       - name: Build ffmpeg (skipped when ffmpeg cache hit)
         if: ${{ steps.restore-ffmpeg-cache.outputs.cache-hit != 'true' }}
         run: |
-          export PATH="/usr/local/opt/ccache/libexec:$PATH"
+          export PATH="$(brew --prefix ccache)/libexec:$PATH"
           ci-scripts/osx/tahoma-buildffmpeg.sh
       - name: Build OpenCV (skipped when OpenCV cache hit)
         if: ${{ steps.restore-opencv-cache.outputs.cache-hit != 'true' }}
         run: |
-          export PATH="/usr/local/opt/ccache/libexec:$PATH"
+          export PATH="$(brew --prefix ccache)/libexec:$PATH"
           ci-scripts/osx/tahoma-buildopencv.sh
       - name: Build libgphoto2 (skipped when libgphoto2 cache hit)
         if: ${{ steps.restore-gphoto-cache.outputs.cache-hit != 'true' }}
         run: |
-          export PATH="/usr/local/opt/ccache/libexec:$PATH"
+          export PATH="$(brew --prefix ccache)/libexec:$PATH"
           ci-scripts/osx/tahoma-buildlibgphoto2.sh
       - name: Build Ztoryc
         run: |
-          export PATH="/usr/local/opt/ccache/libexec:$PATH"
+          export PATH="$(brew --prefix ccache)/libexec:$PATH"
           ci-scripts/osx/tahoma-build.sh
       - name: Verify stuff/themes present before packaging
         run: |
@@ -164,49 +186,15 @@ jobs:
         run: bash ./ci-scripts/osx/tahoma-buildpkg.sh
       - uses: actions/upload-artifact@v4
         with:
-          name: Ztoryc-portable-osx.dmg
-          path: toonz/build/Ztoryc-portable-osx.dmg
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Ztoryc-install-osx.pkg
-          path: toonz/build/Ztoryc-install-osx.pkg
-      - name: Create release tag
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.publish_release == 'true' }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          TAG="${{ github.event.inputs.release_tag }}"
-          git fetch origin --tags --force
-          if git rev-parse "$TAG" >/dev/null 2>&1; then
-            echo "Tag $TAG already exists at $(git rev-parse "$TAG")"
-          else
-            git tag -a "$TAG" -m "Release $TAG"
-            git push origin "$TAG"
-          fi
-      - name: Publish GitHub Release (versioned)
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.publish_release == 'true' }}
-        uses: ncipollo/release-action@v1
-        with:
-          allowUpdates: true
-          artifactErrorsFailBuild: true
-          artifacts: toonz/build/Ztoryc-portable-osx.dmg,toonz/build/Ztoryc-install-osx.pkg
-          artifactContentType: "raw"
-          name: Ztoryc ${{ github.event.inputs.release_tag }}
-          body: |
-            Ztoryc macOS build — portable DMG and installer PKG.
-
-            Built from commit ${{ github.sha }}.
-          prerelease: false
-          replacesArtifacts: true
-          tag: ${{ github.event.inputs.release_tag }}
-          token: ${{ secrets.GITHUB_TOKEN }}
+          name: Ztoryc-${{ env.ZTORYC_RELEASE_SEMVER }}-portable-osx-${{ matrix.suffix }}
+          path: toonz/build/${{ env.ZTORYC_DMG_BASENAME }}
       - name: Get Nightly Release Date
-        if: ${{ github.repository_owner == 'tahoma2d' && github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+        if: ${{ matrix.suffix == 'mactel' && github.repository_owner == 'tahoma2d' && github.event_name == 'push' && github.ref == 'refs/heads/master' }}
         run: |
           echo "NIGHTLYDATE=$(date '+%Y-%m-%d')" >> $GITHUB_ENV
           echo "NIGHTLYDATETIME=$(date '+%Y-%m-%d %H:%M:%S %Z')" >> $GITHUB_ENV
       - name: Create/Update Nightlies Tag
-        if: ${{ github.repository_owner == 'tahoma2d' && github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+        if: ${{ matrix.suffix == 'mactel' && github.repository_owner == 'tahoma2d' && github.event_name == 'push' && github.ref == 'refs/heads/master' }}
         run: |
           git remote add nightly_repo https://tahoma2d:${{ secrets.TAHOMA2D_TOKEN }}@github.com/tahoma2d/tahoma2d_nightlies.git
           git config lfs.https://tahoma2d:${{ secrets.TAHOMA2D_TOKEN }}@github.com/tahoma2d/tahoma2d_nightlies.git.lfs.locksverify false
@@ -218,12 +206,12 @@ jobs:
           git push -f nightly_repo nightly-${{ github.sha }}
           git remote rm nightly_repo
       - name: Update Latest Nightly Release
-        if: ${{ github.repository_owner == 'tahoma2d' && github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+        if: ${{ matrix.suffix == 'mactel' && github.repository_owner == 'tahoma2d' && github.event_name == 'push' && github.ref == 'refs/heads/master' }}
         uses: ncipollo/release-action@v1
         with:
           allowUpdates: true
           artifactErrorsFailBuild: false
-          artifacts: toonz/build/Ztoryc-portable-osx.dmg,toonz/build/Ztoryc-install-osx.pkg
+          artifacts: toonz/build/${{ env.ZTORYC_DMG_BASENAME }}
           artifactContentType: "raw"
           body: ${{ github.event.head_commit.message }}
           name: Latest Nightly ${{ env.NIGHTLYDATE }}
@@ -232,12 +220,12 @@ jobs:
           tag: nightly
           token: ${{ secrets.GITHUB_TOKEN }}
       - name: Create Nightlies Release
-        if: ${{ github.repository_owner == 'tahoma2d' && github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+        if: ${{ matrix.suffix == 'mactel' && github.repository_owner == 'tahoma2d' && github.event_name == 'push' && github.ref == 'refs/heads/master' }}
         uses: ncipollo/release-action@v1
         with:
           allowUpdates: true
           artifactErrorsFailBuild: false
-          artifacts: toonz/build/Ztoryc-portable-osx.dmg,toonz/build/Ztoryc-install-osx.pkg
+          artifacts: toonz/build/${{ env.ZTORYC_DMG_BASENAME }}
           artifactContentType: "raw"
           body: ${{ github.event.head_commit.message }}
           name: ${{ env.NIGHTLYDATETIME }}
@@ -251,7 +239,7 @@ jobs:
           token: ${{ secrets.TAHOMA2D_TOKEN }}
       - name: Remove existing master cache
         if: ${{ steps.restore-cache.outputs.cache-hit == 'true' && github.ref == 'refs/heads/master' }}
-        run: gh cache delete "${{ runner.os }}-ccache-5G-${{ github.ref }}"
+        run: gh cache delete "${{ runner.arch }}-${{ runner.os }}-ccache-5G-${{ github.ref }}"
         env:
           GH_TOKEN: ${{ github.token }}
       - name: Save cache
@@ -260,49 +248,49 @@ jobs:
         with:
           path: |
             /Users/runner/.ccache
-          key: ${{ runner.os }}-ccache-5G-${{ github.ref }}
+          key: ${{ runner.arch }}-${{ runner.os }}-ccache-5G-${{ github.ref }}
       - name: Save ffmpeg dependency cache
         if: ${{ steps.restore-ffmpeg-cache.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v4
         with:
           path: |
-            /usr/local/bin/ffmpeg
-            /usr/local/bin/ffprobe
-            /usr/local/lib/libav*.dylib
-            /usr/local/lib/libsw*.dylib
-            /usr/local/lib/libpostproc*.dylib
-            /usr/local/lib/pkgconfig/libav*.pc
-            /usr/local/lib/pkgconfig/libsw*.pc
-            /usr/local/lib/pkgconfig/libpostproc.pc
+            ${{ env.BREW_PREFIX }}/bin/ffmpeg
+            ${{ env.BREW_PREFIX }}/bin/ffprobe
+            ${{ env.BREW_PREFIX }}/lib/libav*.dylib
+            ${{ env.BREW_PREFIX }}/lib/libsw*.dylib
+            ${{ env.BREW_PREFIX }}/lib/libpostproc*.dylib
+            ${{ env.BREW_PREFIX }}/lib/pkgconfig/libav*.pc
+            ${{ env.BREW_PREFIX }}/lib/pkgconfig/libsw*.pc
+            ${{ env.BREW_PREFIX }}/lib/pkgconfig/libpostproc.pc
             thirdparty/aom
             thirdparty/dav1d
             thirdparty/ffmpeg
-          key: ${{ runner.os }}-ffmpeg-${{ hashFiles('ci-scripts/osx/tahoma-buildffmpeg.sh', 'ci-scripts/osx/tahoma-install.sh') }}
+          key: ${{ runner.arch }}-${{ runner.os }}-ffmpeg-${{ hashFiles('ci-scripts/osx/tahoma-buildffmpeg.sh', 'ci-scripts/osx/tahoma-install.sh') }}
 
       - name: Save OpenCV dependency cache
         if: ${{ steps.restore-opencv-cache.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v4
         with:
           path: |
-            /usr/local/lib/libopencv*.dylib
-            /usr/local/include/opencv4
-            /usr/local/lib/cmake/opencv4
-            /usr/local/lib/pkgconfig/opencv4.pc
+            ${{ env.BREW_PREFIX }}/lib/libopencv*.dylib
+            ${{ env.BREW_PREFIX }}/include/opencv4
+            ${{ env.BREW_PREFIX }}/lib/cmake/opencv4
+            ${{ env.BREW_PREFIX }}/lib/pkgconfig/opencv4.pc
             thirdparty/opencv
-          key: ${{ runner.os }}-opencv-v2-${{ hashFiles('ci-scripts/osx/tahoma-buildopencv.sh', 'ci-scripts/osx/tahoma-install.sh') }}
+          key: ${{ runner.arch }}-${{ runner.os }}-opencv-v2-${{ hashFiles('ci-scripts/osx/tahoma-buildopencv.sh', 'ci-scripts/osx/tahoma-install.sh') }}
 
       - name: Save libgphoto2 dependency cache
         if: ${{ steps.restore-gphoto-cache.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v4
         with:
           path: |
-            /usr/local/lib/libgphoto2*.dylib
-            /usr/local/lib/libgphoto2
-            /usr/local/lib/libgphoto2_port
-            /usr/local/include/gphoto2
-            /usr/local/lib/pkgconfig/libgphoto2*.pc
+            ${{ env.BREW_PREFIX }}/lib/libgphoto2*.dylib
+            ${{ env.BREW_PREFIX }}/lib/libgphoto2
+            ${{ env.BREW_PREFIX }}/lib/libgphoto2_port
+            ${{ env.BREW_PREFIX }}/include/gphoto2
+            ${{ env.BREW_PREFIX }}/lib/pkgconfig/libgphoto2*.pc
             thirdparty/libgphoto2_src
-          key: ${{ runner.os }}-gphoto-${{ hashFiles('ci-scripts/osx/tahoma-buildlibgphoto2.sh', 'ci-scripts/osx/tahoma-install.sh') }}
+          key: ${{ runner.arch }}-${{ runner.os }}-gphoto-${{ hashFiles('ci-scripts/osx/tahoma-buildlibgphoto2.sh', 'ci-scripts/osx/tahoma-install.sh') }}
 
       - name: Save TIFF build cache
         if: ${{ steps.restore-tiff-cache.outputs.cache-hit != 'true' }}
@@ -310,18 +298,84 @@ jobs:
         with:
           path: |
             thirdparty/tiff-4.2.0
-          key: ${{ runner.os }}-tiff-${{ hashFiles('ci-scripts/osx/tahoma-build.sh', 'thirdparty/tiff-4.2.0/configure') }}
+          key: ${{ runner.arch }}-${{ runner.os }}-tiff-${{ hashFiles('ci-scripts/osx/tahoma-build.sh', 'thirdparty/tiff-4.2.0/configure') }}
 
       - name: Save thirdparty apps bundle cache
         if: ${{ success() && steps.restore-apps-cache.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v4
         with:
           path: thirdparty/apps
-          key: ${{ runner.os }}-apps-${{ hashFiles('ci-scripts/osx/tahoma-get3rdpartyapps.sh') }}
+          key: ${{ runner.arch }}-${{ runner.os }}-apps-${{ hashFiles('ci-scripts/osx/tahoma-get3rdpartyapps.sh') }}
 
       - name: Save Homebrew downloads cache
         if: ${{ success() && steps.brew-cache-restore.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v4
         with:
           path: ~/Library/Caches/Homebrew
-          key: ${{ runner.os }}-brew-${{ hashFiles('ci-scripts/osx/tahoma-install.sh') }}
+          key: ${{ runner.arch }}-${{ runner.os }}-brew-${{ hashFiles('ci-scripts/osx/tahoma-install.sh') }}
+
+  publish-release:
+    needs: macOS
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.publish_release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: Ztoryc-*-portable-osx-*
+          merge-multiple: true
+          path: release-files
+      - name: List downloaded DMGs
+        run: find release-files -name '*.dmg' -print
+      - name: Resolve DMG paths for release (artifact zip keeps toonz/build/… layout)
+        id: release_dmgs
+        run: |
+          set -euo pipefail
+          MACTEL=$(find release-files -type f -name 'Ztoryc-*-portable-osx-mactel.dmg' | head -1)
+          SILICON=$(find release-files -type f -name 'Ztoryc-*-portable-osx-silicon.dmg' | head -1)
+          if [ -z "${MACTEL:-}" ] || [ ! -f "$MACTEL" ]; then
+            echo "::error::Intel DMG (*-portable-osx-mactel.dmg) not found under release-files"
+            find release-files -type f -print || true
+            exit 1
+          fi
+          if [ -z "${SILICON:-}" ] || [ ! -f "$SILICON" ]; then
+            echo "::error::Apple Silicon DMG (*-portable-osx-silicon.dmg) not found under release-files"
+            find release-files -type f -print || true
+            exit 1
+          fi
+          echo "mactel=$MACTEL" >> "$GITHUB_OUTPUT"
+          echo "silicon=$SILICON" >> "$GITHUB_OUTPUT"
+      - name: Create release tag if missing
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          TAG="${{ github.event.inputs.release_tag }}"
+          git fetch origin --tags --force
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists at $(git rev-parse "$TAG")"
+          else
+            git tag -a "$TAG" -m "Release $TAG"
+            git push origin "$TAG"
+          fi
+      - name: Publish GitHub Release (Intel + Apple Silicon DMGs)
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          artifactErrorsFailBuild: true
+          artifacts: ${{ steps.release_dmgs.outputs.mactel }},${{ steps.release_dmgs.outputs.silicon }}
+          artifactContentType: "raw"
+          name: Ztoryc ${{ github.event.inputs.release_tag }}
+          body: |
+            Ztoryc macOS **${{ github.event.inputs.release_tag }}** — Intel (x86_64) and Apple Silicon (arm64) portable DMGs.
+
+            Filenames include app semver from `tversion.h` (e.g. `Ztoryc-0.3.0-portable-osx-mactel.dmg`).
+
+            Built from commit ${{ github.sha }}.
+          prerelease: false
+          replacesArtifacts: true
+          tag: ${{ github.event.inputs.release_tag }}
+          token: ${{ secrets.GITHUB_TOKEN }}
