@@ -107,7 +107,7 @@ jobs:
             ${{ env.BREW_PREFIX }}/lib/cmake/opencv4
             ${{ env.BREW_PREFIX }}/lib/pkgconfig/opencv4.pc
             thirdparty/opencv
-          key: ${{ runner.arch }}-${{ runner.os }}-opencv-v2-${{ hashFiles('ci-scripts/osx/tahoma-buildopencv.sh', 'ci-scripts/osx/tahoma-install.sh') }}
+          key: ${{ runner.arch }}-${{ runner.os }}-opencv-v3-${{ hashFiles('ci-scripts/osx/tahoma-buildopencv.sh', 'ci-scripts/osx/tahoma-install.sh') }}
 
       - name: Restore libgphoto2 dependency cache
         id: restore-gphoto-cache
@@ -169,6 +169,17 @@ jobs:
         run: |
           export PATH="$(brew --prefix ccache)/libexec:$PATH"
           ci-scripts/osx/tahoma-buildopencv.sh
+      - name: Ensure OpenCV CMake config exists
+        run: |
+          OPENCV_CFG="${BREW_PREFIX}/lib/cmake/opencv4/OpenCVConfig.cmake"
+          if [ -f "$OPENCV_CFG" ]; then
+            echo "OpenCV config found: $OPENCV_CFG"
+          else
+            echo "OpenCV config missing at $OPENCV_CFG — rebuilding OpenCV now"
+            export PATH="$(brew --prefix ccache)/libexec:$PATH"
+            ci-scripts/osx/tahoma-buildopencv.sh
+            test -f "$OPENCV_CFG"
+          fi
       - name: Build libgphoto2 (skipped when libgphoto2 cache hit)
         if: ${{ steps.restore-gphoto-cache.outputs.cache-hit != 'true' }}
         run: |
@@ -239,7 +250,7 @@ jobs:
           token: ${{ secrets.TAHOMA2D_TOKEN }}
       - name: Remove existing master cache
         if: ${{ steps.restore-cache.outputs.cache-hit == 'true' && github.ref == 'refs/heads/master' }}
-        run: gh cache delete "${{ runner.arch }}-${{ runner.os }}-ccache-5G-${{ github.ref }}"
+        run: gh cache delete "${{ runner.arch }}-${{ runner.os }}-ccache-5G-${{ github.ref }}" || true
         env:
           GH_TOKEN: ${{ github.token }}
       - name: Save cache
@@ -277,7 +288,7 @@ jobs:
             ${{ env.BREW_PREFIX }}/lib/cmake/opencv4
             ${{ env.BREW_PREFIX }}/lib/pkgconfig/opencv4.pc
             thirdparty/opencv
-          key: ${{ runner.arch }}-${{ runner.os }}-opencv-v2-${{ hashFiles('ci-scripts/osx/tahoma-buildopencv.sh', 'ci-scripts/osx/tahoma-install.sh') }}
+          key: ${{ runner.arch }}-${{ runner.os }}-opencv-v3-${{ hashFiles('ci-scripts/osx/tahoma-buildopencv.sh', 'ci-scripts/osx/tahoma-install.sh') }}
 
       - name: Save libgphoto2 dependency cache
         if: ${{ steps.restore-gphoto-cache.outputs.cache-hit != 'true' }}
