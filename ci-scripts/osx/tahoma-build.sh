@@ -54,6 +54,12 @@ then
 fi
 
 export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$BREW_PREFIX/opt/jpeg-turbo/lib/pkgconfig"
+OPENCV_CMAKE_DIR="$BREW_PREFIX/lib/cmake/opencv4"
+if [ -d "$OPENCV_CMAKE_DIR" ]; then
+  echo "OpenCV CMake dir: $OPENCV_CMAKE_DIR"
+else
+  echo "WARNING: OpenCV CMake dir missing at $OPENCV_CMAKE_DIR (configure may fail)"
+fi
 
 NPROC=$(sysctl -n hw.logicalcpu 2>/dev/null || echo 7)
 CMAKE_EXTRA=()
@@ -69,6 +75,7 @@ cmake ../sources "${CMAKE_EXTRA[@]}" $CANON_FLAG \
       -DWITH_GPHOTO2=ON \
       -DWITH_SYSTEM_SUPERLU=ON \
       -DQT_PATH=$USEQTLIB \
+      -DOpenCV_DIR="$OPENCV_CMAKE_DIR" \
       -DTIFF_INCLUDE_DIR=../../thirdparty/tiff-4.2.0/libtiff/
 
 "${BUILD_CMD[@]}"
