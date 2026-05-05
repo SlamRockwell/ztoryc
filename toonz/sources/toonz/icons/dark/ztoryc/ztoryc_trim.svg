@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <!-- Left arrow pointing right toward seam -->
+  <line x1="2" y1="12" x2="8" y2="12" stroke="#E6E6E6" stroke-width="1.6" stroke-linecap="round"/>
+  <polyline points="6,9 9,12 6,15" fill="none" stroke="#E6E6E6" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>
+  <!-- Central seam / edit point -->
+  <line x1="12" y1="4" x2="12" y2="20" stroke="#E6E6E6" stroke-width="1.6" stroke-linecap="round"/>
+  <!-- Right arrow pointing left toward seam -->
+  <line x1="22" y1="12" x2="16" y2="12" stroke="#E6E6E6" stroke-width="1.6" stroke-linecap="round"/>
+  <polyline points="18,9 15,12 18,15" fill="none" stroke="#E6E6E6" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>
+</svg>

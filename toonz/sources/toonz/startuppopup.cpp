@@ -1486,6 +1486,16 @@ void StartupPopup::onRecentSceneClicked(int index) {
         TProjectManager::instance()->getCurrentProjectPath();
     RecentFiles::instance()->addFilePath(
         projectPath.getParentDir().getQString(), RecentFiles::Project);
+    // Apply the selected workflow — same logic as onExistingSceneClicked.
+    if (m_loadWorkflowCB && m_mode != LoadSubSceneMode) {
+      static const char *kCmds[] = {
+        MI_WorkflowStoryboard, MI_Workflow2D,
+        MI_WorkflowCutout,     MI_WorkflowStopMotion
+      };
+      int wfIdx = m_loadWorkflowCB->currentIndex();
+      const char *cmd = (wfIdx >= 0 && wfIdx < 4) ? kCmds[wfIdx] : MI_WorkflowStoryboard;
+      CommandManager::instance()->execute(cmd);
+    }
     hide();
   }
 }

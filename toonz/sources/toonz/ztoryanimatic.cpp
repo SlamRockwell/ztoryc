@@ -1392,6 +1392,8 @@ void ZtoryAnimaticTrack::setLocked(bool on) {
 void ZtoryAnimaticTrack::updateCursor() {
   if (m_tool == RazorTool)
     setCursor(Qt::CrossCursor);
+  else if (m_tool == SlipTool)
+    setCursor(Qt::SizeHorCursor);
   else
     unsetCursor();
 }
@@ -1434,8 +1436,20 @@ void ZtoryAnimaticTrack::refreshFromScene() {
     ShotBlock b;
     b.col = col;
     b.startFrameInMain = startFrame;
-    b.f0 = 0;
-    b.f1 = duration - 1;
+    // Read slip offset from first non-empty cell's frameId (1-based → 0-based).
+    // resequenceXsheet() writes TFrameId(slipOff + r + 1), so frame 0 of the
+    // block is TFrameId(slipOff + 1).  If slipOff == 0 this equals TFrameId(1).
+    int slipOffset = 0;
+    for (int r = r0; r <= r1; r++) {
+      TXshCell cell = mainXsh->getCell(r, col);
+      if (!cell.isEmpty() && cell.m_level && cell.m_level->getChildLevel()) {
+        int fn = cell.getFrameId().getNumber();
+        slipOffset = (fn > 0) ? fn - 1 : 0;
+        break;
+      }
+    }
+    b.f0 = slipOffset;
+    b.f1 = slipOffset + duration - 1;
     // Legge il numero shot dal nome della colonna (impostato da StoryboardPanel)
     QString colName = QString::fromStdString(
         mainXsh->getStageObject(mainXsh->getColumnObjectId(col))->getName());
@@ -1547,6 +1561,20 @@ void ZtoryAnimaticTrack::paintEvent(QPaintEvent *) {
     else
       p.drawText(x + 4, 2, w - 8, h, Qt::AlignBottom | Qt::AlignLeft, b.shotNumber);
 
+    // Slip indicator — small colored strip + offset text when f0 > 0
+    if (b.f0 > 0 && w > 20) {
+      // Left edge tinted orange to signal slipped content
+      p.fillRect(x + 1, 2, 4, h, QColor(220, 130, 30, 200));
+      // Offset label bottom-right (only when block is wide enough)
+      if (w > 50) {
+        p.setPen(QColor(255, 180, 60));
+        p.setFont(QFont("Arial", 7));
+        QString slip = QString("+%1").arg(b.f0);
+        p.drawText(x + 6, 2, w - 14, h - 1, Qt::AlignBottom | Qt::AlignRight, slip);
+        p.setFont(QFont("Arial", 9));
+      }
+    }
+
     // Handle resize (bordo destro)
     p.fillRect(x + w - 4, 2, 4, h, QColor(180, 180, 80));
   }
@@ -1616,24 +1644,77 @@ void ZtoryAnimaticTrack::mousePressEvent(QMouseEvent *e) {
     return;
   }
 
-  for (auto &b : m_blocks) {
+  for (int bi = 0; bi < (int)m_blocks.size(); bi++) {
+    auto &b = m_blocks[bi];
     int duration = b.f1 - b.f0 + 1;
     int x = (int)(b.startFrameInMain * m_ppf);
     int w = (int)(duration * m_ppf);
-    // Check handle resize
-    if (mx >= x + w - 6 && mx <= x + w + 2) {
-      m_draggingCol = b.col;
-      m_dragStartX = mx;
-      m_dragOrigF1 = b.f1;
-      // Refresh prima di salvare originals per avere dati aggiornati
-      refreshFromScene();
-      m_origStarts.clear();
-      m_origDurations.clear();
-      for (auto &sb : m_blocks) {
-        m_origStarts[sb.col] = sb.startFrameInMain;
-        m_origDurations[sb.col] = sb.f1 - sb.f0 + 1;
+
+    // ── TrimTool: Roll on seam, RippleTrim on last edge ──────────────────
+    if (m_tool == TrimTool && e->button() == Qt::LeftButton) {
+      if (mx >= x + w - 6 && mx <= x + w + 6) {
+        bool hasNext = (bi + 1 < (int)m_blocks.size());
+        if (hasNext) {
+          // Roll: seam between b and the next block
+          auto &nb = m_blocks[bi + 1];
+          int nextDur = nb.f1 - nb.f0 + 1;
+          m_dragMode       = Roll;
+          m_dragStartX     = mx;
+          m_dragColA       = b.col;
+          m_dragColB       = nb.col;
+          m_dragOrigDurA   = duration;
+          m_dragOrigDurB   = nextDur;
+          m_dragOrigStartB = nb.startFrameInMain;
+          setCursor(Qt::SplitHCursor);
+        } else {
+          // RippleTrim: last shot — same as SelectTool drag
+          m_dragMode  = RippleTrim;
+          m_dragColA  = b.col;
+          m_dragStartX = mx;
+          m_dragOrigDurA = duration;
+          refreshFromScene();
+          m_origStarts.clear();
+          m_origDurations.clear();
+          for (auto &sb : m_blocks) {
+            m_origStarts[sb.col] = sb.startFrameInMain;
+            m_origDurations[sb.col] = sb.f1 - sb.f0 + 1;
+          }
+          setCursor(Qt::SizeHorCursor);
+        }
+        return;
       }
-      return;
+    }
+
+    // ── SlipTool: drag inside block ───────────────────────────────────────
+    if (m_tool == SlipTool && e->button() == Qt::LeftButton) {
+      if (mx >= x && mx < x + w) {
+        m_dragMode        = Slip;
+        m_dragStartX      = mx;
+        m_dragColA        = b.col;
+        m_dragOrigDurA    = duration;  // block duration (width stays constant during slip)
+        m_dragOrigSlipF0  = b.f0;     // current slip offset
+        setCursor(Qt::SizeHorCursor);
+        return;
+      }
+    }
+
+    // ── SelectTool: resize (RippleTrim) on right edge ────────────────────
+    if (m_tool == SelectTool && e->button() == Qt::LeftButton) {
+      if (mx >= x + w - 6 && mx <= x + w + 2) {
+        m_dragMode   = RippleTrim;
+        m_dragColA   = b.col;
+        m_dragStartX = mx;
+        m_dragOrigDurA = duration;
+        // Refresh prima di salvare originals per avere dati aggiornati
+        refreshFromScene();
+        m_origStarts.clear();
+        m_origDurations.clear();
+        for (auto &sb : m_blocks) {
+          m_origStarts[sb.col] = sb.startFrameInMain;
+          m_origDurations[sb.col] = sb.f1 - sb.f0 + 1;
+        }
+        return;
+      }
     }
     // Click su shot
     if (mx >= x && mx < x + w) {
@@ -1678,31 +1759,72 @@ void ZtoryAnimaticTrack::mousePressEvent(QMouseEvent *e) {
 
 void ZtoryAnimaticTrack::mouseMoveEvent(QMouseEvent *e) {
   int mx = e->x() - kLabelW;
-  if (m_draggingCol >= 0) {
+
+  // ── Active drag update ─────────────────────────────────────────────────
+  if (m_dragMode == RippleTrim) {
     int dx = mx - m_dragStartX;
     int delta = (int)(dx / m_ppf);
-    int newF1 = qMax(m_dragOrigF1 + delta, 0);
-    int newDuration = newF1 + 1;
-    int durationDelta = newDuration - (m_dragOrigF1 + 1);
+    int origDur = m_dragOrigDurA;
+    int newDuration = qMax(origDur + delta, 1);
+    int newF1 = newDuration - 1;  // f0 is always 0 for RippleTrim
 
     // Aggiorna durata shot draggato e ricalcola posizioni successive
     int nextStart = -1;
     for (int i = 0; i < (int)m_blocks.size(); i++) {
-      if (m_blocks[i].col == m_draggingCol) {
-        m_blocks[i].f1 = newF1;
+      if (m_blocks[i].col == m_dragColA) {
+        m_blocks[i].f1 = m_blocks[i].f0 + newF1;
         nextStart = m_origStarts[m_blocks[i].col] + newDuration;
       } else if (nextStart >= 0) {
-        int origDuration = m_origDurations.value(m_blocks[i].col, m_blocks[i].f1 - m_blocks[i].f0 + 1);
+        int origBlockDur = m_origDurations.value(m_blocks[i].col, m_blocks[i].f1 - m_blocks[i].f0 + 1);
         m_blocks[i].startFrameInMain = nextStart;
-        nextStart += origDuration;
+        nextStart += origBlockDur;
       }
     }
     update();
     return;
   }
 
-  // Hover cursor: SizeHorCursor near right edge of each shot block (resize handle)
-  if (m_tool != RazorTool) {
+  if (m_dragMode == Roll) {
+    int dx = mx - m_dragStartX;
+    int delta = (int)(dx / m_ppf);
+    // Clamp: each side must keep at least 1 frame
+    delta = qMax(delta, -(m_dragOrigDurA - 1));
+    delta = qMin(delta,   m_dragOrigDurB - 1);
+    int newDurA = m_dragOrigDurA + delta;
+    int newDurB = m_dragOrigDurB - delta;
+
+    for (auto &b : m_blocks) {
+      if (b.col == m_dragColA) {
+        b.f1 = b.f0 + newDurA - 1;
+      } else if (b.col == m_dragColB) {
+        b.startFrameInMain = m_dragOrigStartB + delta;
+        b.f1 = b.f0 + newDurB - 1;
+      }
+    }
+    update();
+    return;
+  }
+
+  if (m_dragMode == Slip) {
+    int dx = mx - m_dragStartX;
+    int delta = (int)(dx / m_ppf);
+    int duration = m_dragOrigDurA + m_dragOrigDurB;  // kept for Slip (uses origDurA only, repurposed)
+    // During Slip drag, shift f0/f1 together — width unchanged
+    for (auto &b : m_blocks) {
+      if (b.col == m_dragColA) {
+        int newF0 = qMax(0, m_dragOrigSlipF0 + delta);
+        int dur   = m_dragOrigDurA;  // original duration stored in m_dragOrigDurA
+        b.f0 = newF0;
+        b.f1 = newF0 + dur - 1;
+        break;
+      }
+    }
+    update();
+    return;
+  }
+
+  // ── Hover cursor (no active drag) ─────────────────────────────────────
+  if (m_tool == SelectTool) {
     bool nearEdge = false;
     for (auto &b : m_blocks) {
       int duration = b.f1 - b.f0 + 1;
@@ -1710,6 +1832,27 @@ void ZtoryAnimaticTrack::mouseMoveEvent(QMouseEvent *e) {
       if (mx >= bx1 - 6 && mx <= bx1 + 2) { nearEdge = true; break; }
     }
     setCursor(nearEdge ? Qt::SizeHorCursor : Qt::ArrowCursor);
+  } else if (m_tool == TrimTool) {
+    Qt::CursorShape cur = Qt::ArrowCursor;
+    for (int bi = 0; bi < (int)m_blocks.size(); bi++) {
+      int duration = m_blocks[bi].f1 - m_blocks[bi].f0 + 1;
+      int bx1 = (int)((m_blocks[bi].startFrameInMain + duration) * m_ppf);
+      if (mx >= bx1 - 6 && mx <= bx1 + 6) {
+        bool hasNext = (bi + 1 < (int)m_blocks.size());
+        cur = hasNext ? Qt::SplitHCursor : Qt::SizeHorCursor;
+        break;
+      }
+    }
+    setCursor(cur);
+  } else if (m_tool == SlipTool) {
+    bool over = false;
+    for (auto &b : m_blocks) {
+      int duration = b.f1 - b.f0 + 1;
+      int bx0 = (int)(b.startFrameInMain * m_ppf);
+      int bx1 = bx0 + (int)(duration * m_ppf);
+      if (mx >= bx0 && mx < bx1) { over = true; break; }
+    }
+    setCursor(over ? Qt::SizeHorCursor : Qt::ArrowCursor);
   }
 
   // Razor hover: snap the indicator to the nearest frame boundary
@@ -1746,18 +1889,49 @@ void ZtoryAnimaticTrack::leaveEvent(QEvent *) {
 }
 
 void ZtoryAnimaticTrack::mouseReleaseEvent(QMouseEvent *) {
-  if (m_draggingCol >= 0) {
+  DragMode finished = m_dragMode;
+  m_dragMode = NoDrag;
+  unsetCursor();
+
+  if (finished == RippleTrim) {
     bool found = false;
     for (auto &b : m_blocks) {
-      if (b.col == m_draggingCol) {
-        emit shotDurationChanged(m_draggingCol, b.f1);
+      if (b.col == m_dragColA) {
+        emit shotDurationChanged(m_dragColA, b.f1 - b.f0);  // newF1 relative to f0
         found = true;
       } else if (found) {
-        // Ripple: aggiorna posizione xsheet degli shot successivi
         emit shotMoved(b.col, b.startFrameInMain);
       }
     }
-    m_draggingCol = -1;
+    m_dragColA = -1;
+    return;
+  }
+
+  if (finished == Roll) {
+    int newDurA = -1, newDurB = -1;
+    for (auto &b : m_blocks) {
+      if (b.col == m_dragColA) newDurA = b.f1 - b.f0 + 1;
+      if (b.col == m_dragColB) newDurB = b.f1 - b.f0 + 1;
+    }
+    if (newDurA > 0 && newDurB > 0 &&
+        (newDurA != m_dragOrigDurA || newDurB != m_dragOrigDurB))
+      emit rollEdit(m_dragColA, newDurA, m_dragColB, newDurB);
+    m_dragColA = m_dragColB = -1;
+    return;
+  }
+
+  if (finished == Slip) {
+    int slipDelta = 0;
+    for (auto &b : m_blocks) {
+      if (b.col == m_dragColA) {
+        slipDelta = b.f0 - m_dragOrigSlipF0;
+        break;
+      }
+    }
+    if (slipDelta != 0)
+      emit slipEdit(m_dragColA, slipDelta);
+    m_dragColA = -1;
+    return;
   }
 }
 
@@ -2954,16 +3128,32 @@ ZtoryAnimaticPanel::ZtoryAnimaticPanel(QWidget *parent) : TPanel(parent) {
   selectBtn->setIcon(createQIcon("ztoryc_select"));
   selectBtn->setIconSize(QSize(20, 20));
   selectBtn->setFixedSize(28, 28);
-  selectBtn->setToolTip(tr("Select"));
+  selectBtn->setToolTip(tr("Select  (S)\nClick to select shots, drag right edge to resize"));
   selectBtn->setCheckable(true);
   selectBtn->setStyleSheet("QToolButton{background:transparent;border:none;border-radius:4px;}QToolButton:hover{background:#555;}QToolButton:checked{background:#666;}");
   selectBtn->setChecked(true);
+
+  QToolButton *trimBtn = new QToolButton(toolbar);
+  trimBtn->setIcon(createQIcon("ztoryc_trim"));
+  trimBtn->setIconSize(QSize(20, 20));
+  trimBtn->setFixedSize(28, 28);
+  trimBtn->setToolTip(tr("Trim / Roll  (T)\nDrag seam between two shots to roll the edit point\nDrag last shot edge to ripple trim"));
+  trimBtn->setCheckable(true);
+  trimBtn->setStyleSheet("QToolButton{background:transparent;border:none;border-radius:4px;}QToolButton:hover{background:#555;}QToolButton:checked{background:#666;}");
+
+  QToolButton *slipBtn = new QToolButton(toolbar);
+  slipBtn->setIcon(createQIcon("ztoryc_slip"));
+  slipBtn->setIconSize(QSize(20, 20));
+  slipBtn->setFixedSize(28, 28);
+  slipBtn->setToolTip(tr("Slip  (Y)\nDrag inside a shot to shift which sub-scene frames are shown\nDuration and position in animatic stay unchanged"));
+  slipBtn->setCheckable(true);
+  slipBtn->setStyleSheet("QToolButton{background:transparent;border:none;border-radius:4px;}QToolButton:hover{background:#555;}QToolButton:checked{background:#666;}");
 
   QToolButton *razorBtn = new QToolButton(toolbar);
   razorBtn->setIcon(createQIcon("ztoryc_razor"));
   razorBtn->setIconSize(QSize(20, 20));
   razorBtn->setFixedSize(28, 28);
-  razorBtn->setToolTip(tr("Razor"));
+  razorBtn->setToolTip(tr("Razor  (C)\nClick to cut a shot at the cursor position"));
   razorBtn->setCheckable(true);
   razorBtn->setStyleSheet("QToolButton{background:transparent;border:none;border-radius:4px;}QToolButton:hover{background:#555;}QToolButton:checked{background:#666;}");
 
@@ -2994,6 +3184,8 @@ ZtoryAnimaticPanel::ZtoryAnimaticPanel(QWidget *parent) : TPanel(parent) {
   addShotBtn->setStyleSheet("QToolButton{background:transparent;border:none;border-radius:4px;}QToolButton:hover{background:#555;}QToolButton:checked{background:#666;}");
 
   tbLay->addWidget(selectBtn);
+  tbLay->addWidget(trimBtn);
+  tbLay->addWidget(slipBtn);
   tbLay->addWidget(razorBtn);
   tbLay->addSpacing(8);
   tbLay->addWidget(linkBtn);
@@ -3005,16 +3197,36 @@ ZtoryAnimaticPanel::ZtoryAnimaticPanel(QWidget *parent) : TPanel(parent) {
   tbLay->addSpacing(12);
   tbLay->addStretch(1);
 
-  connect(selectBtn, &QToolButton::clicked, this, [this, selectBtn, razorBtn](){
+  connect(selectBtn, &QToolButton::clicked, this, [this, selectBtn, trimBtn, slipBtn, razorBtn](){
     m_track->setTool(ZtoryAnimaticTrack::SelectTool);
     selectBtn->setChecked(true);
+    trimBtn->setChecked(false);
+    slipBtn->setChecked(false);
     razorBtn->setChecked(false);
     for (auto *at : m_audioTracks) at->setRazorActive(false);
   });
-  connect(razorBtn, &QToolButton::clicked, this, [this, selectBtn, razorBtn](){
+  connect(trimBtn, &QToolButton::clicked, this, [this, selectBtn, trimBtn, slipBtn, razorBtn](){
+    m_track->setTool(ZtoryAnimaticTrack::TrimTool);
+    trimBtn->setChecked(true);
+    selectBtn->setChecked(false);
+    slipBtn->setChecked(false);
+    razorBtn->setChecked(false);
+    for (auto *at : m_audioTracks) at->setRazorActive(false);
+  });
+  connect(slipBtn, &QToolButton::clicked, this, [this, selectBtn, trimBtn, slipBtn, razorBtn](){
+    m_track->setTool(ZtoryAnimaticTrack::SlipTool);
+    slipBtn->setChecked(true);
+    selectBtn->setChecked(false);
+    trimBtn->setChecked(false);
+    razorBtn->setChecked(false);
+    for (auto *at : m_audioTracks) at->setRazorActive(false);
+  });
+  connect(razorBtn, &QToolButton::clicked, this, [this, selectBtn, trimBtn, slipBtn, razorBtn](){
     m_track->setTool(ZtoryAnimaticTrack::RazorTool);
     razorBtn->setChecked(true);
     selectBtn->setChecked(false);
+    trimBtn->setChecked(false);
+    slipBtn->setChecked(false);
     // Always activate razor on audio tracks so the user can cut them directly.
     // m_audioLinked only controls whether a video cut also cuts audio.
     for (auto *at : m_audioTracks) at->setRazorActive(true);
@@ -3075,6 +3287,10 @@ ZtoryAnimaticPanel::ZtoryAnimaticPanel(QWidget *parent) : TPanel(parent) {
           this, &ZtoryAnimaticPanel::onReturnToMain);
   connect(m_track, &ZtoryAnimaticTrack::shotDurationChanged,
           this, &ZtoryAnimaticPanel::onShotDurationChanged);
+  connect(m_track, &ZtoryAnimaticTrack::rollEdit,
+          this, &ZtoryAnimaticPanel::onRollEdit);
+  connect(m_track, &ZtoryAnimaticTrack::slipEdit,
+          this, &ZtoryAnimaticPanel::onSlipEdit);
   connect(m_track, &ZtoryAnimaticTrack::shotMoved,
           this, &ZtoryAnimaticPanel::onShotMoved);
   // Video lock state — no persistence map needed (single track)
@@ -3667,13 +3883,24 @@ void ZtoryAnimaticPanel::onShotDoubleClicked(int col) {
   if (cell.m_level && cell.m_level->getChildLevel()) {
     app->getCurrentFrame()->setFrame(r0);
     CommandManager::instance()->execute("MI_OpenChild");
-    // Set the native play range to the sub-scene's frame count so the
-    // stop marker lands at the last frame of this shot automatically.
+    // Set the native play range to the portion of the sub-scene that is
+    // actually exposed in the animatic (accounting for Slip offset).
+    // slipOff = first sub-scene frame shown; durInAnimatic = shot length.
     {
+      int durInAnimatic = r1 - r0 + 1;
+      int slipOff = ZtoryModel::instance()->getSlipOffset(col);
+      int inF  = slipOff;
+      int outF = slipOff + durInAnimatic - 1;
       TXsheet *subXsh = app->getCurrentXsheet()->getXsheet();
-      int subFrames = subXsh ? subXsh->getFrameCount() : 0;
-      if (subFrames > 0)
-        XsheetGUI::setPlayRange(0, subFrames - 1, 1, false);
+      if (subXsh) {
+        // Clamp to actual sub-scene length (sub-scene may be shorter than slip range)
+        int subFrames = subXsh->getFrameCount();
+        outF = qMin(outF, subFrames - 1);
+        if (inF <= outF)
+          XsheetGUI::setPlayRange(inF, outF, 1, false);
+        else
+          XsheetGUI::setPlayRange(0, qMax(0, subFrames - 1), 1, false);
+      }
     }
     // Keep the animatic controller's frame at the shot's main-xsheet row
     // so the animatic viewer renders at the correct position.
@@ -4387,6 +4614,98 @@ void ZtoryAnimaticPanel::onSegmentDroppedOutside(int srcCol, int origR0,
       at->update();
     }
   });
+}
+
+// ── onRollEdit ────────────────────────────────────────────────────────────────
+// Resize colA and colB symmetrically so the seam moves without changing total
+// animatic duration.  resequenceXsheet() re-packs the columns afterwards.
+void ZtoryAnimaticPanel::onRollEdit(int colA, int newDurA, int colB, int newDurB) {
+  StoryboardPanel *board = findBoardPanel();
+  std::vector<ZtoryShotSnap> before;
+  if (board) before = board->captureSnapshot();
+
+  TApp *app = TApp::instance();
+  ToonzScene *scene = app->getCurrentScene()->getScene();
+  if (!scene) return;
+  TXsheet *xsh = scene->getChildStack()->getTopXsheet();
+  if (!xsh) return;
+
+  // Helper lambda: resize column to newDur frames
+  auto resizeCol = [&](int col, int newDur) {
+    TXshColumn *column = xsh->getColumn(col);
+    if (!column || column->isEmpty()) return;
+    int r0 = 0, r1 = 0;
+    column->getRange(r0, r1);
+    int curDur = r1 - r0 + 1;
+    TXshCell typeCell;
+    for (int r = r0; r <= r1; r++) {
+      TXshCell cell = xsh->getCell(r, col);
+      if (!cell.isEmpty() && cell.m_level && cell.m_level->getChildLevel()) {
+        typeCell = cell; break;
+      }
+    }
+    if (typeCell.isEmpty()) return;
+    if (newDur > curDur) {
+      int lastFrameNum = typeCell.m_frameId.getNumber();
+      for (int r = r0; r <= r1; r++) {
+        TXshCell c = xsh->getCell(r, col);
+        if (!c.isEmpty()) lastFrameNum = c.m_frameId.getNumber();
+      }
+      for (int r = r0 + curDur; r < r0 + newDur; r++) {
+        TXshCell c = typeCell;
+        c.m_frameId = TFrameId(++lastFrameNum);
+        xsh->setCell(r, col, c);
+      }
+    } else if (newDur < curDur) {
+      xsh->removeCells(r0 + newDur, col, curDur - newDur);
+    }
+  };
+
+  resizeCol(colA, newDurA);
+  resizeCol(colB, newDurB);
+
+  resequenceXsheet();
+  ztorySetShotRange(colA, 0, newDurA - 1);
+  ztorySetShotRange(colB, 0, newDurB - 1);
+  m_track->refreshFromScene();
+
+  if (board) {
+    auto after = board->captureSnapshot();
+    TUndoManager::manager()->add(
+        new UndoBoardState(board, tr("Roll Edit"),
+                           std::move(before), std::move(after)));
+  }
+}
+
+// ── onSlipEdit ────────────────────────────────────────────────────────────────
+// Shift the sub-scene content window by |slipDelta| frames.
+// Does NOT change the shot's animatic duration or position.
+void ZtoryAnimaticPanel::onSlipEdit(int col, int slipDelta) {
+  if (slipDelta == 0) return;
+  ZtoryModel::instance()->adjustSlipOffset(col, slipDelta);
+  // resequenceXsheet() re-writes cell frameIds using the new slipOffset
+  resequenceXsheet();
+
+  // Update the shot's In/Out play range to reflect the new slip offset.
+  // This ensures that when the sub-scene is opened for editing, the markers
+  // show exactly which frames are exposed in the animatic.
+  TApp *app = TApp::instance();
+  ToonzScene *scene = app->getCurrentScene()->getScene();
+  if (scene) {
+    TXsheet *xsh = scene->getChildStack()->getTopXsheet();
+    if (xsh) {
+      TXshColumn *column = xsh->getColumn(col);
+      if (column && !column->isEmpty()) {
+        int r0 = 0, r1 = 0;
+        column->getRange(r0, r1);
+        int durInAnimatic = r1 - r0 + 1;
+        int slipOff = ZtoryModel::instance()->getSlipOffset(col);
+        ztorySetShotRange(col, slipOff, slipOff + durInAnimatic - 1);
+      }
+    }
+  }
+
+  m_track->refreshFromScene();
 }
 
 void ZtoryAnimaticPanel::onShotDurationChanged(int col, int newF1) {

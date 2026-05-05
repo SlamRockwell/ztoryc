@@ -6,6 +6,23 @@
 > Voci più vecchie di ~2 settimane → spostarle in `CHANGELOG_ARCHIVE.md`.
 
 ---
+## [2026-05-05] — Fix crash + Add to Favorites funzionante
+
+### Fixed
+- **Crash "Refresh Folder"**: causato da vtable corruption dopo aggiunta di `virtual TFilePath getPath()` nella base class `DvDirModelNode`. Rimossa la virtual (non necessaria), rimosso `override` da `DvDirModelFileFolderNode::getPath()`, ripristinato cast-based approach in `dvdirtreeview.cpp`
+- **Errori compile `TFilePath + QString`**: `TFilePath::operator+` non accetta `QString` — corretti tutti e 4 i siti (dvdirtreeview.cpp ×2, filebrowser.cpp ×2) usando `favFolder + srcFp.withoutParentDir()` (TFilePath + TFilePath)
+
+### Added
+- **Add to Favorites (pannello destra)**: right-click su spazio vuoto nella cartella corrente → "Add to Favorites"; right-click su una cartella → "Add to Favorites". Implementato in `filebrowser.cpp::getContextMenu()`
+- **Remove from Favorites (pannello destra)**: right-click dentro Favorites → "Remove from Favorites"
+- **Add/Remove Favorites (albero sinistro)**: right-click su nodo folder nell'albero → "Add to Favorites" / "Remove from Favorites". Funziona per tutti i nodi `DvDirModelFileFolderNode` (Desktop, Downloads, cartelle progetto, ecc.) — non per nodi virtuali root (My Computer, History) che non hanno path reale
+- **Drag & drop su Favorites**: trascinare una cartella sul nodo Favorites nell'albero crea un symlink
+
+### Notes
+- Symlinks creati con `QFile::link()` nella cartella `ToonzFolder::getMyFavoritesFolder()`
+- `ImportAssetsPopup`: browser multi-selezione, tutti i tipi file eccetto .tnz, chiama `IoCmd::loadResources()`
+
+---
 ## [2026-05-04] — Task 24: Startup popup come hub scene management
 
 ### Added

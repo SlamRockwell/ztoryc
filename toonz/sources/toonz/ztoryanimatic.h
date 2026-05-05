@@ -160,7 +160,7 @@ private:
 class ZtoryAnimaticTrack : public QWidget {
   Q_OBJECT
 public:
-  enum Tool { SelectTool, RazorTool };
+  enum Tool { SelectTool, TrimTool, SlipTool, RazorTool };
 
   struct ShotBlock {
     int col;
@@ -210,14 +210,27 @@ signals:
   // or -1 when the mouse leaves. Panel forwards this to audio tracks.
   void razorHoverFrameChanged(int frame);
   void lockedChanged(bool on);
+  // Roll: colA new duration, colB new duration (colB repositioned by resequenceXsheet)
+  void rollEdit(int colA, int newDurA, int colB, int newDurB);
+  // Slip: shift sub-scene content by |slipDelta| frames (positive = later content)
+  void slipEdit(int col, int slipDelta);
 
 private:
   double m_ppf = 8.0;
   int m_currentFrame = 0;
   std::vector<ShotBlock> m_blocks;
-  int m_draggingCol = -1;
-  int m_dragStartX = 0;
-  int m_dragOrigF1 = 0;
+
+  // ── Drag state ────────────────────────────────────────────────────────────
+  enum DragMode { NoDrag, RippleTrim, Roll, Slip };
+  DragMode m_dragMode     = NoDrag;
+  int m_dragStartX        = 0;   // pixel X at drag start
+  int m_dragColA          = -1;  // RippleTrim/Roll/Slip: primary col (left for Roll)
+  int m_dragColB          = -1;  // Roll: right col
+  int m_dragOrigDurA      = 0;   // original duration of colA at drag start
+  int m_dragOrigDurB      = 0;   // original duration of colB at drag start
+  int m_dragOrigStartB    = 0;   // original startFrameInMain of colB (Roll)
+  int m_dragOrigSlipF0    = 0;   // original f0 (slip offset) at drag start
+  // For RippleTrim: saved positions/durations of all blocks
   QMap<int, int> m_origStarts;
   QMap<int, int> m_origDurations;
   std::set<int> m_selectedCols;
@@ -579,6 +592,8 @@ private slots:
   void onShotDoubleClicked(int col);
   void onReturnToMain();
   void onShotDurationChanged(int col, int newF1);
+  void onRollEdit(int colA, int newDurA, int colB, int newDurB);
+  void onSlipEdit(int col, int slipDelta);
   void onRazorRequested(int col, int splitFrame);
   void onShotMoved(int col, int newStartFrame);
   void onMergeShots();

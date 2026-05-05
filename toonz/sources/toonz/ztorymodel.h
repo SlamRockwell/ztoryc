@@ -69,6 +69,7 @@ struct ShotData {
   QString                shotLabel;     // "SH020" — stable identifier (primary, v4+)
   int                    orderIndex = 0;  // sort key (100 × label number for step-10)
   QString                sequenceId;    // uuid of parent SequenceData (may be empty)
+  int                    slipOffset = 0;  // 0-based frame offset into sub-scene (Slip tool)
   std::vector<PanelData> panels;
 
   ShotData() : xsheetColumn(0) {}
@@ -124,6 +125,15 @@ public:
   int  shotCount() const { return (int)m_shots.size(); }
   ShotData       &shot(int i)       { return m_shots[i]; }
   const ShotData &shot(int i) const { return m_shots[i]; }
+
+  // ── Slip offset (0-based frame offset into sub-scene) ─────────────────────
+  // Returns the shot index for a given xsheet column, or -1 if not found.
+  int  shotIndexForCol(int col) const;
+  // Returns the current slip offset for the shot at xsheet column |col| (0 = no slip).
+  int  getSlipOffset(int col) const;
+  // Adds |delta| to the slip offset of the shot at xsheet column |col|.
+  // Clamps to [0, INT_MAX].  Call resequenceXsheet() afterwards.
+  void adjustSlipOffset(int col, int delta);
   std::vector<ShotData>       &shots()       { return m_shots; }
   const std::vector<ShotData> &shots() const { return m_shots; }
   int  fps() const { return m_fps; }
