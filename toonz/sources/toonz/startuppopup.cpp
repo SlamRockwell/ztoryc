@@ -444,21 +444,33 @@ StartupPopup::StartupPopup(Mode mode)
     m_topLayout->addLayout(guiLay, 0);
   }
 
+  // Center m_buttonLayout vertically within the button frame.
+  // setAlignment(Qt::AlignVCenter) on the VBoxLayout itself has no effect when
+  // it is the frame's main layout; the two-arg overload targets the child layout.
+  if (m_buttonFrame) {
+    auto *outerLay = qobject_cast<QVBoxLayout *>(m_buttonFrame->layout());
+    if (outerLay) outerLay->setAlignment(m_buttonLayout, Qt::AlignVCenter);
+  }
   m_buttonLayout->setContentsMargins(0, 0, 0, 0);
   m_buttonLayout->setSpacing(10);
   {
     m_cancelButton = new QPushButton(tr("Cancel"), this);
     m_cancelButton->setMinimumSize(65, 25);
-    m_cancelButton->setMaximumHeight(25);
-    m_buttonLayout->addWidget(m_cancelButton, 0, Qt::AlignLeft);
+    m_buttonLayout->addWidget(m_cancelButton, 0, Qt::AlignLeft | Qt::AlignVCenter);
     connect(m_cancelButton, &QPushButton::clicked, this, &StartupPopup::onCancelButton);
 
     m_buttonLayout->addStretch();
-    m_buttonLayout->addWidget(m_autoSaveOnCB);
-    m_buttonLayout->addWidget(m_autoSaveTimeFld);
-    QLabel *minutesLabel = new QLabel(tr("Minutes"), this);
+
+    m_autoSaveBar = new QWidget(this);
+    QHBoxLayout *autoSaveLay = new QHBoxLayout(m_autoSaveBar);
+    autoSaveLay->setContentsMargins(0, 0, 0, 0);
+    autoSaveLay->setSpacing(5);
+    autoSaveLay->addWidget(m_autoSaveOnCB);
+    autoSaveLay->addWidget(m_autoSaveTimeFld);
+    QLabel *minutesLabel = new QLabel(tr("Minutes"), m_autoSaveBar);
     minutesLabel->setStyleSheet("QLabel{ background-color: none; }");
-    m_buttonLayout->addWidget(minutesLabel);
+    autoSaveLay->addWidget(minutesLabel);
+    m_buttonLayout->addWidget(m_autoSaveBar, 0, Qt::AlignVCenter);
   }
 
   TApp *app                 = TApp::instance();
@@ -546,6 +558,9 @@ void StartupPopup::showEvent(QShowEvent *) {
       m_nameFld->setFocus();
       break;
   }
+
+  // Autosave bar only belongs in the cold-start/DefaultMode popup.
+  if (m_autoSaveBar) m_autoSaveBar->setVisible(m_mode == DefaultMode);
 
   // Cancel label: "Quit" only at cold start (untitled scene in DefaultMode).
   if (m_cancelButton) {

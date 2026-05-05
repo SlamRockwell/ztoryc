@@ -452,6 +452,17 @@ public:
 
 //-----------------------------------------------------------------------------
 
+class ImportAssetsPopup final : public FileBrowserPopup {
+  Q_OBJECT
+
+public:
+  ImportAssetsPopup();
+  bool execute() override;
+  void initFolder() override;
+};
+
+//-----------------------------------------------------------------------------
+
 class BrowserPopupController final
     : public QObject,
       public DVGui::FileField::BrowserPopupController {

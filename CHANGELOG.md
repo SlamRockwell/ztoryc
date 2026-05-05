@@ -6,6 +6,27 @@
 > Voci più vecchie di ~2 settimane → spostarle in `CHANGELOG_ARCHIVE.md`.
 
 ---
+## [2026-05-04] — Task 24: Startup popup come hub scene management
+
+### Added
+- **StartupPopup `Mode` enum** (4 modalità): `DefaultMode` (avvio a freddo, entrambi i tab, blocco chiusura), `CreateMode` (File > New Scene, solo tab Create, niente recent panel), `LoadMode` (File > Load Scene, solo tab Load), `LoadSubSceneMode` (File > Load As Sub-Scene, solo tab Load, multi-selezione con Shift/Cmd + pulsante "Load Selected", niente recent panel)
+- **`File > Import > Import Assets...`** — browser nativo macOS (vecchio comportamento Load Scene), aggiunto in `menubar.cpp` + `menubarcommandids.h` + `mainwindow.cpp/.h`
+- **Multi-selezione in LoadSubSceneMode**: `ExtendedSelection` + `setMultiSelect(true)` su `StartupScenesList` che disabilita hover-clear in `leaveEvent` e hover-setCurrentItem in `mouseMoveEvent`
+
+### Modified
+- **`onNewScene()`**: non chiama più `IoCmd::newScene()` prima del popup — la scena corrente non viene chiusa se l'utente fa Cancel. `IoCmd::newScene()` spostato dentro `onCreateButton()` per `CreateMode` only
+- **Startup a freddo**: popup mostrato da `main.cpp` (DefaultMode); File > New Scene usa sempre `CreateMode`
+- **Titoli popup dinamici**: "Ztoryc Startup" / "Create New Scene" / "Load Scene" / "Load Scene as Sub-Scene"
+- **Bottone Cancel**: `setMinimumSize(65,25)` + `setMaximumHeight(25)` (uguale ai pulsanti nativi DVGui); label "Quit Ztoryc" solo a freddo con scena untitled, "Cancel" altrimenti
+- **`onProjectComboChanged` in LoadSubSceneMode**: carica le scene del progetto selezionato senza cambiare progetto attivo né chiudere la scena corrente (`TProject::load()` + `refreshExistingScenes(scenesFolder)`)
+- **`refreshExistingScenes`**: accetta `TFilePath scenesFolder = TFilePath()` opzionale
+- **`IoCmd::loadSubScene(path)` in `iocommand.cpp`**: invariato (usa ASK_USER default per tutte le scene)
+- **`ResourceImportDialog::askImportQuestion`**: messaggio contestuale — "doesn't belong to the current project" solo per file effettivamente esterni; messaggio neutro "Do you want to import it or load it from its current location?" per file nella scenes folder del progetto corrente (check `isExternPath` + ancestor della `+scenes` folder)
+
+### Notes
+- Bug layout Cancel button: `addWidget(btn, Qt::AlignLeft)` passava AlignLeft (=1) come stretch factor → pulsante si espandeva. Fix: `addWidget(btn, 0, Qt::AlignLeft)`
+
+---
 ## [2026-05-03] — Peg columns narrow (22px) + Set Key fix
 
 ### Fixed

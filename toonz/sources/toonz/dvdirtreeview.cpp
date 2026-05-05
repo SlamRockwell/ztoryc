@@ -19,6 +19,7 @@
 #include "toonzqt/gutil.h"
 #include "tapp.h"
 #include "toonz/tscenehandle.h"
+#include "toonz/toonzfolders.h"
 
 #include <QPainter>
 #include <QPixmap>
@@ -430,6 +431,22 @@ void DvDirTreeView::dropEvent(QDropEvent *e) {
           DvDirModel::instance()->getNode(index));
   if (!folderNode || !folderNode->isFolder()) return;
   if (!mimeData->hasUrls()) return;
+
+  // Dropping onto Favorites creates symlinks instead of moving files.
+  TFilePath favFolder = ToonzFolder::getMyFavoritesFolder();
+  if (folderNode->getPath() == favFolder) {
+    if (!TFileStatus(favFolder).doesExist()) TSystem::mkDir(favFolder);
+    for (const QUrl &url : mimeData->urls()) {
+      TFilePath srcFp(url.toLocalFile().toStdWString());
+      if (!QFileInfo(srcFp.getQString()).isDir()) continue;
+      TFilePath linkDst = favFolder + srcFp.withoutParentDir();
+      if (!QFile::exists(linkDst.getQString()))
+        QFile::link(srcFp.getQString(), linkDst.getQString());
+    }
+    DvDirModel::instance()->refreshFolder(favFolder);
+    return;
+  }
+
   int count = 0;
   for (const QUrl &url : mimeData->urls()) {
     TFilePath srcFp(url.toLocalFile().toStdWString());
@@ -549,6 +566,32 @@ void DvDirTreeView::contextMenuEvent(QContextMenuEvent *e) {
         connect(action, SIGNAL(triggered()), this,
                 SLOT(purgeCurrentVersionControlNode()));
       }
+    }
+  }
+
+  // Add to / Remove from Favorites — only works for file-folder nodes.
+  DvDirModelFileFolderNode *folderNode =
+      dynamic_cast<DvDirModelFileFolderNode *>(node);
+  TFilePath nodePath  = folderNode ? folderNode->getPath() : TFilePath();
+  TFilePath favFolder = ToonzFolder::getMyFavoritesFolder();
+  if (!nodePath.isEmpty() && QFileInfo(nodePath.getQString()).isDir()) {
+    if (favFolder.isAncestorOf(nodePath) && nodePath != favFolder) {
+      if (!menu.isEmpty()) menu.addSeparator();
+      QAction *removeAct = menu.addAction(tr("Remove from Favorites"));
+      connect(removeAct, &QAction::triggered, this, [nodePath, favFolder, this]() {
+        QFile::remove(nodePath.getQString());
+        DvDirModel::instance()->refreshFolder(favFolder);
+      });
+    } else if (nodePath != favFolder && !favFolder.isAncestorOf(nodePath)) {
+      if (!menu.isEmpty()) menu.addSeparator();
+      QAction *addAct = menu.addAction(tr("Add to Favorites"));
+      connect(addAct, &QAction::triggered, this, [nodePath, favFolder, this]() {
+        if (!TFileStatus(favFolder).doesExist()) TSystem::mkDir(favFolder);
+        TFilePath linkDst = favFolder + nodePath.withoutParentDir();
+        if (!QFile::exists(linkDst.getQString()))
+          QFile::link(nodePath.getQString(), linkDst.getQString());
+        DvDirModel::instance()->refreshFolder(favFolder);
+      });
     }
   }
 

@@ -2269,6 +2269,31 @@ void BrowserPopup::initFolder(TFilePath path) {
 }
 
 //=============================================================================
+// ImportAssetsPopup
+
+ImportAssetsPopup::ImportAssetsPopup()
+    : FileBrowserPopup(tr("Import Assets"), Options(MULTISELECTION)) {
+  setOkText(tr("Import"));
+  // No filter types: shows all non-tnz assets by default (images, tlv, pli, audio…)
+}
+
+bool ImportAssetsPopup::execute() {
+  if (m_selectedPaths.empty()) return false;
+  IoCmd::LoadResourceArguments args;
+  for (const TFilePath &fp : m_selectedPaths)
+    args.resourceDatas.emplace_back(fp);
+  IoCmd::loadResources(args);
+  return true;
+}
+
+void ImportAssetsPopup::initFolder() {
+  TFilePath folder =
+      TProjectManager::instance()->getCurrentProject()->getFolder(
+          TProject::Drawings, true);
+  if (!folder.isEmpty()) setFolder(folder);
+}
+
+//=============================================================================
 // BrowserPopupController
 /* N.B. Eliminare nel momento in cui la classe FileBrowserPopup, con tutte le
    classi annesse

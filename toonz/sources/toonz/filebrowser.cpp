@@ -27,6 +27,7 @@
 #include "toonz/txshsimplelevel.h"
 #include "toonz/txshsoundlevel.h"
 #include "toonz/tproject.h"
+#include "toonz/toonzfolders.h"
 #include "toonz/txshlevelhandle.h"
 #include "toonz/namebuilder.h"
 #include "toonz/toonzimageutils.h"
@@ -1124,6 +1125,28 @@ QMenu *FileBrowser::getContextMenu(QWidget *parent, int index) {
     if (!Preferences::instance()->isWatchFileSystemEnabled()) {
       menu->addAction(cm->getAction(MI_RefreshTree));
     }
+    // Add / Remove current folder as Favorite
+    TFilePath favFolder = ToonzFolder::getMyFavoritesFolder();
+    TFilePath curFolder = getFolder();
+    if (!curFolder.isEmpty() && curFolder != favFolder) {
+      menu->addSeparator();
+      if (!favFolder.isAncestorOf(curFolder)) {
+        QAction *a = menu->addAction(tr("Add to Favorites"));
+        connect(a, &QAction::triggered, this, [curFolder, favFolder]() {
+          if (!TFileStatus(favFolder).doesExist()) TSystem::mkDir(favFolder);
+          TFilePath dst = favFolder + curFolder.withoutParentDir();
+          if (!QFile::exists(dst.getQString()))
+            QFile::link(curFolder.getQString(), dst.getQString());
+          DvDirModel::instance()->refreshFolder(favFolder);
+        });
+      } else {
+        QAction *a = menu->addAction(tr("Remove from Favorites"));
+        connect(a, &QAction::triggered, this, [curFolder, favFolder]() {
+          QFile::remove(curFolder.getQString());
+          DvDirModel::instance()->refreshFolder(favFolder);
+        });
+      }
+    }
     return menu;
   }
 
@@ -1415,6 +1438,22 @@ QMenu *FileBrowser::getContextMenu(QWidget *parent, int index) {
   if (!Preferences::instance()->isWatchFileSystemEnabled()) {
     menu->addSeparator();
     menu->addAction(cm->getAction(MI_RefreshTree));
+  }
+
+  // Add to Favorites if the clicked item is a directory.
+  if (!clickedFile.isEmpty() && QFileInfo(clickedFile.getQString()).isDir()) {
+    TFilePath favFolder = ToonzFolder::getMyFavoritesFolder();
+    if (!favFolder.isAncestorOf(clickedFile) && clickedFile != favFolder) {
+      menu->addSeparator();
+      QAction *a = menu->addAction(tr("Add to Favorites"));
+      connect(a, &QAction::triggered, this, [clickedFile, favFolder]() {
+        if (!TFileStatus(favFolder).doesExist()) TSystem::mkDir(favFolder);
+        TFilePath dst = favFolder + clickedFile.withoutParentDir();
+        if (!QFile::exists(dst.getQString()))
+          QFile::link(clickedFile.getQString(), dst.getQString());
+        DvDirModel::instance()->refreshFolder(favFolder);
+      });
+    }
   }
 
   assert(ret);

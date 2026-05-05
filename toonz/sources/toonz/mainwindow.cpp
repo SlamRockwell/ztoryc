@@ -16,6 +16,7 @@
 #include "custompanelmanager.h"
 #include "statusbar.h"
 #include "aboutpopup.h"
+#include "filebrowserpopup.h"
 #include "ztorymodel.h"
 
 // TnzTools includes
@@ -1220,7 +1221,12 @@ void MainWindow::onLoadSubScene() {
   popup->activateWindow();
 }
 
-void MainWindow::onImportAssets() { IoCmd::loadScene(); }
+void MainWindow::onImportAssets() {
+  static ImportAssetsPopup *popup = nullptr;
+  if (!popup) popup = new ImportAssetsPopup();
+  popup->initFolder();
+  popup->exec();
+}
 //-----------------------------------------------------------------------------
 
 void MainWindow::onUpgradeTabPro() {}

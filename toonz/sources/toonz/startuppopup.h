@@ -71,6 +71,7 @@ public:
   Mode m_mode                       = DefaultMode;
   QPushButton *m_cancelButton       = nullptr;
   QPushButton *m_loadSelectedButton = nullptr;
+  QWidget *m_autoSaveBar            = nullptr;
 
   // Ztoryc: workflow + shot numbering
   QComboBox *m_workflowCB;       // in "Create" tab
