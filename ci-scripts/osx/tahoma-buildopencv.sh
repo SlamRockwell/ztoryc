@@ -2,8 +2,13 @@
 BREW_PREFIX="${BREW_PREFIX:-$(brew --prefix)}"
 cd thirdparty
 
-echo ">>> Cloning opencv"
-git clone https://github.com/tahoma2d/opencv
+if [ ! -d opencv/.git ]
+then
+  echo ">>> Cloning opencv"
+  git clone https://github.com/tahoma2d/opencv
+else
+  echo ">>> Reusing existing opencv checkout"
+fi
 
 cd opencv
 echo "*" >| .gitignore
@@ -47,6 +52,7 @@ cmake -DCMAKE_BUILD_TYPE=Release \
       -DBUILD_opencv_python2=OFF \
       -DBUILD_opencv_python3=ON \
       -DCMAKE_MACOS_RPATH=FALSE \
+      -DCMAKE_INSTALL_PREFIX="$BREW_PREFIX" \
       -DCMAKE_INSTALL_NAME_DIR="$BREW_PREFIX/lib" \
       ..
 
@@ -54,4 +60,4 @@ echo ">>> Building opencv"
 make -j7 # runs 7 jobs in parallel
 
 echo ">>> Installing opencv"
-sudo make install
+make install
