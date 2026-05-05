@@ -225,6 +225,13 @@ fi
 
 cd $TOONZDIR
 
+# Ensure the final portable app has a valid signature after all bundle edits.
+# If this fails here, CI should stop instead of shipping a crashing DMG.
+echo ">>> Re-signing portable app bundle (ad-hoc)"
+codesign --force --deep --sign - --timestamp=none Ztoryc.app
+echo ">>> Verifying app signature"
+codesign --verify --deep --strict --verbose=2 Ztoryc.app
+
 # Due to random ERROR: Bundle creation error: "hdiutil: create failed - Resource busy\n"
 # We'll try to create the DMG a few times
 
