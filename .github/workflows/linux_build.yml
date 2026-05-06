@@ -9,6 +9,7 @@ jobs:
     env:
       CCACHE_MAXSIZE: 5G
       CCACHE_COMPRESS: 'true'
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -21,7 +22,7 @@ jobs:
             cc: clang
             cxx: clang++
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Setup cmake
         uses: jwlawson/actions-setup-cmake@v2
         with:
@@ -30,7 +31,7 @@ jobs:
         run: cmake --version
       - name: Restore cache
         id: restore-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: |
             /home/runner/.ccache
@@ -39,7 +40,7 @@ jobs:
             ${{ runner.os }}-${{ matrix.compiler }}-
       - name: Restore external dependency cache
         id: restore-deps-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: |
             /usr/local/lib
@@ -166,14 +167,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
       - name: Save cache
         if: ${{ steps.restore-cache.outputs.cache-hit != 'true' || github.ref == 'refs/heads/master' }}
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: |
             /home/runner/.ccache
           key: ${{ runner.os }}-${{ matrix.compiler }}-${{ github.ref }}
       - name: Save external dependency cache
         if: ${{ steps.restore-deps-cache.outputs.cache-hit != 'true' }}
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: |
             /usr/local/lib

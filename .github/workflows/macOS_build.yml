@@ -40,8 +40,10 @@ jobs:
       # Header metadata-only changes still match (safe default sloppiness set)
       CCACHE_SLOPPINESS: 'include_file_ctime,include_file_mtime'
       SKIP_PKG: '1'
+      # Quiets Node 20 deprecation for any action not yet on Node 24 (e.g. upload-artifact@v4).
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
       - name: Set portable DMG name from ZtorycVersion.cmake (semver)
@@ -65,7 +67,7 @@ jobs:
         run: cmake --version
       - name: Restore Homebrew downloads cache
         id: brew-cache-restore
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: ~/Library/Caches/Homebrew
           key: ${{ runner.arch }}-${{ runner.os }}-brew-${{ hashFiles('ci-scripts/osx/tahoma-install.sh') }}
@@ -77,7 +79,7 @@ jobs:
           echo "Cold path (~1h): rebuild native deps when dep scripts change or caches evicted."
       - name: Restore cache
         id: restore-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: |
             /Users/runner/.ccache
@@ -88,7 +90,7 @@ jobs:
             ${{ runner.arch }}-${{ runner.os }}-
       - name: Restore ffmpeg dependency cache
         id: restore-ffmpeg-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: |
             ${{ env.BREW_PREFIX }}/bin/ffmpeg
@@ -106,7 +108,7 @@ jobs:
 
       - name: Restore OpenCV dependency cache
         id: restore-opencv-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: |
             ${{ env.BREW_PREFIX }}/lib/libopencv*.dylib
@@ -118,7 +120,7 @@ jobs:
 
       - name: Restore libgphoto2 dependency cache
         id: restore-gphoto-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: |
             ${{ env.BREW_PREFIX }}/lib/libgphoto2*.dylib
@@ -131,7 +133,7 @@ jobs:
 
       - name: Restore TIFF build cache
         id: restore-tiff-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: |
             thirdparty/tiff-4.2.0
@@ -162,7 +164,7 @@ jobs:
           ln -s Versions/Current/EDSDK EDSDK
       - name: Restore Rhubarb cache
         id: restore-rhubarb-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: thirdparty/apps/rhubarb
           key: ${{ runner.arch }}-${{ runner.os }}-rhubarb-${{ hashFiles('ci-scripts/thirdparty_versions.sh', 'ci-scripts/osx/tahoma-bundle-apps.sh') }}
@@ -277,14 +279,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
       - name: Save cache
         if: ${{ steps.restore-cache.outputs.cache-hit != 'true' || github.ref == 'refs/heads/master' }}
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: |
             /Users/runner/.ccache
           key: ${{ runner.arch }}-${{ runner.os }}-ccache-8G-${{ github.ref }}
       - name: Save ffmpeg dependency cache
         if: ${{ steps.restore-ffmpeg-cache.outputs.cache-hit != 'true' }}
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: |
             ${{ env.BREW_PREFIX }}/bin/ffmpeg
@@ -302,7 +304,7 @@ jobs:
 
       - name: Save OpenCV dependency cache
         if: ${{ steps.restore-opencv-cache.outputs.cache-hit != 'true' }}
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: |
             ${{ env.BREW_PREFIX }}/lib/libopencv*.dylib
@@ -314,7 +316,7 @@ jobs:
 
       - name: Save libgphoto2 dependency cache
         if: ${{ steps.restore-gphoto-cache.outputs.cache-hit != 'true' }}
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: |
             ${{ env.BREW_PREFIX }}/lib/libgphoto2*.dylib
@@ -327,7 +329,7 @@ jobs:
 
       - name: Save TIFF build cache
         if: ${{ steps.restore-tiff-cache.outputs.cache-hit != 'true' }}
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: |
             thirdparty/tiff-4.2.0
@@ -335,14 +337,14 @@ jobs:
 
       - name: Save Rhubarb cache
         if: ${{ success() && steps.restore-rhubarb-cache.outputs.cache-hit != 'true' }}
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: thirdparty/apps/rhubarb
           key: ${{ runner.arch }}-${{ runner.os }}-rhubarb-${{ hashFiles('ci-scripts/thirdparty_versions.sh', 'ci-scripts/osx/tahoma-bundle-apps.sh') }}
 
       - name: Save Homebrew downloads cache
         if: ${{ success() && steps.brew-cache-restore.outputs.cache-hit != 'true' }}
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: ~/Library/Caches/Homebrew
           key: ${{ runner.arch }}-${{ runner.os }}-brew-${{ hashFiles('ci-scripts/osx/tahoma-install.sh') }}
@@ -351,10 +353,12 @@ jobs:
     needs: macOS
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.publish_release == 'true'
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
       - uses: actions/download-artifact@v4

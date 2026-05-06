@@ -16,6 +16,8 @@ done
 brew install superlu
 brew install openjpeg libresample protobuf boost qt@5 clang-format glew lz4 lzo libmypaint jpeg-turbo nasm yasm fontconfig freetype gnutls lame libass libbluray libsoxr libvorbis libvpx opencore-amr openh264 openjpeg opus rav1e sdl2 snappy speex tesseract theora webp xvid xz gsed
 #brew install dav1d
-brew install meson ninja
+# Avoid brew "already installed" noise on CI when runners pre-seed these.
+brew list meson >/dev/null 2>&1 || brew install meson
+brew list ninja >/dev/null 2>&1 || brew install ninja
 brew install dylibbundler
 brew install automake autoconf gettext pkg-config libtool libusb-compat gd libexif libdeflate

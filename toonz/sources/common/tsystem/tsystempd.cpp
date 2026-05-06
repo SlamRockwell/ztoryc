@@ -537,6 +537,8 @@ void TSystem::moveFileToRecycleBin(const TFilePath &fp) {
   int ret = SHFileOperationW(&data);  // do it!
 
 #elif defined(MACOSX)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
   FSRef foundRef;
   OSErr err = FSFindFolder(kOnSystemDisk, kTrashFolderType, kDontCreateFolder,
                            &foundRef);
@@ -568,6 +570,7 @@ void TSystem::moveFileToRecycleBin(const TFilePath &fp) {
     } catch (...) {
     }
   }
+#pragma clang diagnostic pop
 #elif defined(LINUX)
   //
   // From https://stackoverflow.com/questions/17964439/move-files-to-trash-recycle-bin-in-qt

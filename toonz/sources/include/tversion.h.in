@@ -21,7 +21,8 @@ public:
 private:
   const char *applicationName     = "Ztoryc";
   const float applicationVersion  = @ZTORYC_APP_VERSION_FLOAT@;
-  const float applicationRevision = @ZTORYC_APP_REVISION@f;
+  /* PATCH.0f — never use bare @PATCH@f (PATCH 0 becomes illegal token "0f"). */
+  const float applicationRevision = @ZTORYC_APP_REVISION@.0f;
   const char *applicationNote     = "";
   const char *tahomaBaseVersion   = "1.6";
 };

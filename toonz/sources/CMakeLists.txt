@@ -107,6 +107,11 @@ else()
     message(ERROR "Unsupported build environment, only MSVC, APPLE and UNIXLIKE are supported")
 endif()
 
+if(APPLE)
+  # macOS SDK marks legacy OpenGL deprecated; silence until a Metal path exists.
+  add_compile_definitions(GL_SILENCE_DEPRECATION)
+endif()
+
 
 # initialize to ON
 macro(option_defaults_init)

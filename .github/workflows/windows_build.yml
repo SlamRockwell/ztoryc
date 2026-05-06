@@ -9,11 +9,12 @@ jobs:
     env:
       CCACHE_MAXSIZE: 5G
       CCACHE_COMPRESS: 'true'
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Restore cache
         id: restore-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: |
             ~/AppData/Local/ccache
@@ -22,7 +23,7 @@ jobs:
             ${{ runner.os }}-
       - name: Restore external dependency cache
         id: restore-deps-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: |
             thirdparty/qt
@@ -119,14 +120,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
       - name: Save cache
         if: ${{ steps.restore-cache.outputs.cache-hit != 'true' || github.ref == 'refs/heads/master' }}
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: |
             ~/AppData/Local/ccache
           key: ${{ runner.os }}-${{ github.ref }}
       - name: Save external dependency cache
         if: ${{ steps.restore-deps-cache.outputs.cache-hit != 'true' }}
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: |
             thirdparty/qt
