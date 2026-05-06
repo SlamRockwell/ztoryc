@@ -1,5 +1,3 @@
-set(VERSION 0.3.0)
-
 set(MOC_HEADERS
     aboutpopup.h
     addfilmstripframespopup.h
@@ -439,8 +437,8 @@ else()
     set_target_properties(Ztoryc PROPERTIES
         MACOSX_BUNDLE_BUNDLE_NAME "Ztoryc"
         MACOSX_BUNDLE_BUNDLE_IDENTIFIER "io.github.ztoryc.Ztoryc"
-        MACOSX_BUNDLE_SHORT_VERSION_STRING "${VERSION}"
-        MACOSX_BUNDLE_LONG_VERSION_STRING "${VERSION}"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "${ZTORYC_VERSION}"
+        MACOSX_BUNDLE_LONG_VERSION_STRING "${ZTORYC_VERSION}"
     )
     #add_definitions(
     #    -DTNZBASE_EXPORTS

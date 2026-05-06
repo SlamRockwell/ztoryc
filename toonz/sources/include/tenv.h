@@ -114,7 +114,7 @@ DVAPI bool getIsPortable();
 DVAPI void setApplicationFullName(std::string applicationFullName);
 DVAPI std::string getApplicationFullName();
 
-/** Tahoma2D engine version this fork is based on (see tversion.h). */
+/** Tahoma2D engine version this fork is based on (runtime header generated from tversion.h.in). */
 DVAPI std::string getTahomaBaseVersionString();
 /** Window title: Ztoryc version plus Tahoma2D base, e.g. "Ztoryc 0.2 · Tahoma2D 1.6". */
 DVAPI std::string getApplicationDisplayTitle();

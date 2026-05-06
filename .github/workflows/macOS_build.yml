@@ -8,7 +8,7 @@ on:
         type: boolean
         default: false
       release_tag:
-        description: 'Tag name (e.g. v0.3.0); keep in sync with toonz/sources/include/tversion.h + CMakeLists VERSION'
+        description: 'Tag name (e.g. v0.3.0); keep in sync with toonz/cmake/ZtorycVersion.cmake'
         type: string
         required: true
         default: 'v0.3.0'
@@ -38,15 +38,17 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Set portable DMG name from tversion.h (semver)
+      - name: Set portable DMG name from ZtorycVersion.cmake (semver)
         run: |
           set -euo pipefail
-          VER=$(grep -E 'applicationVersion\s*=' toonz/sources/include/tversion.h | grep -oE '[0-9]+\.[0-9]+' | head -1)
-          REV=$(grep -E 'applicationRevision\s*=' toonz/sources/include/tversion.h | grep -oE '[0-9]+' | head -1)
-          SEMVER="${VER}.${REV}"
+          F="toonz/cmake/ZtorycVersion.cmake"
+          MAJOR=$(sed -n 's/^set(ZTORYC_VERSION_MAJOR \([0-9]*\)).*/\1/p' "$F")
+          MINOR=$(sed -n 's/^set(ZTORYC_VERSION_MINOR \([0-9]*\)).*/\1/p' "$F")
+          PATCH=$(sed -n 's/^set(ZTORYC_VERSION_PATCH \([0-9]*\)).*/\1/p' "$F")
+          SEMVER="${MAJOR}.${MINOR}.${PATCH}"
           echo "ZTORYC_RELEASE_SEMVER=${SEMVER}" >> $GITHUB_ENV
           echo "ZTORYC_DMG_BASENAME=Ztoryc-${SEMVER}-portable-osx-${{ matrix.suffix }}.dmg" >> $GITHUB_ENV
-          echo "DMG output: Ztoryc-${SEMVER}-portable-osx-${{ matrix.suffix }}.dmg"
+          echo "DMG output: Ztoryc-${SEMVER}-portable-osx-${{ matrix.suffix }}.dmg (from $F)"
       - name: Homebrew prefix (cache paths + deps)
         run: echo "BREW_PREFIX=$(brew --prefix)" >> $GITHUB_ENV
       - name: Setup cmake
@@ -383,7 +385,7 @@ jobs:
           body: |
             Ztoryc macOS **${{ github.event.inputs.release_tag }}** — Intel (x86_64) and Apple Silicon (arm64) portable DMGs.
 
-            Filenames include app semver from `tversion.h` (e.g. `Ztoryc-0.3.0-portable-osx-mactel.dmg`).
+            Filenames include app semver from `toonz/cmake/ZtorycVersion.cmake` (e.g. `Ztoryc-0.3.0-portable-osx-mactel.dmg`).
 
             Built from commit ${{ github.sha }}.
           prerelease: false

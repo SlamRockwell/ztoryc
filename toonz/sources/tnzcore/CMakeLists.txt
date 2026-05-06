@@ -117,7 +117,6 @@ set(HEADERS ${MOC_HEADERS}
     ../include/tenv.h
     ../include/tmeshimage.h
     ../include/tgldisplaylistsmanager.h
-    ../include/tversion.h
     ../include/tstringid.h
     ../include/tvariant.h
 )

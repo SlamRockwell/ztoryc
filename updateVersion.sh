@@ -74,11 +74,14 @@ sed -e"s/$USEOLDVERSION/$USENEWVERSION/" ci-scripts/osx/tahoma-buildpkg.sh >| tm
 unix2dos tmp.txt
 mv tmp.txt ci-scripts/osx/tahoma-buildpkg.sh
 
-# toonz/cmake/BundleInfo.plist.in
-dos2unix toonz/cmake/BundleInfo.plist.in 
-sed -e"s/$OLDFULLVERSION/$NEWFULLVERSION/" toonz/cmake/BundleInfo.plist.in >| tmp.txt
+# toonz/cmake/ZtorycVersion.cmake — single source (also drives BundleInfo.plist via CMake @ZTORYC_VERSION@)
+dos2unix toonz/cmake/ZtorycVersion.cmake
+sed -e"s/^set(ZTORYC_VERSION_MAJOR $OLDMAJOR)/set(ZTORYC_VERSION_MAJOR $NEWMAJOR)/" \
+    -e"s/^set(ZTORYC_VERSION_MINOR $OLDMINOR)/set(ZTORYC_VERSION_MINOR $NEWMINOR)/" \
+    -e"s/^set(ZTORYC_VERSION_PATCH $OLDFIX)/set(ZTORYC_VERSION_PATCH $NEWFIX)/" \
+    toonz/cmake/ZtorycVersion.cmake >| tmp.txt
 unix2dos tmp.txt
-mv tmp.txt toonz/cmake/BundleInfo.plist.in
+mv tmp.txt toonz/cmake/ZtorycVersion.cmake
 
 # toonz/installer/linux/deb-creator/deb-template/DEBIAN/control
 dos2unix toonz/installer/linux/deb-creator/deb-template/DEBIAN/control
@@ -92,17 +95,7 @@ sed -e"s/$USEOLDVERSION/$USENEWVERSION/" toonz/installer/windows/setup.iss >| tm
 unix2dos tmp.txt
 mv tmp.txt toonz/installer/windows/setup.iss
 
-# toonz/sources/include/tversion.h
-dos2unix toonz/sources/include/tversion.h
-sed -e"s/applicationVersion  = $OLDSHORTVERSION/applicationVersion  = $NEWSHORTVERSION/" -e"s/applicationRevision = $OLDFIX/applicationRevision = $NEWFIX/" toonz/sources/include/tversion.h >| tmp.txt
-unix2dos tmp.txt
-mv tmp.txt toonz/sources/include/tversion.h
-
-# toonz/sources/toonz/CMakeLists.txt
-dos2unix toonz/sources/toonz/CMakeLists.txt
-sed -e"s/$OLDFULLVERSION/$NEWFULLVERSION/" toonz/sources/toonz/CMakeLists.txt >| tmp.txt
-unix2dos tmp.txt
-mv tmp.txt toonz/sources/toonz/CMakeLists.txt
+# toonz/sources/toonz/CMakeLists.txt — version strings come from ZtorycVersion.cmake (no manual bump here)
 
 # toonz/sources/xdg-data/org.tahoma2d.Tahoma2D.metainfo.xml
 dos2unix toonz/sources/xdg-data/org.tahoma2d.Tahoma2D.metainfo.xml

@@ -22,6 +22,23 @@ set(CMAKE_BUILD_TYPE_INIT Release)
 
 project(Tahoma2D)
 
+# Ztoryc semver — single source: toonz/cmake/ZtorycVersion.cmake
+include("${CMAKE_SOURCE_DIR}/../cmake/ZtorycVersion.cmake")
+message(STATUS "Ztoryc version: ${ZTORYC_VERSION}")
+
+set(ZTORYC_GEN_INCLUDE_DIR "${CMAKE_BINARY_DIR}/ztoryc_generated/include")
+file(MAKE_DIRECTORY "${ZTORYC_GEN_INCLUDE_DIR}")
+configure_file(
+  "${CMAKE_SOURCE_DIR}/include/tversion.h.in"
+  "${ZTORYC_GEN_INCLUDE_DIR}/tversion.h"
+  @ONLY
+)
+configure_file(
+  "${CMAKE_SOURCE_DIR}/../cmake/BundleInfo.plist.in"
+  "${CMAKE_BINARY_DIR}/ztoryc_generated/BundleInfo.plist"
+  @ONLY
+)
+
 
 #-----------------------------------------------------------------------------
 # Platform Specific Defaults
@@ -277,6 +294,8 @@ if(BUILD_ENV_APPLE)
         set(CMAKE_INSTALL_RPATH "${QT_LIB_PATH}")
     endif()
 endif()
+
+include_directories(BEFORE "${ZTORYC_GEN_INCLUDE_DIR}")
 
 include_directories(
     include
@@ -738,7 +757,7 @@ if(BUILD_ENV_APPLE)
     #     $<TARGET_FILE:executable>
     # )
     # add capability for retina displays
-    set_target_properties(Ztoryc PROPERTIES MACOSX_BUNDLE_INFO_PLIST ${CMAKE_SOURCE_DIR}/../cmake/BundleInfo.plist.in)
+    set_target_properties(Ztoryc PROPERTIES MACOSX_BUNDLE_INFO_PLIST ${CMAKE_BINARY_DIR}/ztoryc_generated/BundleInfo.plist)
 endif()
 
 if(BUILD_ENV_UNIXLIKE AND NOT BUILD_TARGET_WIN)
