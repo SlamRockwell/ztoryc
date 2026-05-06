@@ -102,7 +102,7 @@ jobs:
             thirdparty/aom
             thirdparty/dav1d
             thirdparty/ffmpeg
-          key: ${{ runner.arch }}-${{ runner.os }}-ffmpeg-${{ hashFiles('ci-scripts/osx/tahoma-buildffmpeg.sh', 'ci-scripts/osx/tahoma-install.sh') }}
+          key: ${{ runner.arch }}-${{ runner.os }}-ffmpeg-${{ hashFiles('ci-scripts/thirdparty_versions.sh', 'ci-scripts/osx/tahoma-buildffmpeg.sh', 'ci-scripts/osx/tahoma-install.sh') }}
 
       - name: Restore OpenCV dependency cache
         id: restore-opencv-cache
@@ -114,7 +114,7 @@ jobs:
             ${{ env.BREW_PREFIX }}/lib/cmake/opencv4
             ${{ env.BREW_PREFIX }}/lib/pkgconfig/opencv4.pc
             thirdparty/opencv
-          key: ${{ runner.arch }}-${{ runner.os }}-opencv-v3-${{ hashFiles('ci-scripts/osx/tahoma-buildopencv.sh', 'ci-scripts/osx/tahoma-install.sh') }}
+          key: ${{ runner.arch }}-${{ runner.os }}-opencv-${{ hashFiles('ci-scripts/thirdparty_versions.sh', 'ci-scripts/osx/tahoma-buildopencv.sh', 'ci-scripts/osx/tahoma-install.sh') }}
 
       - name: Restore libgphoto2 dependency cache
         id: restore-gphoto-cache
@@ -165,7 +165,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: thirdparty/apps
-          key: ${{ runner.arch }}-${{ runner.os }}-apps-${{ hashFiles('ci-scripts/osx/tahoma-get3rdpartyapps.sh') }}
+          key: ${{ runner.arch }}-${{ runner.os }}-apps-${{ hashFiles('ci-scripts/thirdparty_versions.sh', 'ci-scripts/osx/tahoma-get3rdpartyapps.sh') }}
 
       - name: Get 3rd Party Apps
         run: |
@@ -283,7 +283,7 @@ jobs:
             thirdparty/aom
             thirdparty/dav1d
             thirdparty/ffmpeg
-          key: ${{ runner.arch }}-${{ runner.os }}-ffmpeg-${{ hashFiles('ci-scripts/osx/tahoma-buildffmpeg.sh', 'ci-scripts/osx/tahoma-install.sh') }}
+          key: ${{ runner.arch }}-${{ runner.os }}-ffmpeg-${{ hashFiles('ci-scripts/thirdparty_versions.sh', 'ci-scripts/osx/tahoma-buildffmpeg.sh', 'ci-scripts/osx/tahoma-install.sh') }}
 
       - name: Save OpenCV dependency cache
         if: ${{ steps.restore-opencv-cache.outputs.cache-hit != 'true' }}
@@ -295,7 +295,7 @@ jobs:
             ${{ env.BREW_PREFIX }}/lib/cmake/opencv4
             ${{ env.BREW_PREFIX }}/lib/pkgconfig/opencv4.pc
             thirdparty/opencv
-          key: ${{ runner.arch }}-${{ runner.os }}-opencv-v3-${{ hashFiles('ci-scripts/osx/tahoma-buildopencv.sh', 'ci-scripts/osx/tahoma-install.sh') }}
+          key: ${{ runner.arch }}-${{ runner.os }}-opencv-${{ hashFiles('ci-scripts/thirdparty_versions.sh', 'ci-scripts/osx/tahoma-buildopencv.sh', 'ci-scripts/osx/tahoma-install.sh') }}
 
       - name: Save libgphoto2 dependency cache
         if: ${{ steps.restore-gphoto-cache.outputs.cache-hit != 'true' }}
@@ -323,7 +323,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: thirdparty/apps
-          key: ${{ runner.arch }}-${{ runner.os }}-apps-${{ hashFiles('ci-scripts/osx/tahoma-get3rdpartyapps.sh') }}
+          key: ${{ runner.arch }}-${{ runner.os }}-apps-${{ hashFiles('ci-scripts/thirdparty_versions.sh', 'ci-scripts/osx/tahoma-get3rdpartyapps.sh') }}
 
       - name: Save Homebrew downloads cache
         if: ${{ success() && steps.brew-cache-restore.outputs.cache-hit != 'true' }}

@@ -1,4 +1,7 @@
 #!/bin/bash
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
+source "$_SCRIPT_DIR/../thirdparty_versions.sh"
 cd thirdparty
 
 echo ">>> Cloning openH264"
@@ -17,8 +20,8 @@ sudo make -j "$parallel" install
 
 cd ..
 
-echo ">>> Cloning ffmpeg"
-git clone -b v4.3.1 https://github.com/tahoma2d/FFmpeg ffmpeg
+echo ">>> Cloning ffmpeg ($TAHOMA_FFMPEG_GIT_TAG)"
+git clone -b "$TAHOMA_FFMPEG_GIT_TAG" "$TAHOMA_FFMPEG_REPO" ffmpeg
 
 cd ffmpeg
 echo "*" >| .gitignore

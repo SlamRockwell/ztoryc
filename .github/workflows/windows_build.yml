@@ -28,7 +28,7 @@ jobs:
             thirdparty/qt
             C:\tools\opencv
             C:\local\boost_1_87_0
-          key: ${{ runner.os }}-deps-${{ hashFiles('ci-scripts/windows/tahoma-install.bat', 'ci-scripts/windows/tahoma-build.bat') }}
+          key: ${{ runner.os }}-deps-${{ hashFiles('ci-scripts/thirdparty_versions.sh', 'ci-scripts/read_thirdparty_version.py', 'ci-scripts/windows/tahoma-install.bat', 'ci-scripts/windows/tahoma-get3rdpartyapps.bat', 'ci-scripts/windows/tahoma-build.bat') }}
       - name: Install Dependencies
         run: |
           ci-scripts\windows\tahoma-install.bat
@@ -132,4 +132,4 @@ jobs:
             thirdparty/qt
             C:\tools\opencv
             C:\local\boost_1_87_0
-          key: ${{ runner.os }}-deps-${{ hashFiles('ci-scripts/windows/tahoma-install.bat', 'ci-scripts/windows/tahoma-build.bat') }}
+          key: ${{ runner.os }}-deps-${{ hashFiles('ci-scripts/thirdparty_versions.sh', 'ci-scripts/read_thirdparty_version.py', 'ci-scripts/windows/tahoma-install.bat', 'ci-scripts/windows/tahoma-get3rdpartyapps.bat', 'ci-scripts/windows/tahoma-build.bat') }}

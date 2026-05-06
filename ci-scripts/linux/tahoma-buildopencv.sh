@@ -1,8 +1,15 @@
 #!/bin/bash
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
+source "$_SCRIPT_DIR/../thirdparty_versions.sh"
 cd thirdparty
 
 echo ">>> Cloning opencv"
-git clone https://github.com/tahoma2d/opencv
+if [ -n "$TAHOMA_OPENCV_GIT_REF" ]; then
+  git clone -b "$TAHOMA_OPENCV_GIT_REF" "$TAHOMA_OPENCV_REPO" opencv
+else
+  git clone "$TAHOMA_OPENCV_REPO" opencv
+fi
 
 cd opencv
 echo "*" >| .gitignore
@@ -13,7 +20,7 @@ then
 fi
 cd build
 
-echo ">>> Cmaking openv"
+echo ">>> Cmaking opencv"
 cmake -DCMAKE_BUILD_TYPE=Release \
       -DBUILD_JASPER=OFF \
       -DBUILD_JPEG=OFF \

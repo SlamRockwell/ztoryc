@@ -1,5 +1,8 @@
 #!/bin/bash
 BREW_PREFIX="${BREW_PREFIX:-$(brew --prefix)}"
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
+source "$_SCRIPT_DIR/../thirdparty_versions.sh"
 cd thirdparty
 
 echo ">>> Cloning aom"
@@ -31,7 +34,7 @@ git clone https://github.com/videolan/dav1d
 
 cd dav1d
 
-git checkout tags/0.9.2
+git checkout "tags/${DAV1D_TAG}"
 
 if [ ! -d build ] 
 then
@@ -50,8 +53,8 @@ ninja install
 
 cd ../..
 
-echo ">>> Cloning ffmpeg"
-git clone -b v4.3.1 https://github.com/tahoma2d/FFmpeg ffmpeg
+echo ">>> Cloning ffmpeg ($TAHOMA_FFMPEG_GIT_TAG)"
+git clone -b "$TAHOMA_FFMPEG_GIT_TAG" "$TAHOMA_FFMPEG_REPO" ffmpeg
 
 cd ffmpeg
 echo "*" >| .gitignore
