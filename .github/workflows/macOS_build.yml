@@ -31,8 +31,14 @@ jobs:
     env:
       HOMEBREW_NO_AUTO_UPDATE: '1'
       HOMEBREW_NO_ANALYTICS: '1'
-      CCACHE_MAXSIZE: 5G
+      HOMEBREW_NO_INSTALL_CLEANUP: '1'
+      # Stable paths in compile commands → better ccache hit rate across CI runs
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_MAXSIZE: 8G
       CCACHE_COMPRESS: 'true'
+      CCACHE_COMPRESSLEVEL: '6'
+      # Header metadata-only changes still match (safe default sloppiness set)
+      CCACHE_SLOPPINESS: 'include_file_ctime,include_file_mtime'
       SKIP_PKG: '1'
     steps:
       - uses: actions/checkout@v4
@@ -65,20 +71,19 @@ jobs:
           key: ${{ runner.arch }}-${{ runner.os }}-brew-${{ hashFiles('ci-scripts/osx/tahoma-install.sh') }}
           restore-keys: |
             ${{ runner.arch }}-${{ runner.os }}-brew-
-      - name: Explain macOS CI hot vs cold paths
+      - name: CI cache expectations
         run: |
-          echo "Cold (deps cache miss): ffmpeg + opencv + libgphoto2 + TIFF (often ~1h+)."
-          echo "Hot (deps cache hit): skips those heavy native builds; restores thirdparty TIFF build + /usr/local tree."
-          echo "Every run still: brew installs (warm), cmake configure, full link of Ztoryc + packaging — not literally app-only;"
-          echo "with ccache + unchanged sources that phase is commonly ~minutes–low tens of minutes, not hours."
+          echo "Hot path (minutes): Homebrew deps cache + ffmpeg/opencv/gphoto/TIFF caches hit + ccache hit on Ztoryc compile."
+          echo "Cold path (~1h): rebuild native deps when dep scripts change or caches evicted."
       - name: Restore cache
         id: restore-cache
         uses: actions/cache/restore@v4
         with:
           path: |
             /Users/runner/.ccache
-          key: ${{ runner.arch }}-${{ runner.os }}-ccache-5G-${{ github.ref }}
+          key: ${{ runner.arch }}-${{ runner.os }}-ccache-8G-${{ github.ref }}
           restore-keys: |
+            ${{ runner.arch }}-${{ runner.os }}-ccache-8G-
             ${{ runner.arch }}-${{ runner.os }}-ccache-5G-
             ${{ runner.arch }}-${{ runner.os }}-
       - name: Restore ffmpeg dependency cache
@@ -136,6 +141,10 @@ jobs:
           ci-scripts/osx/tahoma-install.sh
           brew install ccache
           mkdir -p /Users/runner/.ccache
+          echo "$(brew --prefix ccache)/libexec" >> "$GITHUB_PATH"
+          ccache --set-config=max_size=8G
+          ccache --set-config=compression=true
+          ccache --show-config | head -30
       - name: Get CanonSDK
         if: ${{ (github.repository_owner == 'tahoma2d' || github.repository_owner == 'manongjohn') && github.event_name == 'push' }}
         run: |
@@ -163,14 +172,10 @@ jobs:
           ci-scripts/osx/tahoma-get3rdpartyapps.sh
       - name: Build ffmpeg (skipped when ffmpeg cache hit)
         if: ${{ steps.restore-ffmpeg-cache.outputs.cache-hit != 'true' }}
-        run: |
-          export PATH="$(brew --prefix ccache)/libexec:$PATH"
-          ci-scripts/osx/tahoma-buildffmpeg.sh
+        run: ci-scripts/osx/tahoma-buildffmpeg.sh
       - name: Build OpenCV (skipped when OpenCV cache hit)
         if: ${{ steps.restore-opencv-cache.outputs.cache-hit != 'true' }}
-        run: |
-          export PATH="$(brew --prefix ccache)/libexec:$PATH"
-          ci-scripts/osx/tahoma-buildopencv.sh
+        run: ci-scripts/osx/tahoma-buildopencv.sh
       - name: Ensure OpenCV CMake config exists
         run: |
           OPENCV_CFG="${BREW_PREFIX}/lib/cmake/opencv4/OpenCVConfig.cmake"
@@ -178,19 +183,19 @@ jobs:
             echo "OpenCV config found: $OPENCV_CFG"
           else
             echo "OpenCV config missing at $OPENCV_CFG — rebuilding OpenCV now"
-            export PATH="$(brew --prefix ccache)/libexec:$PATH"
             ci-scripts/osx/tahoma-buildopencv.sh
             test -f "$OPENCV_CFG"
           fi
       - name: Build libgphoto2 (skipped when libgphoto2 cache hit)
         if: ${{ steps.restore-gphoto-cache.outputs.cache-hit != 'true' }}
-        run: |
-          export PATH="$(brew --prefix ccache)/libexec:$PATH"
-          ci-scripts/osx/tahoma-buildlibgphoto2.sh
+        run: ci-scripts/osx/tahoma-buildlibgphoto2.sh
+      - name: ccache stats (before Ztoryc)
+        run: ccache -sv || true
       - name: Build Ztoryc
-        run: |
-          export PATH="$(brew --prefix ccache)/libexec:$PATH"
-          ci-scripts/osx/tahoma-build.sh
+        run: ci-scripts/osx/tahoma-build.sh
+      - name: ccache stats (after Ztoryc)
+        if: success() || failure()
+        run: ccache -sv || true
       - name: Verify stuff/themes present before packaging
         run: |
           test -f stuff/config/qss/Dark/Dark.qss
@@ -252,7 +257,7 @@ jobs:
           token: ${{ secrets.TAHOMA2D_TOKEN }}
       - name: Remove existing master cache
         if: ${{ steps.restore-cache.outputs.cache-hit == 'true' && github.ref == 'refs/heads/master' }}
-        run: gh cache delete "${{ runner.arch }}-${{ runner.os }}-ccache-5G-${{ github.ref }}" || true
+        run: gh cache delete "${{ runner.arch }}-${{ runner.os }}-ccache-8G-${{ github.ref }}" || true
         env:
           GH_TOKEN: ${{ github.token }}
       - name: Save cache
@@ -261,7 +266,7 @@ jobs:
         with:
           path: |
             /Users/runner/.ccache
-          key: ${{ runner.arch }}-${{ runner.os }}-ccache-5G-${{ github.ref }}
+          key: ${{ runner.arch }}-${{ runner.os }}-ccache-8G-${{ github.ref }}
       - name: Save ffmpeg dependency cache
         if: ${{ steps.restore-ffmpeg-cache.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v4
