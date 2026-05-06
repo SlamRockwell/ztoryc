@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+remote_name="${1:-}"
+remote_url="${2:-}"
+
+if [[ -z "$remote_name" ]]; then
+  exit 0
+fi
+
+if [[ "$remote_name" != "origin" ]]; then
+  if [[ "${SKIP_REMOTE_GUARD:-0}" == "1" ]]; then
+    exit 0
+  fi
+  echo "ERROR: push blocked by repository safety hook."
+  echo "Only pushes to remote 'origin' are allowed from this clone."
+  echo "Attempted remote: $remote_name ($remote_url)"
+  echo "If this is intentional, run:"
+  echo "  SKIP_REMOTE_GUARD=1 git push $remote_name <branch>"
+  exit 1
+fi
