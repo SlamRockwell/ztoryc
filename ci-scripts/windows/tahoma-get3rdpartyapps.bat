@@ -1,27 +1,35 @@
 @echo off
 setlocal EnableDelayedExpansion
-REM Versions: read from ci-scripts\thirdparty_versions.sh via read_thirdparty_version.py (single source of truth).
+REM FFmpeg: install via Chocolatey (no Tahoma release zips). Rhubarb: version from thirdparty_versions.sh.
+cd /d "%~dp0..\.."
+
 set "VER_PY=%~dp0..\read_thirdparty_version.py"
-for /f "delims=" %%a in ('python "%VER_PY%" TAHOMA_FFMPEG_STATIC_VER') do set "TAHOMA_FFMPEG_STATIC_VER=%%a"
-for /f "delims=" %%a in ('python "%VER_PY%" TAHOMA_FFMPEG_STATIC_RELEASE') do set "TAHOMA_FFMPEG_STATIC_RELEASE=%%a"
 for /f "delims=" %%a in ('python "%VER_PY%" TAHOMA_RHUBARB_RELEASE') do set "TAHOMA_RHUBARB_RELEASE=%%a"
 
-cd thirdparty
-
-IF NOT EXIST apps mkdir apps
-
-cd apps
+IF NOT EXIST thirdparty\apps mkdir thirdparty\apps
+cd thirdparty\apps
 echo * > .gitignore
 
-echo ">>> Getting FFmpeg"
+echo ">>> FFmpeg (Chocolatey — portable layout under lib\\ffmpeg)"
+IF NOT EXIST ffmpeg\bin mkdir ffmpeg\bin
+where choco >nul 2>&1
+IF ERRORLEVEL 1 (
+  echo ERROR: Chocolatey not found. Install Chocolatey or bundle ffmpeg manually into thirdparty\apps\ffmpeg\bin
+  exit /b 1
+)
+IF "%ChocolateyInstall%"=="" SET "ChocolateyInstall=C:\ProgramData\chocolatey"
+choco install ffmpeg -y --no-progress
+IF ERRORLEVEL 1 exit /b 1
 
-IF EXIST ffmpeg rmdir /S /Q ffmpeg
-curl -fsSL -o "ffmpeg-!TAHOMA_FFMPEG_STATIC_VER!-win64-static-lgpl.zip" "https://github.com/tahoma2d/FFmpeg/releases/download/!TAHOMA_FFMPEG_STATIC_RELEASE!/ffmpeg-!TAHOMA_FFMPEG_STATIC_VER!-win64-static-lgpl.zip"
-7z x "ffmpeg-!TAHOMA_FFMPEG_STATIC_VER!-win64-static-lgpl.zip"
-rename "ffmpeg-!TAHOMA_FFMPEG_STATIC_VER!-win64-static-lgpl" ffmpeg
+set "FFBIN=%ChocolateyInstall%\lib\ffmpeg\tools\ffmpeg\bin"
+IF NOT EXIST "%FFBIN%\ffmpeg.exe" set "FFBIN=%ChocolateyInstall%\lib\ffmpeg-full\tools\ffmpeg\bin"
+IF NOT EXIST "%FFBIN%\ffmpeg.exe" (
+  echo ERROR: Expected ffmpeg.exe under Chocolatey lib\ffmpeg after choco install — adjust FFBIN in ci-scripts\windows\tahoma-get3rdpartyapps.bat
+  exit /b 1
+)
+xcopy /Y /I "%FFBIN%\*.*" ffmpeg\bin\
 
-echo ">>> Getting Rhubarb Lip Sync"
-
+echo ">>> Rhubarb Lip Sync"
 IF EXIST rhubarb rmdir /S /Q rhubarb
 curl -fsSL -o rhubarb-lip-sync-tahoma2d-win.zip "https://github.com/tahoma2d/rhubarb-lip-sync/releases/download/!TAHOMA_RHUBARB_RELEASE!/rhubarb-lip-sync-tahoma2d-win.zip"
 7z x rhubarb-lip-sync-tahoma2d-win.zip

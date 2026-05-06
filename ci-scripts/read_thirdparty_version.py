@@ -34,13 +34,6 @@ def main() -> None:
         print("usage: read_thirdparty_version.py KEY", file=sys.stderr)
         sys.exit(2)
     key = sys.argv[1]
-    if key == "TAHOMA_FFMPEG_STATIC_VER":
-        rel = cfg.get("TAHOMA_FFMPEG_STATIC_RELEASE", "")
-        if rel.startswith("v"):
-            print(rel[1:])
-        else:
-            print(rel)
-        return
     if key not in cfg:
         print(f"unknown key: {key}", file=sys.stderr)
         sys.exit(1)

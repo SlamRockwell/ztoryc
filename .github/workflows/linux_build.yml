@@ -53,7 +53,7 @@ jobs:
             thirdparty/libmypaint/src
             thirdparty/libgphoto2_src
             thirdparty/tiff-4.2.0
-          key: ${{ runner.os }}-${{ matrix.compiler }}-deps-${{ hashFiles('ci-scripts/thirdparty_versions.sh', 'ci-scripts/linux/tahoma-build*.sh', 'ci-scripts/linux/tahoma-install.sh', 'toonz/cmake/FindSuperLU.cmake', 'thirdparty/tiff-4.2.0/configure') }}
+          key: ${{ runner.os }}-${{ matrix.compiler }}-deps-${{ hashFiles('ci-scripts/thirdparty_versions.sh', 'ci-scripts/linux/tahoma-bundle-apps.sh', 'ci-scripts/linux/tahoma-build*.sh', 'ci-scripts/linux/tahoma-install.sh', 'toonz/cmake/FindSuperLU.cmake', 'thirdparty/tiff-4.2.0/configure') }}
       - name: Install Dependencies
         run: |
           ci-scripts/linux/tahoma-install.sh
@@ -90,14 +90,13 @@ jobs:
           export CC="ccache ${{ matrix.cc }}"
           export CXX="ccache ${{ matrix.cxx }}"
           ci-scripts/linux/tahoma-buildlibgphoto2.sh
+      - name: Bundle third-party apps (FFmpeg from /usr/local + Rhubarb)
+        run: ci-scripts/linux/tahoma-bundle-apps.sh
       - name: Build Ztoryc
         run: |
           export CC="ccache ${{ matrix.cc }}"
           export CXX="ccache ${{ matrix.cxx }}"
           ci-scripts/linux/tahoma-build.sh
-      - name: Get 3rd Party Apps
-        run: |
-          ci-scripts/linux/tahoma-get3rdpartyapps.sh
       - name: Create Package
         run: |
           ci-scripts/linux/tahoma-buildpkg.sh
@@ -188,4 +187,4 @@ jobs:
             thirdparty/libmypaint/src
             thirdparty/libgphoto2_src
             thirdparty/tiff-4.2.0
-          key: ${{ runner.os }}-${{ matrix.compiler }}-deps-${{ hashFiles('ci-scripts/thirdparty_versions.sh', 'ci-scripts/linux/tahoma-build*.sh', 'ci-scripts/linux/tahoma-install.sh', 'toonz/cmake/FindSuperLU.cmake', 'thirdparty/tiff-4.2.0/configure') }}
+          key: ${{ runner.os }}-${{ matrix.compiler }}-deps-${{ hashFiles('ci-scripts/thirdparty_versions.sh', 'ci-scripts/linux/tahoma-bundle-apps.sh', 'ci-scripts/linux/tahoma-build*.sh', 'ci-scripts/linux/tahoma-install.sh', 'toonz/cmake/FindSuperLU.cmake', 'thirdparty/tiff-4.2.0/configure') }}

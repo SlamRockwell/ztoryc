@@ -58,6 +58,10 @@ then
    fi
    mkdir $TOONZDIR/Ztoryc.app/ffmpeg
    cp -R thirdparty/apps/ffmpeg/bin/ffmpeg thirdparty/apps/ffmpeg/bin/ffprobe $TOONZDIR/Ztoryc.app/ffmpeg
+   if [ -d thirdparty/apps/ffmpeg/lib ]
+   then
+      cp -R thirdparty/apps/ffmpeg/lib $TOONZDIR/Ztoryc.app/ffmpeg/
+   fi
    chmod -R 755 $TOONZDIR/Ztoryc.app/ffmpeg
 fi
 

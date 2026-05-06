@@ -50,6 +50,10 @@ then
    fi
    mkdir -p Ztoryc/ffmpeg
    cp -R ../../thirdparty/apps/ffmpeg/bin/ffmpeg ../../thirdparty/apps/ffmpeg/bin/ffprobe Ztoryc/ffmpeg
+   if [ -d ../../thirdparty/apps/ffmpeg/lib ]
+   then
+      cp -R ../../thirdparty/apps/ffmpeg/lib Ztoryc/ffmpeg/
+   fi
    chmod -R 755 Ztoryc/ffmpeg
 fi
 
