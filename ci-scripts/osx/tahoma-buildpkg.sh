@@ -225,34 +225,49 @@ fi
 
 cd $TOONZDIR
 
-# Ensure the final portable app has a valid signature after all bundle edits.
-# If this fails here, CI should stop instead of shipping a crashing DMG.
-echo ">>> Re-signing portable app bundle (ad-hoc)"
-codesign --force --deep --sign - --timestamp=none Ztoryc.app
-echo ">>> Verifying app signature"
-codesign --verify --deep --strict --verbose=2 Ztoryc.app
+OUTPUT_DMG="$REPO_ROOT/toonz/build/$FINAL_DMG_NAME"
+mkdir -p "$(dirname "$OUTPUT_DMG")"
 
-# Due to random ERROR: Bundle creation error: "hdiutil: create failed - Resource busy\n"
-# We'll try to create the DMG a few times
+# macdeployqt copies/fixes Qt frameworks and dylibs — that MUST happen before signing.
+# (Previously we signed here then ran macdeployqt -dmg, which invalidated signatures and
+# caused dyld Code Signature Invalid crashes at launch on Apple Silicon.)
 
 let MAXTRY=10
 
 for TRY in $(seq 1 $MAXTRY)
 do
-   if [ $TRY -gt  1 ]
-   then
-      echo ">>> DMG file creation failed.  Retrying $TRY/$MAXTRY..."
+   if [ $TRY -gt 1 ]; then
+      echo ">>> macdeployqt retry $TRY/$MAXTRY..."
+      sleep 2
    fi
-
-    $QTDIR/bin/macdeployqt Ztoryc.app -dmg -verbose=0
-    if [ -f Ztoryc.dmg ]
-    then
-       echo ">>> DMG file created successfully"
-       mv Ztoryc.dmg "../$FINAL_DMG_NAME"
-       exit 0
-    fi
+   if "$QTDIR/bin/macdeployqt" Ztoryc.app -verbose=0; then
+      break
+   fi
+   if [ "$TRY" -eq "$MAXTRY" ]; then
+      echo "ERROR: macdeployqt failed after $MAXTRY attempts"
+      exit 1
+   fi
 done
 
-echo ">>> DMG file creation failed after too many attempts. Aborting!"
+echo ">>> Re-signing portable app bundle after macdeployqt (ad-hoc)"
+codesign --force --deep --sign - --timestamp=none Ztoryc.app
+echo ">>> Verifying app signature"
+codesign --verify --deep --strict --verbose=2 Ztoryc.app
+
+# Build DMG from the signed app only — do not run macdeployqt -dmg after signing.
+for TRY in $(seq 1 $MAXTRY)
+do
+   if [ $TRY -gt 1 ]; then
+      echo ">>> hdiutil retry $TRY/$MAXTRY..."
+      sleep 2
+   fi
+   rm -f "$OUTPUT_DMG"
+   if hdiutil create -volname "Ztoryc" -srcfolder Ztoryc.app -ov -format UDZO "$OUTPUT_DMG"; then
+      echo ">>> DMG created successfully: $OUTPUT_DMG"
+      exit 0
+   fi
+done
+
+echo "ERROR: DMG creation failed after $MAXTRY attempts. Aborting!"
 exit 1
 

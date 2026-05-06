@@ -439,8 +439,8 @@ else()
     set_target_properties(Ztoryc PROPERTIES
         MACOSX_BUNDLE_BUNDLE_NAME "Ztoryc"
         MACOSX_BUNDLE_BUNDLE_IDENTIFIER "io.github.ztoryc.Ztoryc"
-        MACOSX_BUNDLE_SHORT_VERSION_STRING "1.0.0"
-        MACOSX_BUNDLE_LONG_VERSION_STRING "1.0.0"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "${VERSION}"
+        MACOSX_BUNDLE_LONG_VERSION_STRING "${VERSION}"
     )
     #add_definitions(
     #    -DTNZBASE_EXPORTS
