@@ -950,6 +950,14 @@ bool BaseViewerPanel::hasSoundtrack() {
   // playAudioFrame() is never called and TXsheet::play() is not re-entered.
   if (ZtoryAnimaticController::instance()->ownsAudioAtMainLevel())
     return false;
+  // Inside a sub-scene with main-xsheet audio, the controller streams the
+  // main soundtrack continuously from the mapped time offset.  Suppress the
+  // native per-frame playAudioFrame here, otherwise the user hears two
+  // overlapping streams: the controller's (from mainFrame*spf) plus the
+  // native one (from sample 0, because m_sound is built from the current
+  // sub-xsheet which often inherits or copies the same audio source).
+  if (ZtoryAnimaticController::instance()->ownsSubSceneAudio())
+    return false;
 
   TXsheetHandle *xsheetHandle    = TApp::instance()->getCurrentXsheet();
   TXsheet *xsh                   = xsheetHandle->getXsheet();

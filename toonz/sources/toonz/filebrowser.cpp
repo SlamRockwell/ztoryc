@@ -239,10 +239,6 @@ FileBrowser::FileBrowser(QWidget *parent, Qt::WindowFlags flags,
   ret = ret && connect(&m_frameCountReader, SIGNAL(calculatedFrameCount()),
                        m_itemViewer->getPanel(), SLOT(update()));
 
-  QAction *refresh = CommandManager::instance()->getAction(MI_RefreshTree);
-  ret = ret && connect(refresh, SIGNAL(triggered()), this, SLOT(refresh()));
-  addAction(refresh);
-
   // Version Control instance connection
   if (Preferences::instance()->isSVNEnabled())
     ret =
@@ -518,6 +514,23 @@ void FileBrowser::removeFilterType(const QString &type) {
 void FileBrowser::refreshCurrentFolderItems() {
   m_items.clear();
 
+  // If the current folder is a symlink (e.g. a Favorites entry), resolve it
+  // to the real target BEFORE any model/filesystem queries.  We update
+  // m_folder and the name label directly instead of calling setFolder() so
+  // that the tree cursor stays on the symlink node and does not jump to the
+  // target's location inside the tree.
+  if (m_folder != TFilePath()) {
+    TFileStatus fpStatus(m_folder);
+    while (fpStatus.isLink()) {
+      QFileInfo info(toQString(m_folder));
+      TFilePath target = TFilePath(info.symLinkTarget().toStdWString());
+      if (target.isEmpty() || target == m_folder) break;  // broken / circular
+      m_folder = target;
+      m_folderName->setText(toQString(m_folder));
+      fpStatus = TFileStatus(m_folder);
+    }
+  }
+
   // put the parent directory item
   TFilePath parentFp = m_folder.getParentDir();
   if (parentFp != TFilePath("") && parentFp != m_folder)
@@ -552,12 +565,6 @@ void FileBrowser::refreshCurrentFolderItems() {
     TFilePathSet all_files;  // for updating m_multiFileItemMap
 
     TFileStatus fpStatus(m_folder);
-    // if the item is link, then set the link target of it
-    if (fpStatus.isLink()) {
-      QFileInfo info(toQString(m_folder));
-      setFolder(TFilePath(info.symLinkTarget().toStdWString()));
-      return;
-    }
     if (fpStatus.doesExist() && fpStatus.isDirectory() &&
         fpStatus.isReadable()) {
       try {
@@ -1122,29 +1129,43 @@ QMenu *FileBrowser::getContextMenu(QWidget *parent, int index) {
   if (files.empty()) {
     menu->addAction(cm->getAction(MI_ShowFolderContents));
     menu->addAction(cm->getAction(MI_SelectAll));
-    if (!Preferences::instance()->isWatchFileSystemEnabled()) {
-      menu->addAction(cm->getAction(MI_RefreshTree));
-    }
     // Add / Remove current folder as Favorite
     TFilePath favFolder = ToonzFolder::getMyFavoritesFolder();
     TFilePath curFolder = getFolder();
     if (!curFolder.isEmpty() && curFolder != favFolder) {
       menu->addSeparator();
-      if (!favFolder.isAncestorOf(curFolder)) {
-        QAction *a = menu->addAction(tr("Add to Favorites"));
-        connect(a, &QAction::triggered, this, [curFolder, favFolder]() {
-          if (!TFileStatus(favFolder).doesExist()) TSystem::mkDir(favFolder);
-          TFilePath dst = favFolder + curFolder.withoutParentDir();
-          if (!QFile::exists(dst.getQString()))
-            QFile::link(curFolder.getQString(), dst.getQString());
-          DvDirModel::instance()->refreshFolder(favFolder);
-        });
-      } else {
+      if (favFolder.isAncestorOf(curFolder)) {
+        // curFolder is directly inside the Favorites folder (symlink path)
         QAction *a = menu->addAction(tr("Remove from Favorites"));
         connect(a, &QAction::triggered, this, [curFolder, favFolder]() {
           QFile::remove(curFolder.getQString());
           DvDirModel::instance()->refreshFolder(favFolder);
         });
+      } else {
+        // When navigating via a Favorites symlink the browser resolves the
+        // symlink and curFolder becomes the target. Check if a symlink with
+        // the same directory name exists inside Favorites pointing here.
+        TFilePath symlinkPath = favFolder + curFolder.withoutParentDir();
+        bool alreadyFavorited =
+            QFileInfo(symlinkPath.getQString()).isSymLink() &&
+            TFilePath(QFile::symLinkTarget(symlinkPath.getQString())
+                          .toStdWString()) == curFolder;
+        if (alreadyFavorited) {
+          QAction *a = menu->addAction(tr("Remove from Favorites"));
+          connect(a, &QAction::triggered, this, [symlinkPath, favFolder]() {
+            QFile::remove(symlinkPath.getQString());
+            DvDirModel::instance()->refreshFolder(favFolder);
+          });
+        } else {
+          QAction *a = menu->addAction(tr("Add to Favorites"));
+          connect(a, &QAction::triggered, this, [curFolder, favFolder]() {
+            if (!TFileStatus(favFolder).doesExist()) TSystem::mkDir(favFolder);
+            TFilePath dst = favFolder + curFolder.withoutParentDir();
+            if (!QFile::exists(dst.getQString()))
+              QFile::link(curFolder.getQString(), dst.getQString());
+            DvDirModel::instance()->refreshFolder(favFolder);
+          });
+        }
       }
     }
     return menu;
@@ -1433,11 +1454,6 @@ QMenu *FileBrowser::getContextMenu(QWidget *parent, int index) {
       menu->addSeparator();
       menu->addMenu(vcMenu);
     }
-  }
-
-  if (!Preferences::instance()->isWatchFileSystemEnabled()) {
-    menu->addSeparator();
-    menu->addAction(cm->getAction(MI_RefreshTree));
   }
 
   // Add to Favorites if the clicked item is a directory.
@@ -2158,34 +2174,38 @@ void FileBrowser::getExpandedFolders(DvDirModelNode *node,
 //-----------------------------------------------------------------------------
 
 void FileBrowser::refresh() {
-  TFilePath originalFolder(
-      m_folder);  // setFolder is invoked by Qt throughout the following...
+  TFilePath originalFolder(m_folder);
 
   int dx                   = m_folderTreeView->verticalScrollBar()->value();
   DvDirModelNode *rootNode = DvDirModel::instance()->getNode(QModelIndex());
+  QModelIndex index        = DvDirModel::instance()->getIndexByNode(rootNode);
 
-  QModelIndex index = DvDirModel::instance()->getIndexByNode(rootNode);
+  // Collect expanded folder paths BEFORE the model refresh.  Node pointers
+  // may become dangling after refresh (nodes recreated), but TFilePaths are
+  // stable and can be used to find fresh nodes after the refresh is done.
+  QList<TFilePath> expandedPaths;
+  {
+    QList<DvDirModelNode *> expandedNodes;
+    for (int i = 0; i < rootNode->getChildCount(); i++)
+      getExpandedFolders(rootNode->getChild(i), expandedNodes);
+    for (DvDirModelNode *n : expandedNodes) {
+      auto *fn = dynamic_cast<DvDirModelFileFolderNode *>(n);
+      if (fn && !fn->getPath().isEmpty()) expandedPaths.append(fn->getPath());
+    }
+  }
 
   bool vcEnabled = m_folderTreeView->refreshVersionControlEnabled();
-
   m_folderTreeView->setRefreshVersionControlEnabled(false);
-  DvDirModel::instance()->refreshFolderChild(index);
+  DvDirModel::instance()->fullRefresh();
   m_folderTreeView->setRefreshVersionControlEnabled(vcEnabled);
 
-  QList<DvDirModelNode *> expandedNodes;
-  int i;
-  for (i = 0; i < rootNode->getChildCount(); i++)
-    getExpandedFolders(rootNode->getChild(i), expandedNodes);
-
-  for (i = 0; i < expandedNodes.size(); i++) {
-    DvDirModelNode *node = expandedNodes[i];
-    if (!node || !node->hasChildren()) continue;
-    QModelIndex ind = DvDirModel::instance()->getIndexByNode(node);
-    if (!ind.isValid()) continue;
-    m_folderTreeView->expand(ind);
+  // Re-expand by path — getIndexByPath finds fresh post-refresh node objects.
+  for (const TFilePath &fp : expandedPaths) {
+    QModelIndex ind = DvDirModel::instance()->getIndexByPath(fp);
+    if (ind.isValid()) m_folderTreeView->expand(ind);
   }
-  m_folderTreeView->verticalScrollBar()->setValue(dx);
 
+  m_folderTreeView->verticalScrollBar()->setValue(dx);
   setFolder(originalFolder, false, true);
 }
 

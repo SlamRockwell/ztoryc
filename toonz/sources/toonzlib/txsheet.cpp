@@ -1853,14 +1853,15 @@ qint64 TXsheet::getAudioPlayedUSecs() const {
 
 //-----------------------------------------------------------------------------
 
-void TXsheet::play(TSoundTrackP soundtrack, int s0, int s1, bool loop) {
+void TXsheet::play(TSoundTrackP soundtrack, int s0, int s1, bool loop,
+                   bool scrubbing) {
   if (!TSoundOutputDevice::installed()) return;
 
   if (!m_player) m_player = new TSoundOutputDevice();
 
   if (m_player) {
     try {
-      m_player->play(soundtrack, s0, s1, loop);
+      m_player->play(soundtrack, s0, s1, loop, scrubbing);
     } catch (TSoundDeviceException &) {
     } catch (...) {
     }

@@ -6,7 +6,6 @@
 #include "tapp.h"
 #include "pane.h"
 #include "ztorymodel.h"
-#include "toonz/onionskinmask.h"
 #include <QWidget>
 #include <QScrollArea>
 #include <QSplitter>
@@ -51,6 +50,13 @@ public:
   // meaning it owns audio and the native ComboViewer must not compete.
   bool ownsAudioAtMainLevel() const;
 
+  // Returns true when we are inside a sub-scene AND the main xsheet has
+  // audio. In that case the controller streams main-xsheet audio at the
+  // mapped time offset (onNativePlayingStatusChanged), and the native
+  // ComboViewer's per-frame playAudioFrame must yield to avoid a double
+  // playback (one from sample 0, one from mainFrame*spf).
+  bool ownsSubSceneAudio() const;
+
   // Build (or return cached) merged track from the main xsheet.
   // Safe to call from any scrub handler — returns null if no audio.
   TSoundTrackP requireSoundTrack();
@@ -66,7 +72,14 @@ public:
     TXsheet *xsh = mainXsheet();
     if (xsh) xsh->stopScrub();
     m_nativeAudioPlaying = false;
+    if (m_scrubDevice) m_scrubDevice->stop();
   }
+
+  // Dedicated audio device used ONLY for per-frame scrub audio.
+  // Kept separate from mainXsh->m_player so that reset() on scrub
+  // does not disrupt continuous playback.
+  TSoundOutputDevice *scrubDevice();
+  void stopScrubDevice() { if (m_scrubDevice) m_scrubDevice->stop(); }
 
   // Re-triggers native sub-scene audio if play is active and audio is enabled.
   // Call this when un-muting (MI_ToggleMainAudio re-enabled) during playback.
@@ -102,6 +115,7 @@ signals:
 
 private:
   ZtoryAnimaticController();
+  ~ZtoryAnimaticController();
   TFrameHandle         *m_frameHandle;
   TSoundTrackP          m_soundTrack;
   int m_animaticR0 = 0;
@@ -109,8 +123,15 @@ private:
   ZtoryAnimaticViewer  *m_viewer = nullptr;
   // True while we are streaming main-xsheet audio on behalf of the native viewer.
   bool m_nativeAudioPlaying  = false;
+  // Last frame seen by onNativeFrameSwitched during native play — used to
+  // detect FlipConsole loop-back (frame jumps backward) so we can restart
+  // audio after the playhead returns to the start of the play range.
+  int m_lastNativePlayFrame  = -1;
   // Guards against launching a second async build while one is already running.
   bool m_soundBuildPending   = false;
+  // Dedicated device for per-frame scrub audio — separate from mainXsh->m_player
+  // so that reset() for precision scrub never disrupts continuous playback.
+  TSoundOutputDevice   *m_scrubDevice = nullptr;
 };
 
 class ZtoryAnimaticRuler : public QWidget {
@@ -124,11 +145,6 @@ public:
   void initPlayRangeIfNeeded();
   void resetPlayRangeToFull();
 
-  // Local (independent) onion skin — does NOT share state with native timeline
-  void setOnionEnabled(bool on);
-  bool onionEnabled() const { return m_onionEnabled; }
-  void syncOnionToGlobal() const; // push local mask to global handle
-
 protected:
   void paintEvent(QPaintEvent *) override;
   void wheelEvent(QWheelEvent *e) override;
@@ -140,7 +156,6 @@ protected:
 signals:
   void frameChanged(int frame);
   void zoomChanged(double ppf);
-  void onionEnabledChanged(bool on);
 private:
   double m_fps = 24.0;
   double m_ppf = 8.0;
@@ -148,19 +163,12 @@ private:
   // In/Out marker drag state (13b)
   enum DragMode { None, DragIn, DragOut };
   DragMode m_dragMode = None;
-  // Onion skin — local state, independent from native timeline
-  OnionSkinMask m_localMask;  // relative frame mode; FOS=fixed, MOS=relative
-  bool m_onionEnabled = false;
-  // Hover feedback
-  int m_hoverFrame = -1;
-  enum HoverZone { HoverNone, HoverFOS, HoverMOS };
-  HoverZone m_hoverZone = HoverNone;
 };
 
 class ZtoryAnimaticTrack : public QWidget {
   Q_OBJECT
 public:
-  enum Tool { SelectTool, TrimTool, SlipTool, RazorTool };
+  enum Tool { SelectTool, TrimTool, RazorTool };
 
   struct ShotBlock {
     int col;
@@ -212,8 +220,6 @@ signals:
   void lockedChanged(bool on);
   // Roll: colA new duration, colB new duration (colB repositioned by resequenceXsheet)
   void rollEdit(int colA, int newDurA, int colB, int newDurB);
-  // Slip: shift sub-scene content by |slipDelta| frames (positive = later content)
-  void slipEdit(int col, int slipDelta);
 
 private:
   double m_ppf = 8.0;
@@ -221,15 +227,14 @@ private:
   std::vector<ShotBlock> m_blocks;
 
   // ── Drag state ────────────────────────────────────────────────────────────
-  enum DragMode { NoDrag, RippleTrim, Roll, Slip };
+  enum DragMode { NoDrag, RippleTrim, Roll };
   DragMode m_dragMode     = NoDrag;
   int m_dragStartX        = 0;   // pixel X at drag start
-  int m_dragColA          = -1;  // RippleTrim/Roll/Slip: primary col (left for Roll)
+  int m_dragColA          = -1;  // RippleTrim/Roll: primary col (left for Roll)
   int m_dragColB          = -1;  // Roll: right col
   int m_dragOrigDurA      = 0;   // original duration of colA at drag start
   int m_dragOrigDurB      = 0;   // original duration of colB at drag start
   int m_dragOrigStartB    = 0;   // original startFrameInMain of colB (Roll)
-  int m_dragOrigSlipF0    = 0;   // original f0 (slip offset) at drag start
   // For RippleTrim: saved positions/durations of all blocks
   QMap<int, int> m_origStarts;
   QMap<int, int> m_origDurations;
@@ -420,6 +425,10 @@ public:
   // between CoreAudio XPC callbacks.
   void requestAudioRestart() { m_pendingAudioRestart = true; }
 
+  // True when the animatic is actively streaming audio (full-track continuous
+  // play). Used by the controller to decide whether to suppress scrub audio.
+  bool isContinuousPlaying() const { return m_continuousPlay; }
+
   // Override: write frame to controller's handle, NOT TApp::getCurrentFrame().
   // Base implementation always uses the global handle → during play it would
   // advance the sub-scene's frame instead of the animatic frame.
@@ -593,7 +602,6 @@ private slots:
   void onReturnToMain();
   void onShotDurationChanged(int col, int newF1);
   void onRollEdit(int colA, int newDurA, int colB, int newDurB);
-  void onSlipEdit(int col, int slipDelta);
   void onRazorRequested(int col, int splitFrame);
   void onShotMoved(int col, int newStartFrame);
   void onMergeShots();

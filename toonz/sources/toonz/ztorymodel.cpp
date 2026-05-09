@@ -636,8 +636,6 @@ void ZtoryModel::save() {
     xml.writeAttribute("order",  QString::number(s.orderIndex)); // v4
     xml.writeAttribute("seqId",  s.sequenceId);       // v4
     xml.writeAttribute("column", QString::number(s.xsheetColumn));
-    if (s.slipOffset != 0)
-      xml.writeAttribute("slipOffset", QString::number(s.slipOffset));
     for (int pi = 0; pi < (int)s.panels.size(); pi++) {
       const PanelData &pd = s.panels[pi];
       xml.writeStartElement("panel");
@@ -707,7 +705,6 @@ void ZtoryModel::load() {
       m_shots[si].orderIndex   = xml.attributes().value("order").toInt();
       m_shots[si].sequenceId   = xml.attributes().value("seqId").toString();
       m_shots[si].xsheetColumn = xml.attributes().value("column").toInt();
-      m_shots[si].slipOffset    = xml.attributes().value("slipOffset").toInt(); // 0 if absent
       // Backward compat (v1–v3): if shotLabel absent, copy from shotNumber
       if (m_shots[si].shotLabel.isEmpty())
         m_shots[si].shotLabel = m_shots[si].shotNumber;
@@ -734,23 +731,10 @@ void ZtoryModel::load() {
   emit modelReset();
 }
 
-// ── Slip offset helpers ───────────────────────────────────────────────────
-
 int ZtoryModel::shotIndexForCol(int col) const {
   for (int i = 0; i < (int)m_shots.size(); i++)
     if (m_shots[i].xsheetColumn == col) return i;
   return -1;
-}
-
-int ZtoryModel::getSlipOffset(int col) const {
-  int i = shotIndexForCol(col);
-  return (i >= 0) ? m_shots[i].slipOffset : 0;
-}
-
-void ZtoryModel::adjustSlipOffset(int col, int delta) {
-  int i = shotIndexForCol(col);
-  if (i < 0) return;
-  m_shots[i].slipOffset = qMax(0, m_shots[i].slipOffset + delta);
 }
 
 void ZtoryModel::resequenceXsheet() {
@@ -778,9 +762,8 @@ void ZtoryModel::resequenceXsheet() {
     }
     if (!cl) { startFrame += duration; continue; }
     for (int r = 0; r <= maxFrames; r++) xsh->clearCells(r, col);
-    int slipOff = getSlipOffset(col);
     for (int r = 0; r < duration; r++)
-      xsh->setCell(startFrame + r, col, TXshCell(cl, TFrameId(slipOff + r + 1)));
+      xsh->setCell(startFrame + r, col, TXshCell(cl, TFrameId(r + 1)));
     startFrame += duration;
   }
   xsh->updateFrameCount();

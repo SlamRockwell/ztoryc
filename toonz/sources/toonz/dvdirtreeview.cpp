@@ -413,7 +413,7 @@ void DvDirTreeView::dragMoveEvent(QDragMoveEvent *e) {
       dynamic_cast<DvDirModelFileFolderNode *>(
           DvDirModel::instance()->getNode(index));
   DvDirModelNode *node = DvDirModel::instance()->getNode(index);
-  if (!node->isFolder()) return;
+  if (!node || !node->isFolder()) return;
   m_currentDropItem = folderNode;
   update();
   e->accept();
@@ -486,11 +486,6 @@ void DvDirTreeView::contextMenuEvent(QContextMenuEvent *e) {
   if (!node) return;
 
   QMenu menu(this);
-
-  if (!Preferences::instance()->isWatchFileSystemEnabled()) {
-    QAction *refresh = CommandManager::instance()->getAction("MI_RefreshTree");
-    menu.addAction(refresh);
-  }
 
   DvDirVersionControlNode *vcNode =
       dynamic_cast<DvDirVersionControlNode *>(node);
@@ -574,15 +569,19 @@ void DvDirTreeView::contextMenuEvent(QContextMenuEvent *e) {
       dynamic_cast<DvDirModelFileFolderNode *>(node);
   TFilePath nodePath  = folderNode ? folderNode->getPath() : TFilePath();
   TFilePath favFolder = ToonzFolder::getMyFavoritesFolder();
-  if (!nodePath.isEmpty() && QFileInfo(nodePath.getQString()).isDir()) {
-    if (favFolder.isAncestorOf(nodePath) && nodePath != favFolder) {
+  if (!nodePath.isEmpty()) {
+    bool isFavChild = favFolder.isAncestorOf(nodePath) && nodePath != favFolder;
+    bool isDir      = QFileInfo(nodePath.getQString()).isDir();
+    if (isFavChild) {
+      // Remove from Favorites — always available for children of the Favorites
+      // folder, including broken symlinks whose target no longer exists.
       if (!menu.isEmpty()) menu.addSeparator();
       QAction *removeAct = menu.addAction(tr("Remove from Favorites"));
       connect(removeAct, &QAction::triggered, this, [nodePath, favFolder, this]() {
         QFile::remove(nodePath.getQString());
         DvDirModel::instance()->refreshFolder(favFolder);
       });
-    } else if (nodePath != favFolder && !favFolder.isAncestorOf(nodePath)) {
+    } else if (isDir && nodePath != favFolder) {
       if (!menu.isEmpty()) menu.addSeparator();
       QAction *addAct = menu.addAction(tr("Add to Favorites"));
       connect(addAct, &QAction::triggered, this, [nodePath, favFolder, this]() {

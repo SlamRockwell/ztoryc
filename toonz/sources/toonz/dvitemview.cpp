@@ -1895,11 +1895,6 @@ DvItemViewerButtonBar::DvItemViewerButtonBar(DvItemViewer *itemViewer,
   exportFileListAction->setIcon(createQIcon("export"));
   addAction(exportFileListAction);
 
-  if (itemViewer->m_windowType == DvItemViewer::Browser &&
-      !Preferences::instance()->isWatchFileSystemEnabled()) {
-    addAction(CommandManager::instance()->getAction("MI_RefreshTree"));
-    addSeparator();
-  }
 
   connect(exportFileListAction, SIGNAL(triggered()), itemViewer->getPanel(),
           SLOT(exportFileList()));
@@ -1945,12 +1940,4 @@ void DvItemViewerButtonBar::onPreferenceChanged(const QString &prefName) {
   // react only when the related preference is changed
   if (prefName != "WatchFileSystem") return;
 
-  QAction *refreshAct = CommandManager::instance()->getAction("MI_RefreshTree");
-  if (Preferences::instance()->isWatchFileSystemEnabled()) {
-    removeAction(refreshAct);
-    removeAction(actions().last());  // remove separator
-  } else {
-    addAction(refreshAct);
-    addSeparator();
-  }
 }

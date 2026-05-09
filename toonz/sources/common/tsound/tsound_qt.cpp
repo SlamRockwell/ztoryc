@@ -201,17 +201,7 @@ public:
       QObject::connect(m_audioOutput.data(), &QAudioOutput::notify, [=](){ sendBuffer(); });
 
       reset();
-    }/* audio buffer too small, so optimization not uses
-    else {
-      // if less than 0.1 sec of data in audio buffer,
-      // then just sent next portion of data
-      // else reset audio buffer before
-      qint64 sentUSecs = format.durationForBytes(m_bytesSent);
-      qint64 processedUSecs = m_audioOutput->processedUSecs();
-      if (sentUSecs - processedUSecs > 100000ll)
-        reset();
     }
-    */
 
     // Snapshot the hardware clock immediately before streaming starts.
     // processedUsecs() returns (device_clock - m_playStartUsecs), giving

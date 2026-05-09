@@ -144,28 +144,11 @@ bool readRoomList(std::vector<TFilePath> &roomPaths,
     t[0] = '\0';
     if (s[0] == '\0') continue;
     TFilePath roomPath = fp.getParentDir() + s;
-    roomPaths.push_back(roomPath);
-  }
-
-  // Storyboard: private layouts/Storyboard/layouts.txt overrides the template.
-  // Older installs often listed only browser.ini — prepend bundled ztoryc.ini
-  // so the ZTORYC room (Board + Animatic + viewer) always appears like a fresh
-  // install / coworker setup.
-  if (argumentLayoutFileName.isEmpty() &&
-      Preferences::instance()->getCurrentRoomChoice() ==
-          QLatin1String("Storyboard")) {
-    const TFilePath templateZtoryc =
-        ToonzFolder::getRoomsDir() + TFilePath("Storyboard/ztoryc.ini");
-    if (TFileStatus(templateZtoryc).doesExist()) {
-      bool haveZtoryc = false;
-      for (const TFilePath &p : roomPaths) {
-        if (p.getWideName() == L"ztoryc.ini") {
-          haveZtoryc = true;
-          break;
-        }
-      }
-      if (!haveZtoryc) roomPaths.insert(roomPaths.begin(), templateZtoryc);
-    }
+    // Skip duplicate entries — same path already queued.
+    bool dup = false;
+    for (const TFilePath &p : roomPaths)
+      if (p == roomPath) { dup = true; break; }
+    if (!dup) roomPaths.push_back(roomPath);
   }
 
   return argumentLayoutFileLoaded;
@@ -262,10 +245,17 @@ void makePrivate(Room *room) {
   TFilePath layoutDir = ToonzFolder::getMyRoomsDir();
   TFilePath roomPath  = room->getPath();
   if (roomPath == TFilePath() || roomPath.getParentDir() != layoutDir) {
-    int count = 1;
-    for (;;) {
-      roomPath = layoutDir + ("room" + std::to_string(count++) + ".ini");
-      if (!TFileStatus(roomPath).doesExist()) break;
+    // Preserve the original filename (e.g. ztoryc.ini, browser.ini) so that
+    // subsequent loads can identify the room by filename without opening it.
+    TFilePath named = layoutDir + roomPath.withoutParentDir();
+    if (roomPath != TFilePath() && !TFileStatus(named).doesExist()) {
+      roomPath = named;
+    } else {
+      int count = 1;
+      for (;;) {
+        roomPath = layoutDir + ("room" + std::to_string(count++) + ".ini");
+        if (!TFileStatus(roomPath).doesExist()) break;
+      }
     }
     room->setPath(roomPath);
     TSystem::touchParentDir(roomPath);
@@ -1428,58 +1418,59 @@ static bool switchToFirstRoom(MainWindow *mw, const QStringList &names) {
 
 void MainWindow::onWorkflowStoryboard() {
   if (m_isHandlingWorkflow) return;
+  // Hold the guard for the entire duration of the switch so that any
+  // MI_Workflow* action queued inside room->load() → processEvents() is
+  // blocked until the switch is fully done.
   m_isHandlingWorkflow = true;
-  // Defer reset to next event loop pass so any MI_Workflow* QAction posted
-  // during room loading (sendPostedEvents) is blocked after we return.
-  QTimer::singleShot(0, this, [this]() { m_isHandlingWorkflow = false; });
-  // User selected Storyboard workflow from menu / startup
   ZtoryModel::instance()->setWorkflow(ZtoryWorkflow::Storyboard);
   StopMotion *sm = StopMotion::instance();
   if (sm && sm->m_liveViewStatus > StopMotion::LiveViewClosed)
     sm->stopLiveView();
   switchRoomChoice("Storyboard");
-  if (switchToFirstRoom(this, {"ZTORYC", "BOARD", "Storyboard", "ANIMATIC", "SHOTEDITOR", "Browser"}))
-    return;
-
-  // If rooms are still missing, reset storyboard layouts to template once.
-  if (ensureStoryboardRoomsTemplate("Storyboard")) {
-    switchRoomChoice("Storyboard");
-    if (switchToFirstRoom(this, {"ZTORYC", "BOARD", "Storyboard", "ANIMATIC", "SHOTEDITOR", "Browser"}))
-      return;
+  if (!switchToFirstRoom(this, {"ZTORYC", "BOARD", "Storyboard", "ANIMATIC", "SHOTEDITOR", "Browser"})) {
+    // If rooms are still missing, reset storyboard layouts to template once.
+    if (ensureStoryboardRoomsTemplate("Storyboard")) {
+      switchRoomChoice("Storyboard");
+      switchToFirstRoom(this, {"ZTORYC", "BOARD", "Storyboard", "ANIMATIC", "SHOTEDITOR", "Browser"});
+    } else {
+      DVGui::warning(tr("Storyboard rooms not found.\nPlease create a ZTORYC or BOARD/ANIMATIC room first."));
+    }
   }
-  DVGui::warning(tr("Storyboard rooms not found.\nPlease create a ZTORYC or BOARD/ANIMATIC room first."));
+  updateWorkflowMenuChecks();
+  m_isHandlingWorkflow = false;
 }
 
 void MainWindow::onWorkflow2D() {
   if (m_isHandlingWorkflow) return;
   m_isHandlingWorkflow = true;
-  QTimer::singleShot(0, this, [this]() { m_isHandlingWorkflow = false; });
-  // User selected 2D Tradigital workflow from menu / startup
   ZtoryModel::instance()->setWorkflow(ZtoryWorkflow::Tradigital);
   StopMotion *sm = StopMotion::instance();
   if (sm && sm->m_liveViewStatus > StopMotion::LiveViewClosed)
     sm->stopLiveView();
   switchRoomChoice("Tradigital");
-  if (switchToFirstRoom(this, {"2D", "Animation", "Drawing"})) return;
-  DVGui::warning(tr("2D room not found."));
+  // Fall back to first available room if no room matches the expected names.
+  if (!switchToFirstRoom(this, {"2D", "Animation", "Drawing"}) &&
+      getRoomCount() > 0)
+    switchToRoom(getRoom(0)->getName());
+  updateWorkflowMenuChecks();
+  m_isHandlingWorkflow = false;
 }
 
 void MainWindow::onWorkflowCutout() {
   if (m_isHandlingWorkflow) return;
   m_isHandlingWorkflow = true;
-  QTimer::singleShot(0, this, [this]() { m_isHandlingWorkflow = false; });
-  // User selected Cutout Digital workflow from menu / startup
   ZtoryModel::instance()->setWorkflow(ZtoryWorkflow::CutoutDigital);
   switchRoomChoice("Cutout");
-  if (switchToFirstRoom(this, {"Cutout", "CUTOUT", "2D"})) return;
-  DVGui::warning(tr("Cutout room not found."));
+  if (!switchToFirstRoom(this, {"Cutout", "CUTOUT", "2D"}) &&
+      getRoomCount() > 0)
+    switchToRoom(getRoom(0)->getName());
+  updateWorkflowMenuChecks();
+  m_isHandlingWorkflow = false;
 }
 
 void MainWindow::onWorkflowStopMotion() {
   if (m_isHandlingWorkflow) return;
   m_isHandlingWorkflow = true;
-  QTimer::singleShot(0, this, [this]() { m_isHandlingWorkflow = false; });
-  // User selected Stop-Motion workflow from menu / startup
   ZtoryModel::instance()->setWorkflow(ZtoryWorkflow::StopMotion);
   StopMotion *sm = StopMotion::instance();
   if (sm && sm->m_liveViewStatus > StopMotion::LiveViewClosed)
@@ -1487,11 +1478,11 @@ void MainWindow::onWorkflowStopMotion() {
   switchRoomChoice("StopMotion");
   // Room names are case-sensitive: the StopMotion layout has "Capture" (not
   // "CAPTURE" or "StopMotion").
-  if (switchToFirstRoom(this, {"Capture", "Camera", "StopMotion", "Stop Motion"}))
-    return;
-  DVGui::warning(
-      tr("Stop Motion room not found.\n"
-         "Please create a room named 'Capture' or 'StopMotion'."));
+  if (!switchToFirstRoom(this, {"Capture", "Camera", "StopMotion", "Stop Motion"}) &&
+      getRoomCount() > 0)
+    switchToRoom(getRoom(0)->getName());
+  updateWorkflowMenuChecks();
+  m_isHandlingWorkflow = false;
 }
 
 void MainWindow::maximizePanel() {

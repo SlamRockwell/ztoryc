@@ -385,6 +385,7 @@ public:
   void refreshFolder(const TFilePath &folderPath,
                      const QModelIndex &i = QModelIndex());
   void refreshFolderChild(const QModelIndex &i = QModelIndex());
+  void fullRefresh();
   // Only used when first launching the program to update recent projects
   void forceRefresh();
   bool removeRows(int row, int count,
@@ -414,6 +415,9 @@ protected slots:
   // when the scene switched, update the path of the scene location node
   void onSceneSwitched();
   void onPreferenceChanged(const QString &);
+
+private:
+  void refreshAllExpanded(DvDirModelNode *node);
 };
 
 #endif

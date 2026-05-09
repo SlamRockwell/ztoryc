@@ -6,6 +6,26 @@
 > Voci più vecchie di ~2 settimane → spostarle in `CHANGELOG_ARCHIVE.md`.
 
 ---
+## [2026-05-05] — Trim/Roll + Slip + fix workflow Load Scene
+
+### Added
+- **TrimTool (T)** nella toolbar animatic: drag sul seam tra due shot → Roll edit (A±Δ, B∓Δ, durata totale invariata); drag sul bordo destro dell'ultimo shot → Ripple Trim classico. Cursore `SplitHCursor` sul seam, `SizeHorCursor` sul bordo isolato
+- **SlipTool (Y)** nella toolbar animatic: drag dentro un blocco → sposta la finestra sub-scena senza cambiare durata o posizione nel timeline. Indicatore visivo: striscia arancione bordo sinistro + testo `+N` in basso a destra
+- **`ShotData.slipOffset`** (int, 0-based): campo persistente in ZtoryModel, salvato/caricato nel `.ztoryc` (`slipOffset` attribute)
+- **`ZtoryModel::resequenceXsheet()`** aggiornato: scrive `TFrameId(slipOff + r + 1)` per ogni colonna, preservando lo slip offset ad ogni resequence
+- **`ZtoryModel::shotIndexForCol / getSlipOffset / adjustSlipOffset`**: metodi helper per gestione slip
+- **Marker dentro lo shot con Slip**: `onShotDoubleClicked` ora imposta play range `[slipOff, slipOff+duration-1]` nella sub-scena; `onSlipEdit` aggiorna `ztorySetShotRange` con il range slippato
+- **Icone SVG**: `ztoryc_trim.svg`, `ztoryc_slip.svg` + registrazione in `toonz.qrc`
+- **`onRollEdit` / `onSlipEdit`** slot in `ZtoryAnimaticPanel`: implementazione completa con undo snapshot
+
+### Fixed
+- **Workflow non applicato su scene recenti** nel popup Load Scene: `onRecentSceneClicked` ora esegue il comando MI_Workflow* selezionato in `m_loadWorkflowCB` (condizione `m_mode != LoadSubSceneMode`)
+
+### Notes
+- Slide (spostamento shot con compensazione vicini) rimandato — complessità alta
+- Slip funziona tecnicamente (frameIds cambiano, viewer mostra frame diversi) ma feedback visivo durante il drag è limitato: il blocco non cambia apparenza a schermo; il contenuto cambia solo alla riproduzione successiva. Miglioramento previsto
+
+---
 ## [2026-05-05] — Fix crash + Add to Favorites funzionante
 
 ### Fixed

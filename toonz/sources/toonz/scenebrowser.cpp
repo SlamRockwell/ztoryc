@@ -222,10 +222,6 @@ SceneBrowser::SceneBrowser(QWidget *parent, Qt::WindowFlags flags,
   ret = ret && connect(&m_frameCountReader, SIGNAL(calculatedFrameCount()),
                        m_itemViewer->getPanel(), SLOT(update()));
 
-  QAction *refresh = CommandManager::instance()->getAction(MI_RefreshTree);
-  ret = ret && connect(refresh, SIGNAL(triggered()), this, SLOT(refresh()));
-  addAction(refresh);
-
   // Version Control instance connection
   if (Preferences::instance()->isSVNEnabled())
     ret =
@@ -1048,9 +1044,6 @@ QMenu *SceneBrowser::getContextMenu(QWidget *parent, int index) {
   if (files.empty()) {
     menu->addAction(cm->getAction(MI_ShowFolderContents));
     menu->addAction(cm->getAction(MI_SelectAll));
-    if (!Preferences::instance()->isWatchFileSystemEnabled()) {
-      menu->addAction(cm->getAction(MI_RefreshTree));
-    }
     return menu;
   }
 
@@ -1334,11 +1327,6 @@ QMenu *SceneBrowser::getContextMenu(QWidget *parent, int index) {
       menu->addSeparator();
       menu->addMenu(vcMenu);
     }
-  }
-
-  if (!Preferences::instance()->isWatchFileSystemEnabled()) {
-    menu->addSeparator();
-    menu->addAction(cm->getAction(MI_RefreshTree));
   }
 
   assert(ret);

@@ -20,8 +20,6 @@
 #include "toonz/tframehandle.h"
 #include "toonz/txsheethandle.h"
 #include "toonz/tscenehandle.h"
-#include "toonz/onionskinmask.h"
-#include "toonz/tonionskinmaskhandle.h"
 #include "iocommand.h"
 #include "xsheetdragtool.h"
 #include "toonz/sceneproperties.h"
@@ -96,9 +94,19 @@ ZtoryAnimaticController::ZtoryAnimaticController() : QObject() {
           this, &ZtoryAnimaticController::onNativeFrameSwitched);
 }
 
+ZtoryAnimaticController::~ZtoryAnimaticController() {
+  delete m_scrubDevice;
+  m_scrubDevice = nullptr;
+}
+
 ZtoryAnimaticController *ZtoryAnimaticController::instance() {
   static ZtoryAnimaticController ctrl;
   return &ctrl;
+}
+
+TSoundOutputDevice *ZtoryAnimaticController::scrubDevice() {
+  if (!m_scrubDevice) m_scrubDevice = new TSoundOutputDevice();
+  return m_scrubDevice;
 }
 
 TXsheet *ZtoryAnimaticController::mainXsheet() const {
@@ -117,6 +125,27 @@ bool ZtoryAnimaticController::ownsAudioAtMainLevel() const {
   ToonzScene *scene = TApp::instance()->getCurrentScene()->getScene();
   if (!scene) return false;
   return scene->getChildStack()->getAncestorCount() == 0;
+}
+
+// Returns true when the user is inside a sub-scene (ancestorCount==1) AND
+// the main xsheet has at least one non-empty audio column. In that case
+// onNativePlayingStatusChanged() streams main-xsheet audio at the correct
+// time offset; the native ComboViewer's playAudioFrame() must yield, or the
+// user hears two overlapping audio streams (one from sample 0 because the
+// native code reads from the current — sub — xsheet at frame 0, plus the
+// controller's main-xsheet stream from mainFrame*spf).
+bool ZtoryAnimaticController::ownsSubSceneAudio() const {
+  ToonzScene *scene = TApp::instance()->getCurrentScene()->getScene();
+  if (!scene) return false;
+  if (scene->getChildStack()->getAncestorCount() != 1) return false;
+  TXsheet *main = scene->getChildStack()->getTopXsheet();
+  if (!main) return false;
+  for (int c = 0; c < main->getColumnCount(); c++) {
+    TXshColumn *col = main->getColumn(c);
+    if (col && col->getSoundColumn() && !col->getSoundColumn()->isEmpty())
+      return true;
+  }
+  return false;
 }
 
 // ---- ZtoryAnimaticController::setAnimaticPlayRangeAndSync ----
@@ -233,12 +262,16 @@ void ZtoryAnimaticController::onNativePlayingStatusChanged() {
   if (!fh->isPlaying()) {
     // Playback stopped — stop background audio if we started it.
     if (m_nativeAudioPlaying && mainXsh) mainXsh->stopScrub();
-    m_nativeAudioPlaying = false;
+    m_nativeAudioPlaying  = false;
+    m_lastNativePlayFrame = -1;  // reset loop detector for next play session
     return;
   }
 
-  // Animatic viewer is already handling audio in continuous-play mode.
-  if (m_frameHandle->isPlaying()) return;
+  // Block only if the animatic viewer is actively streaming audio (continuous
+  // play). Using isContinuousPlaying() instead of m_frameHandle->isPlaying()
+  // avoids blocking sub-scene playback audio when the animatic frame handle is
+  // stuck in "playing" state after a room switch without an explicit stop.
+  if (m_viewer && m_viewer->isContinuousPlaying()) return;
 
   ToonzScene *scene = TApp::instance()->getCurrentScene()->getScene();
   if (!scene) return;
@@ -256,6 +289,11 @@ void ZtoryAnimaticController::onNativePlayingStatusChanged() {
   // Map the current sub-scene frame to its position in the main xsheet.
   int subFrame = fh->getFrame();
   std::pair<TXsheet *, int> ancestor = cs->getAncestor(subFrame);
+  // If the row table doesn't have a mapping for subFrame, getAncestor returns
+  // (sub-xsheet, subFrame) instead of (main-xsheet, mainRow).  In that case
+  // the sub-frame has no corresponding main-xsheet position — those frames
+  // should play silent, not audio from sample 0.
+  if (ancestor.first != mainXsh) return;
   int mainFrame = ancestor.second;
 
   double fps = scene->getProperties()->getOutputProperties()->getFrameRate();
@@ -270,6 +308,12 @@ void ZtoryAnimaticController::onNativePlayingStatusChanged() {
   if (startSample > endSample) return;
 
   if (!TXsheet::isMainAudioEnabled()) return;
+  // stopScrub() clears m_buffer so any residual data from a previous play
+  // call (e.g., rapid play/stop cycles) is discarded before we push the new
+  // segment.  Without this the hardware ring buffer can still contain a
+  // tail of the previous range, which the user perceives as audio playing
+  // "from frame 1" before the correct segment plays from mainFrame*spf.
+  mainXsh->stopScrub();
   mainXsh->play(st.getPointer(), startSample, endSample, false);
   m_nativeAudioPlaying = true;
 }
@@ -287,10 +331,33 @@ void ZtoryAnimaticController::restartNativeAudioIfPlaying() {
 // handle and maps the sub-scene frame through ChildStack::getAncestor().
 void ZtoryAnimaticController::onNativeFrameSwitched() {
   TFrameHandle *fh = TApp::instance()->getCurrentFrame();
-  // During continuous play the streaming audio already handles this.
-  if (fh->isPlaying()) return;
-  // Animatic viewer active — it handles its own scrub audio.
-  if (m_frameHandle->isPlaying()) return;
+  // The animatic owning audio still wins regardless of the play state below.
+  if (m_viewer && m_viewer->isContinuousPlaying()) return;
+
+  // Native-viewer continuous play: streaming audio is already handled by
+  // onNativePlayingStatusChanged. But if play started on a sub-frame that
+  // wasn't yet in the mapped range (so audio didn't start), retry the start
+  // here as frames advance — this lets audio kick in once the playhead
+  // crosses into the mapped region.
+  if (fh->isPlaying()) {
+    int currentFrame = fh->getFrame();
+    // Detect FlipConsole loop-back: when the play range loops, the frame
+    // jumps backward.  Reset so the audio restarts (the previous cycle's
+    // buffer may have already drained naturally if the audio range is
+    // shorter than the play range, leaving m_nativeAudioPlaying stale).
+    if (m_lastNativePlayFrame >= 0 && currentFrame < m_lastNativePlayFrame &&
+        m_nativeAudioPlaying) {
+      TXsheet *mainXsh = mainXsheet();
+      if (mainXsh) mainXsh->stopScrub();
+      m_nativeAudioPlaying = false;
+    }
+    m_lastNativePlayFrame = currentFrame;
+
+    if (!m_nativeAudioPlaying) onNativePlayingStatusChanged();
+    return;
+  }
+  // Not playing — reset loop tracker for the next play session.
+  m_lastNativePlayFrame = -1;
 
   ToonzScene *scene = TApp::instance()->getCurrentScene()->getScene();
   if (!scene) return;
@@ -303,6 +370,9 @@ void ZtoryAnimaticController::onNativeFrameSwitched() {
 
   int subFrame = fh->getFrame();
   std::pair<TXsheet *, int> ancestor = cs->getAncestor(subFrame);
+  // Sub-frame must map to a main row; otherwise it's outside the sub-scene's
+  // mapped range and audio should be silent there.
+  if (ancestor.first != mainXsh) return;
   int mainFrame = ancestor.second;
 
   double fps = scene->getProperties()->getOutputProperties()->getFrameRate();
@@ -316,50 +386,33 @@ void ZtoryAnimaticController::onNativeFrameSwitched() {
   if (s1 >= totalSamples) s1 = totalSamples - 1;
 
   if (!TXsheet::isMainAudioEnabled()) return;
-  mainXsh->play(st.getPointer(), s0, s1, false);
+  // Use the dedicated scrub device so it never overwrites mainXsh->m_player,
+  // which is used for continuous playback.
+  if (!TSoundOutputDevice::installed()) return;
+  scrubDevice()->play(st, s0, s1, false);
 }
 
 // ---- ZtoryAnimaticRuler ----
 
 ZtoryAnimaticRuler::ZtoryAnimaticRuler(QWidget *parent) : QWidget(parent) {
-  setFixedHeight(36);
+  setFixedHeight(18);
   setMouseTracking(true);
-  m_localMask.setRelativeFrameMode(true); // MOS = relative offsets, FOS = fixed frames
 }
 
 void ZtoryAnimaticRuler::paintEvent(QPaintEvent *) {
   QPainter p(this);
   p.setRenderHint(QPainter::Antialiasing);
-  const int h = height();  // 36px
+  const int h = height();
+  const int rulerY = 0;
+  const int rulerH = h;
 
-  // Strip heights: 9px top (FOS), 9px bottom (MOS), 18px middle (ruler)
-  static const int kFosH = 9;
-  static const int kMosH = 9;
-  const int rulerY  = kFosH;
-  const int rulerH  = h - kFosH - kMosH;
-  const int mosY    = h - kMosH;
-
-  // Full background
+  // Background
   p.fillRect(rect(), QColor(40, 40, 40));
-
-  // FOS strip (top) + MOS strip (bottom) — slightly darker
-  p.fillRect(kLabelW, 0,    width() - kLabelW, kFosH, QColor(28, 28, 28));
-  p.fillRect(kLabelW, mosY, width() - kLabelW, kMosH, QColor(28, 28, 28));
-  // Strip labels in label area
   p.fillRect(0, 0, kLabelW, h, QColor(25, 25, 25));
-  p.setPen(QColor(100, 100, 100));
-  p.setFont(QFont("Arial", 7));
-  p.drawText(QRect(0, 0, kLabelW - 2, kFosH), Qt::AlignRight | Qt::AlignVCenter, "F");
-  p.drawText(QRect(0, mosY, kLabelW - 2, kMosH), Qt::AlignRight | Qt::AlignVCenter, "R");
-  // Strip separator lines
-  p.setPen(QColor(55, 55, 55));
-  p.drawLine(0, kFosH, width(), kFosH);
-  p.drawLine(0, mosY,  width(), mosY);
-  // Label-area right border
   p.setPen(QColor(60, 60, 60));
   p.drawLine(kLabelW, 0, kLabelW, h);
 
-  // ---- In/Out range highlight (middle ruler zone only) ----
+  // ---- In/Out range highlight ----
   // Read from the animatic-owned range — independent from XsheetGUI which
   // gets overwritten by the native viewer when entering/leaving sub-scenes.
   auto *ctrl = ZtoryAnimaticController::instance();
@@ -378,7 +431,7 @@ void ZtoryAnimaticRuler::paintEvent(QPaintEvent *) {
                QColor(255, 165, 0, rangeEnabled ? 45 : 20));
   }
 
-  // ---- Tick marks (middle zone) ----
+  // ---- Tick marks ----
   p.setFont(QFont());
   p.setPen(QColor(180, 180, 180));
   int w = width() - kLabelW;
@@ -395,7 +448,7 @@ void ZtoryAnimaticRuler::paintEvent(QPaintEvent *) {
     }
   }
 
-  // ---- In/Out triangular markers (middle zone top edge) ----
+  // ---- In/Out triangular markers ----
   static const int kM = 8;
   if (r1 >= r0) {
     int x0 = kLabelW + (int)(r0 * m_ppf);
@@ -410,9 +463,7 @@ void ZtoryAnimaticRuler::paintEvent(QPaintEvent *) {
     p.drawConvexPolygon(outTri);
   }
 
-  // ---- Playhead — downward triangle + line (middle zone) ----
-  // Centered on the frame column (+ half-frame offset) so the triangle tip
-  // points to the middle of the frame, not its left edge.
+  // ---- Playhead — downward triangle + line ----
   static const int kPH = 8;
   int px = kLabelW + (int)(m_currentFrame * m_ppf) + (int)(m_ppf / 2);
   p.setPen(Qt::NoPen);
@@ -421,95 +472,15 @@ void ZtoryAnimaticRuler::paintEvent(QPaintEvent *) {
   tri << QPoint(px - 5, rulerY) << QPoint(px + 5, rulerY) << QPoint(px, rulerY + kPH);
   p.drawConvexPolygon(tri);
   p.setPen(QPen(QColor(255, 100, 0), 1));
-  p.drawLine(px, rulerY + kPH, px, mosY);
-
-  // ---- Onion skin markers ----
-  if (m_onionEnabled) {
-    p.setPen(Qt::NoPen);
-
-    // FOS strip — fixed-frame dots (orange), top strip
-    for (int i = 0; i < m_localMask.getFosCount(); i++) {
-      int frame = m_localMask.getFos(i);
-      int ox = kLabelW + (int)(frame * m_ppf) + (int)(m_ppf / 2);
-      p.setBrush(QColor(255, 165, 0));
-      p.drawEllipse(QPoint(ox, kFosH / 2), 4, 4);
-    }
-
-    // MOS strip — relative dots (red=past, blue=future), bottom strip.
-    // A line connects each dot back to the playhead, matching the native
-    // timeline's visual style that shows the relative distance at a glance.
-    for (int i = 0; i < m_localMask.getMosCount(); i++) {
-      int rel   = m_localMask.getMos(i);
-      int frame = m_currentFrame + rel;
-      if (frame < 0) continue;
-      int ox = kLabelW + (int)(frame * m_ppf) + (int)(m_ppf / 2);
-      QColor mc = (rel < 0) ? QColor(255, 100, 100) : QColor(100, 150, 255);
-      // Connecting line from playhead to this MOS dot
-      p.setPen(QPen(mc.darker(130), 1));
-      p.drawLine(px, mosY + kMosH / 2, ox, mosY + kMosH / 2);
-      p.setPen(Qt::NoPen);
-      p.setBrush(mc);
-      p.drawEllipse(QPoint(ox, mosY + kMosH / 2), 4, 4);
-    }
-  }
-
-  // ---- Hover feedback ----
-  if (m_hoverFrame >= 0 && m_hoverZone != HoverNone) {
-    int ox = kLabelW + (int)(m_hoverFrame * m_ppf) + (int)(m_ppf / 2);
-    p.setPen(Qt::NoPen);
-    if (m_hoverZone == HoverFOS) {
-      bool exists = m_localMask.isFos(m_hoverFrame);
-      // Red hint if removing, orange hint if adding
-      p.setBrush(exists ? QColor(255, 60, 60, 160) : QColor(255, 165, 0, 100));
-      p.drawEllipse(QPoint(ox, kFosH / 2), 5, 5);
-    } else { // HoverMOS
-      int rel = m_hoverFrame - m_currentFrame;
-      if (rel != 0) {
-        bool exists = m_localMask.isMos(rel);
-        QColor mc = exists ? QColor(255, 60, 60, 160)
-                   : (rel < 0 ? QColor(255, 100, 100, 100)
-                              : QColor(100, 150, 255, 100));
-        p.setBrush(mc);
-        p.drawEllipse(QPoint(ox, mosY + kMosH / 2), 5, 5);
-      }
-    }
-  }
+  p.drawLine(px, rulerY + kPH, px, h);
 }
 
 void ZtoryAnimaticRuler::mousePressEvent(QMouseEvent *e) {
   if (e->button() != Qt::LeftButton) return;
 
-  const int my = e->y();
-  const int h  = height();
-  static const int kFosH = 9;
-  static const int kMosH = 9;
-  const int mosY = h - kMosH;
-
   int mx    = qMax(0, e->x() - kLabelW);
   int frame = (int)(mx / m_ppf);
 
-  // ── FOS strip (top): click toggles a fixed-frame onion skin point ──────
-  if (my < kFosH) {
-    if (!m_onionEnabled) { setOnionEnabled(true); emit onionEnabledChanged(true); }
-    m_localMask.setFos(frame, !m_localMask.isFos(frame));
-    syncOnionToGlobal();
-    update();
-    return;
-  }
-
-  // ── MOS strip (bottom): click toggles a relative onion skin point ───────
-  if (my >= mosY) {
-    int rel = frame - m_currentFrame;
-    if (rel != 0) {
-      if (!m_onionEnabled) { setOnionEnabled(true); emit onionEnabledChanged(true); }
-      m_localMask.setMos(rel, !m_localMask.isMos(rel));
-      syncOnionToGlobal();
-      update();
-    }
-    return;
-  }
-
-  // ── Middle ruler zone ────────────────────────────────────────────────────
   // Shift+click = set In, Alt+click = set Out
   auto *ctrlR = ZtoryAnimaticController::instance();
   if (e->modifiers() & Qt::ShiftModifier) {
@@ -568,25 +539,6 @@ void ZtoryAnimaticRuler::mousePressEvent(QMouseEvent *e) {
 }
 
 void ZtoryAnimaticRuler::mouseMoveEvent(QMouseEvent *e) {
-  // Hover feedback (no button required)
-  {
-    const int my = e->y();
-    const int h  = height();
-    static const int kFosH = 9;
-    static const int kMosH = 9;
-    int newFrame = (int)(qMax(0, e->x() - kLabelW) / m_ppf);
-    HoverZone newZone = HoverNone;
-    if (my < kFosH)               newZone = HoverFOS;
-    else if (my >= h - kMosH)     newZone = HoverMOS;
-    if (newFrame != m_hoverFrame || newZone != m_hoverZone) {
-      m_hoverFrame = newFrame;
-      m_hoverZone  = newZone;
-      // Cursor hint: cross when over a strip, default otherwise
-      setCursor(newZone != HoverNone ? Qt::CrossCursor : Qt::ArrowCursor);
-      update();
-    }
-  }
-
   if (!(e->buttons() & Qt::LeftButton)) return;
   int mx = qMax(0, e->x() - kLabelW);
   int frame = (int)(mx / m_ppf);
@@ -633,34 +585,8 @@ void ZtoryAnimaticRuler::mouseReleaseEvent(QMouseEvent *) {
 }
 
 void ZtoryAnimaticRuler::leaveEvent(QEvent *) {
-  m_hoverFrame = -1;
-  m_hoverZone  = HoverNone;
   setCursor(Qt::ArrowCursor);
   update();
-}
-
-void ZtoryAnimaticRuler::setOnionEnabled(bool on) {
-  m_onionEnabled = on;
-  syncOnionToGlobal();
-  update();
-}
-
-void ZtoryAnimaticRuler::syncOnionToGlobal() const {
-  // Push local animatic onion skin state to the global handle so the
-  // viewer renders the correct onion frames. This does NOT touch the
-  // native timeline's conceptual state — the local mask is restored
-  // every time the animatic panel becomes visible.
-  TOnionSkinMaskHandle *osmh = TApp::instance()->getCurrentOnionSkin();
-  if (m_onionEnabled) {
-    OnionSkinMask mask = m_localMask;
-    mask.enable(true);
-    osmh->setOnionSkinMask(mask);
-  } else {
-    OnionSkinMask off;
-    off.enable(false);
-    osmh->setOnionSkinMask(off);
-  }
-  osmh->notifyOnionSkinMaskChanged();
 }
 
 void ZtoryAnimaticRuler::resetPlayRangeToFull() {
@@ -1392,8 +1318,6 @@ void ZtoryAnimaticTrack::setLocked(bool on) {
 void ZtoryAnimaticTrack::updateCursor() {
   if (m_tool == RazorTool)
     setCursor(Qt::CrossCursor);
-  else if (m_tool == SlipTool)
-    setCursor(Qt::SizeHorCursor);
   else
     unsetCursor();
 }
@@ -1436,20 +1360,8 @@ void ZtoryAnimaticTrack::refreshFromScene() {
     ShotBlock b;
     b.col = col;
     b.startFrameInMain = startFrame;
-    // Read slip offset from first non-empty cell's frameId (1-based → 0-based).
-    // resequenceXsheet() writes TFrameId(slipOff + r + 1), so frame 0 of the
-    // block is TFrameId(slipOff + 1).  If slipOff == 0 this equals TFrameId(1).
-    int slipOffset = 0;
-    for (int r = r0; r <= r1; r++) {
-      TXshCell cell = mainXsh->getCell(r, col);
-      if (!cell.isEmpty() && cell.m_level && cell.m_level->getChildLevel()) {
-        int fn = cell.getFrameId().getNumber();
-        slipOffset = (fn > 0) ? fn - 1 : 0;
-        break;
-      }
-    }
-    b.f0 = slipOffset;
-    b.f1 = slipOffset + duration - 1;
+    b.f0 = 0;
+    b.f1 = duration - 1;
     // Legge il numero shot dal nome della colonna (impostato da StoryboardPanel)
     QString colName = QString::fromStdString(
         mainXsh->getStageObject(mainXsh->getColumnObjectId(col))->getName());
@@ -1561,20 +1473,6 @@ void ZtoryAnimaticTrack::paintEvent(QPaintEvent *) {
     else
       p.drawText(x + 4, 2, w - 8, h, Qt::AlignBottom | Qt::AlignLeft, b.shotNumber);
 
-    // Slip indicator — small colored strip + offset text when f0 > 0
-    if (b.f0 > 0 && w > 20) {
-      // Left edge tinted orange to signal slipped content
-      p.fillRect(x + 1, 2, 4, h, QColor(220, 130, 30, 200));
-      // Offset label bottom-right (only when block is wide enough)
-      if (w > 50) {
-        p.setPen(QColor(255, 180, 60));
-        p.setFont(QFont("Arial", 7));
-        QString slip = QString("+%1").arg(b.f0);
-        p.drawText(x + 6, 2, w - 14, h - 1, Qt::AlignBottom | Qt::AlignRight, slip);
-        p.setFont(QFont("Arial", 9));
-      }
-    }
-
     // Handle resize (bordo destro)
     p.fillRect(x + w - 4, 2, 4, h, QColor(180, 180, 80));
   }
@@ -1681,19 +1579,6 @@ void ZtoryAnimaticTrack::mousePressEvent(QMouseEvent *e) {
           }
           setCursor(Qt::SizeHorCursor);
         }
-        return;
-      }
-    }
-
-    // ── SlipTool: drag inside block ───────────────────────────────────────
-    if (m_tool == SlipTool && e->button() == Qt::LeftButton) {
-      if (mx >= x && mx < x + w) {
-        m_dragMode        = Slip;
-        m_dragStartX      = mx;
-        m_dragColA        = b.col;
-        m_dragOrigDurA    = duration;  // block duration (width stays constant during slip)
-        m_dragOrigSlipF0  = b.f0;     // current slip offset
-        setCursor(Qt::SizeHorCursor);
         return;
       }
     }
@@ -1805,24 +1690,6 @@ void ZtoryAnimaticTrack::mouseMoveEvent(QMouseEvent *e) {
     return;
   }
 
-  if (m_dragMode == Slip) {
-    int dx = mx - m_dragStartX;
-    int delta = (int)(dx / m_ppf);
-    int duration = m_dragOrigDurA + m_dragOrigDurB;  // kept for Slip (uses origDurA only, repurposed)
-    // During Slip drag, shift f0/f1 together — width unchanged
-    for (auto &b : m_blocks) {
-      if (b.col == m_dragColA) {
-        int newF0 = qMax(0, m_dragOrigSlipF0 + delta);
-        int dur   = m_dragOrigDurA;  // original duration stored in m_dragOrigDurA
-        b.f0 = newF0;
-        b.f1 = newF0 + dur - 1;
-        break;
-      }
-    }
-    update();
-    return;
-  }
-
   // ── Hover cursor (no active drag) ─────────────────────────────────────
   if (m_tool == SelectTool) {
     bool nearEdge = false;
@@ -1844,15 +1711,6 @@ void ZtoryAnimaticTrack::mouseMoveEvent(QMouseEvent *e) {
       }
     }
     setCursor(cur);
-  } else if (m_tool == SlipTool) {
-    bool over = false;
-    for (auto &b : m_blocks) {
-      int duration = b.f1 - b.f0 + 1;
-      int bx0 = (int)(b.startFrameInMain * m_ppf);
-      int bx1 = bx0 + (int)(duration * m_ppf);
-      if (mx >= bx0 && mx < bx1) { over = true; break; }
-    }
-    setCursor(over ? Qt::SizeHorCursor : Qt::ArrowCursor);
   }
 
   // Razor hover: snap the indicator to the nearest frame boundary
@@ -1920,19 +1778,6 @@ void ZtoryAnimaticTrack::mouseReleaseEvent(QMouseEvent *) {
     return;
   }
 
-  if (finished == Slip) {
-    int slipDelta = 0;
-    for (auto &b : m_blocks) {
-      if (b.col == m_dragColA) {
-        slipDelta = b.f0 - m_dragOrigSlipF0;
-        break;
-      }
-    }
-    if (slipDelta != 0)
-      emit slipEdit(m_dragColA, slipDelta);
-    m_dragColA = -1;
-    return;
-  }
 }
 
 void ZtoryAnimaticTrack::mouseDoubleClickEvent(QMouseEvent *e) {
@@ -2099,12 +1944,6 @@ ZtoryAnimaticViewer::ZtoryAnimaticViewer(QWidget *parent)
   connect(ctrl->frameHandle(), &TFrameHandle::frameSwitched, this, [this]() {
     if (m_sceneViewer) m_sceneViewer->update();
   });
-
-  // Repaint when onion skin mask changes so the viewer shows the onion frames.
-  // Without this connection, syncOnionToGlobal() pushes the new mask to the
-  // global handle but the viewer never receives a repaint request.
-  connect(TApp::instance()->getCurrentOnionSkin(),
-          SIGNAL(onionSkinMaskChanged()), m_sceneViewer, SLOT(update()));
 
   // Set up layout: scene viewer + flip console (like SceneViewerPanel)
   m_mainLayout->insertWidget(0, m_fsWidget, 1);
@@ -2393,13 +2232,15 @@ void ZtoryAnimaticViewer::playAnimaticAudioFrame(int frame) {
                             ->getFrameRate();
     m_samplesPerFrame = m_sound->getSampleRate() / std::abs(m_fps);
   }
-  TXsheet *mainXsh = ZtoryAnimaticController::instance()->mainXsheet();
-  if (!mainXsh) return;
+  auto *ctrl = ZtoryAnimaticController::instance();
+  if (!ctrl->mainXsheet()) return;
   m_viewerFps = m_flipConsole->getCurrentFps();
   double s0   = frame * m_samplesPerFrame;
   double s1   = s0 + m_samplesPerFrame;
-  if (m_fps < m_viewerFps) mainXsh->stopScrub();
-  mainXsh->play(m_sound, s0, s1, false);
+  // Use the dedicated scrub device so ruler scrub doesn't overwrite the
+  // continuous-play buffer on mainXsh->m_player.
+  if (!TSoundOutputDevice::installed()) return;
+  ctrl->scrubDevice()->play(m_sound, s0, s1, false);
 }
 
 // ---- onAnimaticPlayingStatusChanged ----
@@ -3141,14 +2982,6 @@ ZtoryAnimaticPanel::ZtoryAnimaticPanel(QWidget *parent) : TPanel(parent) {
   trimBtn->setCheckable(true);
   trimBtn->setStyleSheet("QToolButton{background:transparent;border:none;border-radius:4px;}QToolButton:hover{background:#555;}QToolButton:checked{background:#666;}");
 
-  QToolButton *slipBtn = new QToolButton(toolbar);
-  slipBtn->setIcon(createQIcon("ztoryc_slip"));
-  slipBtn->setIconSize(QSize(20, 20));
-  slipBtn->setFixedSize(28, 28);
-  slipBtn->setToolTip(tr("Slip  (Y)\nDrag inside a shot to shift which sub-scene frames are shown\nDuration and position in animatic stay unchanged"));
-  slipBtn->setCheckable(true);
-  slipBtn->setStyleSheet("QToolButton{background:transparent;border:none;border-radius:4px;}QToolButton:hover{background:#555;}QToolButton:checked{background:#666;}");
-
   QToolButton *razorBtn = new QToolButton(toolbar);
   razorBtn->setIcon(createQIcon("ztoryc_razor"));
   razorBtn->setIconSize(QSize(20, 20));
@@ -3185,7 +3018,6 @@ ZtoryAnimaticPanel::ZtoryAnimaticPanel(QWidget *parent) : TPanel(parent) {
 
   tbLay->addWidget(selectBtn);
   tbLay->addWidget(trimBtn);
-  tbLay->addWidget(slipBtn);
   tbLay->addWidget(razorBtn);
   tbLay->addSpacing(8);
   tbLay->addWidget(linkBtn);
@@ -3197,36 +3029,25 @@ ZtoryAnimaticPanel::ZtoryAnimaticPanel(QWidget *parent) : TPanel(parent) {
   tbLay->addSpacing(12);
   tbLay->addStretch(1);
 
-  connect(selectBtn, &QToolButton::clicked, this, [this, selectBtn, trimBtn, slipBtn, razorBtn](){
+  connect(selectBtn, &QToolButton::clicked, this, [this, selectBtn, trimBtn, razorBtn](){
     m_track->setTool(ZtoryAnimaticTrack::SelectTool);
     selectBtn->setChecked(true);
     trimBtn->setChecked(false);
-    slipBtn->setChecked(false);
     razorBtn->setChecked(false);
     for (auto *at : m_audioTracks) at->setRazorActive(false);
   });
-  connect(trimBtn, &QToolButton::clicked, this, [this, selectBtn, trimBtn, slipBtn, razorBtn](){
+  connect(trimBtn, &QToolButton::clicked, this, [this, selectBtn, trimBtn, razorBtn](){
     m_track->setTool(ZtoryAnimaticTrack::TrimTool);
     trimBtn->setChecked(true);
     selectBtn->setChecked(false);
-    slipBtn->setChecked(false);
     razorBtn->setChecked(false);
     for (auto *at : m_audioTracks) at->setRazorActive(false);
   });
-  connect(slipBtn, &QToolButton::clicked, this, [this, selectBtn, trimBtn, slipBtn, razorBtn](){
-    m_track->setTool(ZtoryAnimaticTrack::SlipTool);
-    slipBtn->setChecked(true);
-    selectBtn->setChecked(false);
-    trimBtn->setChecked(false);
-    razorBtn->setChecked(false);
-    for (auto *at : m_audioTracks) at->setRazorActive(false);
-  });
-  connect(razorBtn, &QToolButton::clicked, this, [this, selectBtn, trimBtn, slipBtn, razorBtn](){
+  connect(razorBtn, &QToolButton::clicked, this, [this, selectBtn, trimBtn, razorBtn](){
     m_track->setTool(ZtoryAnimaticTrack::RazorTool);
     razorBtn->setChecked(true);
     selectBtn->setChecked(false);
     trimBtn->setChecked(false);
-    slipBtn->setChecked(false);
     // Always activate razor on audio tracks so the user can cut them directly.
     // m_audioLinked only controls whether a video cut also cuts audio.
     for (auto *at : m_audioTracks) at->setRazorActive(true);
@@ -3289,8 +3110,6 @@ ZtoryAnimaticPanel::ZtoryAnimaticPanel(QWidget *parent) : TPanel(parent) {
           this, &ZtoryAnimaticPanel::onShotDurationChanged);
   connect(m_track, &ZtoryAnimaticTrack::rollEdit,
           this, &ZtoryAnimaticPanel::onRollEdit);
-  connect(m_track, &ZtoryAnimaticTrack::slipEdit,
-          this, &ZtoryAnimaticPanel::onSlipEdit);
   connect(m_track, &ZtoryAnimaticTrack::shotMoved,
           this, &ZtoryAnimaticPanel::onShotMoved);
   // Video lock state — no persistence map needed (single track)
@@ -3338,9 +3157,6 @@ ZtoryAnimaticPanel::ZtoryAnimaticPanel(QWidget *parent) : TPanel(parent) {
         refreshFromScene();
     });
   });
-  // 13a: refresh ruler when onion skin changes (markers update)
-  connect(TApp::instance()->getCurrentOnionSkin(),
-          SIGNAL(onionSkinMaskChanged()), m_ruler, SLOT(update()));
 }
 
 void ZtoryAnimaticPanel::refreshFromScene() {
@@ -3535,7 +3351,6 @@ void ZtoryAnimaticPanel::showEvent(QShowEvent *e) {
   TPanel::showEvent(e);
   refreshFromScene();
   m_ruler->initPlayRangeIfNeeded();
-  m_ruler->syncOnionToGlobal();
 }
 
 // Helper: returns shot index in ZtoryModel for a given xsheet column, or -1.
@@ -3883,23 +3698,15 @@ void ZtoryAnimaticPanel::onShotDoubleClicked(int col) {
   if (cell.m_level && cell.m_level->getChildLevel()) {
     app->getCurrentFrame()->setFrame(r0);
     CommandManager::instance()->execute("MI_OpenChild");
-    // Set the native play range to the portion of the sub-scene that is
-    // actually exposed in the animatic (accounting for Slip offset).
-    // slipOff = first sub-scene frame shown; durInAnimatic = shot length.
+    // Set the native play range to the full duration shown in the animatic.
     {
       int durInAnimatic = r1 - r0 + 1;
-      int slipOff = ZtoryModel::instance()->getSlipOffset(col);
-      int inF  = slipOff;
-      int outF = slipOff + durInAnimatic - 1;
       TXsheet *subXsh = app->getCurrentXsheet()->getXsheet();
       if (subXsh) {
-        // Clamp to actual sub-scene length (sub-scene may be shorter than slip range)
         int subFrames = subXsh->getFrameCount();
-        outF = qMin(outF, subFrames - 1);
-        if (inF <= outF)
-          XsheetGUI::setPlayRange(inF, outF, 1, false);
-        else
-          XsheetGUI::setPlayRange(0, qMax(0, subFrames - 1), 1, false);
+        int outF = qMin(durInAnimatic - 1, subFrames - 1);
+        if (outF >= 0)
+          XsheetGUI::setPlayRange(0, outF, 1, false);
       }
     }
     // Keep the animatic controller's frame at the shot's main-xsheet row
@@ -4677,36 +4484,6 @@ void ZtoryAnimaticPanel::onRollEdit(int colA, int newDurA, int colB, int newDurB
   }
 }
 
-// ── onSlipEdit ────────────────────────────────────────────────────────────────
-// Shift the sub-scene content window by |slipDelta| frames.
-// Does NOT change the shot's animatic duration or position.
-void ZtoryAnimaticPanel::onSlipEdit(int col, int slipDelta) {
-  if (slipDelta == 0) return;
-  ZtoryModel::instance()->adjustSlipOffset(col, slipDelta);
-  // resequenceXsheet() re-writes cell frameIds using the new slipOffset
-  resequenceXsheet();
-
-  // Update the shot's In/Out play range to reflect the new slip offset.
-  // This ensures that when the sub-scene is opened for editing, the markers
-  // show exactly which frames are exposed in the animatic.
-  TApp *app = TApp::instance();
-  ToonzScene *scene = app->getCurrentScene()->getScene();
-  if (scene) {
-    TXsheet *xsh = scene->getChildStack()->getTopXsheet();
-    if (xsh) {
-      TXshColumn *column = xsh->getColumn(col);
-      if (column && !column->isEmpty()) {
-        int r0 = 0, r1 = 0;
-        column->getRange(r0, r1);
-        int durInAnimatic = r1 - r0 + 1;
-        int slipOff = ZtoryModel::instance()->getSlipOffset(col);
-        ztorySetShotRange(col, slipOff, slipOff + durInAnimatic - 1);
-      }
-    }
-  }
-
-  m_track->refreshFromScene();
-}
 
 void ZtoryAnimaticPanel::onShotDurationChanged(int col, int newF1) {
   StoryboardPanel *board = findBoardPanel();

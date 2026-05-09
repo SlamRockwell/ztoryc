@@ -539,7 +539,8 @@ in TXsheetImp.
 #endif
   void scrub(int frame, bool isPreview = false);
   void stopScrub();
-  void play(TSoundTrackP soundtrack, int s0, int s1, bool loop);
+  void play(TSoundTrackP soundtrack, int s0, int s1, bool loop,
+            bool scrubbing = false);
 
   // Global main-audio enable flag — toggled by MI_ToggleMainAudio (sceneviewer.cpp).
   // scrub() checks this flag and returns early when audio is disabled.

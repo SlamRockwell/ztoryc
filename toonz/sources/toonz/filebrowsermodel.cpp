@@ -1481,9 +1481,68 @@ void DvDirModel::refresh(const QModelIndex &index) {
   DvDirModelNode *node = getNode(index);
   if (!node) return;
 
+  // Collect ALL loaded descendants (not just direct children) before refresh.
+  // Any of them can be deleted by refreshChildren() — their raw pointers are
+  // used as opaque keys to match and invalidate Qt persistent indexes so that
+  // tree views don't dereference freed memory in parent() or paint().
+  struct Snap {
+    int row;
+    DvDirModelNode *ptr;
+  };
+  std::vector<Snap> before;
+  {
+    std::vector<DvDirModelNode *> stack;
+    for (int i = 0; i < node->getChildCount(); i++)
+      stack.push_back(node->getChild(i));
+    while (!stack.empty()) {
+      DvDirModelNode *n = stack.back();
+      stack.pop_back();
+      before.push_back({n->getRow(), n});
+      if (n->areChildrenValid()) {
+        for (int i = 0; i < n->getChildCount(); i++)
+          stack.push_back(n->getChild(i));
+      }
+    }
+  }
+
   emit layoutAboutToBeChanged();
 
   node->refreshChildren();
+
+  // Collect surviving descendants (fresh pointers, post-refresh).
+  std::vector<DvDirModelNode *> afterVec;
+  {
+    std::vector<DvDirModelNode *> stack;
+    for (int i = 0; i < node->getChildCount(); i++)
+      stack.push_back(node->getChild(i));
+    while (!stack.empty()) {
+      DvDirModelNode *n = stack.back();
+      stack.pop_back();
+      afterVec.push_back(n);
+      if (n->areChildrenValid()) {
+        for (int i = 0; i < n->getChildCount(); i++)
+          stack.push_back(n->getChild(i));
+      }
+    }
+  }
+
+  // Invalidate persistent indexes for every deleted descendant.
+  // Pointer values used only for identity comparison — never dereferenced.
+  QModelIndexList from, to;
+  for (const auto &s : before) {
+    bool survived = false;
+    for (DvDirModelNode *p : afterVec) {
+      if (p == s.ptr) {
+        survived = true;
+        break;
+      }
+    }
+    if (!survived) {
+      from.append(createIndex(s.row, 0, s.ptr));
+      to.append(QModelIndex());
+    }
+  }
+  if (!from.isEmpty()) changePersistentIndexList(from, to);
 
   emit layoutChanged();
 }
@@ -1514,6 +1573,24 @@ void DvDirModel::refreshFolderChild(const QModelIndex &i) {
   int count = rowCount(i);
   int r;
   for (r = 0; r < count; r++) refreshFolderChild(index(r, 0, i));
+}
+
+//-----------------------------------------------------------------------------
+
+// Safely refresh all expanded nodes with a single beginResetModel/endResetModel
+// pair, avoiding the persistent-index invalidation complexity of refresh().
+void DvDirModel::fullRefresh() {
+  beginResetModel();
+  refreshAllExpanded(m_root);
+  endResetModel();
+}
+
+void DvDirModel::refreshAllExpanded(DvDirModelNode *node) {
+  if (!node || !node->areChildrenValid()) return;
+  if (node->isFolder() || dynamic_cast<DvDirModelMyComputerNode *>(node))
+    node->refreshChildren();
+  for (int i = 0; i < node->getChildCount(); i++)
+    refreshAllExpanded(node->getChild(i));
 }
 
 //-----------------------------------------------------------------------------
