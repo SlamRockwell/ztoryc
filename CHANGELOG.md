@@ -6,6 +6,67 @@
 > Voci più vecchie di ~2 settimane → spostarle in `CHANGELOG_ARCHIVE.md`.
 
 ---
+## [2026-05-10] — Bug fix pre-release: Perspective Grid crash + shot viewer camera view
+
+### Fixed
+- **Crash Perspective Grid Tool (SIGSEV)**: `m_perspectiveButton` era un pointer non inizializzato in `ComboViewerPanel` (che non chiama `initializeTitleBar()`). Fix: inizializzati `m_symmetryButton` e `m_perspectiveButton` a `nullptr` nel costruttore di `BaseViewerPanel` + null-guard in `onToolSwitched()` prima di dereferenziare entrambi. (`viewerpane.cpp`)
+- **Camera View e Render Preview non funzionavano in shot mode**: i bottoni nel title bar di `ZtoryAnimaticViewerPanel` (Camera Stand, Camera View, Preview) erano connessi permanentemente allo SceneViewer dell'animatic viewer (pagina 0 dello stack). In shot mode (pagina 1, ComboViewerPanel), i bottoni non avevano effetto sul viewer visibile. Fix: in `enterShotMode()` le connessioni vengono riinstradate al `ComboViewerPanel`; in `returnToAnimaticMode()` vengono riportate all'animatic viewer. Il shot viewer si apre di default in `CAMERA_REFERENCE`. (`ztoryanimatic.cpp`, `viewerpane.h`)
+
+### Added
+- `BaseViewerPanel::sceneViewer()`, `referenceModeButtonSet()`, `previewButton()` — accessor pubblici per permettere a `ZtoryAnimaticViewerPanel` di reindirizzare le connessioni dei bottoni senza accedere a membri protetti. (`viewerpane.h`)
+
+### Notes
+- Task 21 (Volume per traccia audio) completato nella sessione di oggi prima dei bug fix
+- Early Beta (v0.2) milestone raggiunta: Undo/Redo ✅, audio toggle ✅, crash fix ✅, shot viewer fix ✅
+
+---
+## [2026-05-09] — Audio sub-scene fix completo + cleanup SLIP/onion residui
+
+### Fixed
+- **Audio in sub-scene (workflow 2D Tradigital + Storyboard)**: risolto il "frammento + double-play". Catena di fix:
+  - **Guard `m_frameHandle->isPlaying()` sostituito con `isContinuousPlaying()`** in `onNativePlayingStatusChanged()` e `onNativeFrameSwitched()`. Il guard precedente bloccava l'audio quando il frame handle dell'animatic restava "stuck" in playing dopo un cambio room senza stop esplicito → audio a volte non partiva o non ripartiva al loop
+  - **Room nera durante play**: causata da flooding del `QAudioOutput::notify` ogni 50ms quando `onNativeFrameSwitched()` veniva chiamato per ogni frame durante il play (frame handle globale aggiornato anche durante play animatic). Fix con il guard preciso sopra
+  - **Doppio play (frame 1 + frame 31)**: aggiunto `ZtoryAnimaticController::ownsSubSceneAudio()` chiamato da `BaseViewerPanel::hasSoundtrack()` per sopprimere il path nativo per-frame quando il controller streama già il main audio
+  - **Frame senza mapping main → muti**: check `ancestor.first != mainXsh` in entrambe le funzioni — sub-frame fuori dal range mappato ora correttamente silenziosi
+  - **Audio non parte se play comincia su frame muto**: `onNativeFrameSwitched()` ora ritenta `onNativePlayingStatusChanged()` quando entra nel mapped range
+  - **Audio muto al loop**: aggiunto `m_lastNativePlayFrame` per rilevare il salto all'indietro del FlipConsole; al loop resetta `m_nativeAudioPlaying=false` e fa ripartire l'audio
+- **`m_scrubDevice` dedicato** (`TSoundOutputDevice` separato dal `mainXsh->m_player`) per scrub audio sia in `onNativeFrameSwitched()` che in `playAnimaticAudioFrame()` — evita interferenze fra scrub e continuous play. Destructor in `~ZtoryAnimaticController()` per evitare leak a chiusura
+- **`mainXsh->stopScrub()` esplicito prima di `play()`** in `onNativePlayingStatusChanged()` per scartare residui del ring buffer hardware
+
+### Removed
+- **SlipTool eliminato completamente** (decisione di scope dopo analisi onesta — implementazione corretta richiedeva 2-3 settimane su mobile mark-in nei sub-scene cell):
+  - Toolbar `slipBtn` rimosso da `ZtoryAnimaticPanel`
+  - Enum `Tool::SlipTool` e `DragMode::Slip` rimossi
+  - Field `ShotData::slipOffset`, metodi `getSlipOffset`/`adjustSlipOffset` rimossi da `ZtoryModel`
+  - Attributo `slipOffset` rimosso da save/load XML (read no-op per backward compat)
+  - Signal `slipEdit`/slot `onSlipEdit` rimossi
+  - Slip indicator (striscia arancione + label `+N`) rimosso dal paint dei block
+  - Cell write in `resequenceXsheet()` semplificato a `TFrameId(r + 1)` (era `TFrameId(slipOff + r + 1)`)
+  - In `ztoryOpenSubXsheet()` il play range ora copre l'intera durata animatic (non più clamp via slipOff)
+- **Onion skin residui in `ZtoryAnimaticRuler`** (era stato deciso di rimuoverlo ma rimanevano frammenti che causavano malfunzionamenti):
+  - Strip FOS (top) + MOS (bottom) rimosse → ruler ora alto 18px (era 36px)
+  - `m_localMask`, `m_onionEnabled`, `setOnionEnabled()`, `syncOnionToGlobal()` rimossi
+  - HoverZone (HoverFOS/HoverMOS), `m_hoverFrame`, `m_hoverZone` rimossi
+  - Signal `onionEnabledChanged` rimosso
+  - Connect `onionSkinMaskChanged` (sia su `m_sceneViewer` che su `m_ruler`) rimossi
+  - Include `onionskinmask.h` e `tonionskinmaskhandle.h` rimossi dal `ztoryanimatic.cpp`/`.h`
+
+### Modified
+- `BaseViewerPanel::hasSoundtrack()` (viewerpane.cpp): aggiunto early return su `ZtoryAnimaticController::ownsSubSceneAudio()` analogo a `ownsAudioAtMainLevel()` — sopprime la path audio nativa quando il controller gestisce lo streaming continuo dal main
+
+### Notes
+- Lista feature/fix completa rivista in sessione → piano d'azione in 7 fasi:
+  1. Audio finiture (icon toggle, waveform normalization, volume per traccia, audio keyboard shortcuts)
+  2. Timeline QoL (peg column residue, PASTE behavior, default palette)
+  3. Sync shot duration toggle + mesh extras path
+  4. Camera sensitivity + waveform residui
+  5. Layout per workflow (config-only, replicare struttura `Storyboard/`)
+  6. Transizioni (formula `extra_per_lato = N/2`)
+  7. Heavy a parte: CEL/KEYS modes (timeline only), PSD robustness + ORA importer, Autofill vector, Multi-select import
+- **DROPPED**: SLIP, SLIDE (workaround manuale accettabile), navigation tag fissi per export range
+- Toggle audio invertito (icona ON↔OFF) noto, da fixare in Fase 1 — è solo asset/QAction state
+
+---
 ## [2026-05-05] — Trim/Roll + Slip + fix workflow Load Scene
 
 ### Added
