@@ -820,7 +820,12 @@ void TXshSoundColumn::updateFrameRate(double fps) {
 
 void TXshSoundColumn::setVolume(double value) {
   m_volume = tcrop<double>(value, 0.0, 1.0);
-  if (m_player && m_player->isPlaying())
+  // Apply to the underlying device whenever it exists, not just while it's
+  // actively streaming.  With per-frame audio (Ztoryc native sub-scene play)
+  // the buffer briefly empties between frames so isPlaying() flickers — the
+  // old guard skipped real-time volume updates during those gaps, making the
+  // slider feel laggy or unresponsive.
+  if (m_player)
 #ifndef _WIN32
     m_player->setVolume(m_volume);
 #else
@@ -910,6 +915,14 @@ void TXshSoundColumn::stop() {
     m_player                = 0;
     m_currentPlaySoundTrack = TSoundTrackP();
   }
+}
+
+qint64 TXshSoundColumn::getProcessedUsecs() const {
+  return m_player ? m_player->processedUsecs() : 0;
+}
+
+bool TXshSoundColumn::isPlayerActive() const {
+  return m_player && m_player->isPlaying();
 }
 
 //-----------------------------------------------------------------------------

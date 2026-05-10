@@ -193,6 +193,11 @@ when the user play a single level and hence the audio behind..*/
   void play(int currentFrame = 0);
   void stop();
 
+  //! Microseconds of audio elapsed since the column's last play() call,
+  //! as reported by the hardware DAC clock.  Returns 0 if no player exists.
+  qint64 getProcessedUsecs() const;
+  bool   isPlayerActive() const;
+
   bool isPlaying() const;
 
   void scrub(int fromFrame, int toFrame);

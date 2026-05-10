@@ -1838,9 +1838,18 @@ void TXsheet::stopScrub() {
   if (m_player) m_player->stop();
 }
 
+void TXsheet::setMasterVolume(double v) {
+  if (m_player) m_player->setVolume(v);
+}
+
 //-----------------------------------------------------------------------------
 
-static bool s_mainAudioEnabled = true;
+// Default false to match mainAudioToggle.m_status initial value (also false).
+// When MainAudioToggleAction env var is 1, createToggle()->action->trigger()
+// runs ToggleCommandHandler::execute() which calls setMainAudioEnabled(true)
+// and brings this in sync; when the env var is 0 no trigger fires, so this
+// must default to false to match the (off) toggle state.
+static bool s_mainAudioEnabled = false;
 
 void TXsheet::setMainAudioEnabled(bool on) { s_mainAudioEnabled = on; }
 bool TXsheet::isMainAudioEnabled() { return s_mainAudioEnabled; }

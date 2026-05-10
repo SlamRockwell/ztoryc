@@ -57,6 +57,10 @@ extern ToggleCommandHandler mainAudioToggle;
 #include "pane.h"
 #include "mainwindow.h"
 #include "storyboardpanel.h"
+#include "tools/tool.h"
+#include "tools/toolcommandids.h"
+#include "../tnztools/symmetrytool.h"
+#include "../tnztools/perspectivetool.h"
 #include "tundo.h"
 #include "tpanels.h"
 #include "ztoryscriptpanel.h"
@@ -2084,53 +2088,74 @@ ZtoryAnimaticViewer::ZtoryAnimaticViewer(QWidget *parent)
 // IMPORTANT: m_subcameraPreviewButton must be created even if not shown,
 // because enableFullPreview() and onSceneSwitched() call setPressed() on it.
 void ZtoryAnimaticViewer::initializeAnimaticTitleBar(TPanelTitleBar *titleBar) {
-  // Several base-class slots (onToolSwitched, onSceneSwitched, onFrameTypeChanged)
-  // dereference these pointers without null guards.  Create hidden dummy widgets
-  // so those calls are harmless even though we never add them to the title bar.
+  // Hidden dummy widgets — base-class slots dereference these without null guards.
   m_symmetryButton = new TPanelTitleBarButton(this, getIconPath("pane_symmetry"));
   m_symmetryButton->hide();
   m_perspectiveButton =
       new TPanelTitleBarButton(this, getIconPath("pane_perspective"));
   m_perspectiveButton->hide();
 
-  // View mode button set: Camera Stand View + Camera View (no 3D for animatic)
+  int x         = -156;
+  int iconWidth = 20;
+
+  // ---- Always-visible overlay toggles ----
+
+  // Safe area
+  auto *safeBtn =
+      new TPanelTitleBarButtonForSafeArea(titleBar, getIconPath("pane_safe"));
+  safeBtn->setToolTip(tr("Safe Area (Right Click to Select)"));
+  titleBar->add(QPoint(x, 0), safeBtn);
+  connect(safeBtn, SIGNAL(toggled(bool)),
+          CommandManager::instance()->getAction(MI_SafeArea), SLOT(trigger()));
+  connect(CommandManager::instance()->getAction(MI_SafeArea),
+          SIGNAL(triggered(bool)), safeBtn, SLOT(setPressed(bool)));
+  safeBtn->setPressed(
+      CommandManager::instance()->getAction(MI_SafeArea)->isChecked());
+
+  // Field guide
+  x += 1 + iconWidth;
+  auto *gridBtn = new TPanelTitleBarButton(titleBar, getIconPath("pane_grid"));
+  gridBtn->setToolTip(tr("Field Guide"));
+  titleBar->add(QPoint(x, 0), gridBtn);
+  connect(gridBtn, SIGNAL(toggled(bool)),
+          CommandManager::instance()->getAction(MI_FieldGuide), SLOT(trigger()));
+  connect(CommandManager::instance()->getAction(MI_FieldGuide),
+          SIGNAL(triggered(bool)), gridBtn, SLOT(setPressed(bool)));
+  gridBtn->setPressed(
+      CommandManager::instance()->getAction(MI_FieldGuide)->isChecked());
+
+  // ---- View mode button set: Camera Stand View + Camera View ----
   TPanelTitleBarButtonSet *viewModeButtonSet = new TPanelTitleBarButtonSet();
   m_referenceModeBs                         = viewModeButtonSet;
 
-  int x         = -105;
-  int iconWidth = 20;
-
-  // Camera Stand View
+  // 10px gap before the camera view group
+  x = -105;
   TPanelTitleBarButton *button =
       new TPanelTitleBarButton(titleBar, getIconPath("pane_table"));
   button->setToolTip(tr("Camera Stand View"));
   titleBar->add(QPoint(x, 0), button);
   button->setButtonSet(viewModeButtonSet, SceneViewer::NORMAL_REFERENCE);
 
-  // Camera View (animatic default — always shows camera framing)
   x += 1 + iconWidth;
   button = new TPanelTitleBarButton(titleBar, getIconPath("pane_cam"));
   button->setToolTip(tr("Camera View"));
   titleBar->add(QPoint(x, 0), button);
   button->setButtonSet(viewModeButtonSet, SceneViewer::CAMERA_REFERENCE);
-  button->setPressed(true);  // reflect the CAMERA_REFERENCE set in the constructor
+  button->setPressed(true);
 
   connect(viewModeButtonSet, SIGNAL(selected(int)), m_sceneViewer,
           SLOT(setReferenceMode(int)));
 
-  // Preview button — enables full render preview
+  // Preview button
   x += 10 + iconWidth;
   m_previewButton = new TPanelTitleBarButtonForPreview(
       titleBar, getIconPath("pane_preview"));
   titleBar->add(QPoint(x, 0), m_previewButton);
   m_previewButton->setToolTip(tr("Preview"));
-  // Direct connection: animatic viewer is not part of the active-viewer rotation,
-  // so we bypass the MI_ToggleViewerPreview command and connect directly.
   connect(m_previewButton, SIGNAL(toggled(bool)), this,
           SLOT(enableFullPreview(bool)));
 
-  // Sub-camera preview button: created but hidden — required to be non-null
-  // because enableFullPreview() and onSceneSwitched() call setPressed() on it.
+  // Sub-camera preview: hidden, kept non-null for base-class safety.
   m_subcameraPreviewButton = new TPanelTitleBarButtonForPreview(
       this, getIconPath("pane_subpreview"));
   m_subcameraPreviewButton->hide();
@@ -2937,6 +2962,41 @@ ZtoryAnimaticViewerPanel::ZtoryAnimaticViewerPanel(QWidget *parent)
   // Title bar buttons for the animatic viewer.
   m_viewer->initializeAnimaticTitleBar(getTitleBar());
 
+  // Symmetry and perspective grid buttons — only meaningful in shot edit mode.
+  // Created here (hidden) so they share the panel title bar; shown/hidden by
+  // enterShotMode() / restoreAnimaticButtons().
+  auto makeOverlayBtn = [&](int x, const QString &icon, const QString &tip,
+                             const char *actionId) -> TPanelTitleBarButton * {
+    auto *btn = new TPanelTitleBarButton(getTitleBar(), getIconPath(icon));
+    btn->setToolTip(tr(tip.toUtf8().constData()));
+    getTitleBar()->add(QPoint(x, 0), btn);
+    connect(btn, SIGNAL(toggled(bool)),
+            CommandManager::instance()->getAction(actionId), SLOT(trigger()));
+    connect(CommandManager::instance()->getAction(actionId),
+            SIGNAL(triggered(bool)), btn, SLOT(setPressed(bool)));
+    btn->hide();
+    return btn;
+  };
+  m_overlayButtons.append(makeOverlayBtn(-198, "pane_symmetry",    "Show Symmetry Guide",    MI_ShowSymmetryGuide));
+  m_overlayButtons.append(makeOverlayBtn(-177, "pane_perspective", "Show Perspective Grids", MI_ShowPerspectiveGrids));
+
+  // The CommandManager action toggling alone is not enough — the tool object must
+  // also be notified via setGuideEnabled() (normally done in onSymmetryGuideToggled,
+  // which is only wired in viewers that call initializeTitleBar()).  Mirror that
+  // call here so symmetry/perspective drawing works in shot edit mode.
+  connect(CommandManager::instance()->getAction(MI_ShowSymmetryGuide),
+          &QAction::triggered, this, [](bool on) {
+    SymmetryTool *t = dynamic_cast<SymmetryTool *>(
+        TTool::getTool(T_Symmetry, TTool::RasterImage));
+    if (t) t->setGuideEnabled(on);
+  });
+  connect(CommandManager::instance()->getAction(MI_ShowPerspectiveGrids),
+          &QAction::triggered, this, [](bool on) {
+    PerspectiveTool *t = dynamic_cast<PerspectiveTool *>(
+        TTool::getTool(T_PerspectiveGrid, TTool::RasterImage));
+    if (t) t->setGuideEnabled(on);
+  });
+
   // Back button → return to animatic mode.
   connect(m_backBtn, &QToolButton::clicked,
           this, &ZtoryAnimaticViewerPanel::returnToAnimaticMode);
@@ -2962,7 +3022,9 @@ ZtoryAnimaticViewerPanel::ZtoryAnimaticViewerPanel(QWidget *parent)
     if (m_stack->currentIndex() != 1) return;  // already in animatic mode
     ToonzScene *scene = TApp::instance()->getCurrentScene()->getScene();
     if (scene && scene->getChildStack()->getAncestorCount() == 0) {
-      // Already at main level — just update the viewer, no need to close child.
+      // Xsheet returned to main level via any path — restore button routing
+      // before hiding the shot viewer (same cleanup as returnToAnimaticMode).
+      restoreAnimaticButtons();
       m_stack->setCurrentIndex(0);
       m_topBar->hide();
     }
@@ -2996,6 +3058,8 @@ void ZtoryAnimaticViewerPanel::enterShotMode(int /*col*/) {
     connect(pb, SIGNAL(toggled(bool)), m_shotViewer, SLOT(enableFullPreview(bool)));
   }
 
+  for (auto *btn : m_overlayButtons) btn->show();
+
   m_stack->setCurrentIndex(1);
   m_topBar->show();
 }
@@ -3012,24 +3076,25 @@ bool ZtoryAnimaticViewerPanel::eventFilter(QObject *obj, QEvent *e) {
   return TPanel::eventFilter(obj, e);
 }
 
-void ZtoryAnimaticViewerPanel::returnToAnimaticMode() {
-  // Close any open sub-scene, switch back to the animatic viewer page, and
-  // (if linked) restore the side panels to animatic mode.
-
-  // Reconnect title bar buttons back to the animatic viewer before closing the sub-scene.
-  if (m_shotViewer) {
-    if (auto *bs = m_viewer->referenceModeButtonSet()) {
-      disconnect(bs, SIGNAL(selected(int)), m_shotViewer->sceneViewer(), SLOT(setReferenceMode(int)));
-      connect(bs, SIGNAL(selected(int)), m_viewer->sceneViewer(), SLOT(setReferenceMode(int)));
-    }
-    if (auto *pb = m_viewer->previewButton()) {
-      // Disable preview in shot viewer before leaving
-      m_shotViewer->sceneViewer()->enablePreview(SceneViewer::NO_PREVIEW);
-      if (pb->isChecked()) pb->setPressed(false);
-      disconnect(pb, SIGNAL(toggled(bool)), m_shotViewer, SLOT(enableFullPreview(bool)));
-      connect(pb, SIGNAL(toggled(bool)), m_viewer, SLOT(enableFullPreview(bool)));
-    }
+void ZtoryAnimaticViewerPanel::restoreAnimaticButtons() {
+  // Re-route title bar buttons (view mode + preview) from shot viewer back to
+  // the animatic viewer. Safe to call even if buttons were never rerouted —
+  // disconnect() is a no-op when the connection doesn't exist.
+  for (auto *btn : m_overlayButtons) btn->hide();
+  if (!m_shotViewer) return;
+  if (auto *bs = m_viewer->referenceModeButtonSet()) {
+    disconnect(bs, SIGNAL(selected(int)), m_shotViewer->sceneViewer(), SLOT(setReferenceMode(int)));
+    connect(bs, SIGNAL(selected(int)), m_viewer->sceneViewer(), SLOT(setReferenceMode(int)));
   }
+  if (auto *pb = m_viewer->previewButton()) {
+    if (pb->isChecked()) pb->setPressed(false);
+    disconnect(pb, SIGNAL(toggled(bool)), m_shotViewer, SLOT(enableFullPreview(bool)));
+    connect(pb, SIGNAL(toggled(bool)), m_viewer, SLOT(enableFullPreview(bool)));
+  }
+}
+
+void ZtoryAnimaticViewerPanel::returnToAnimaticMode() {
+  restoreAnimaticButtons();
 
   ToonzScene *scene = TApp::instance()->getCurrentScene()->getScene();
   if (scene) {

@@ -541,6 +541,11 @@ in TXsheetImp.
   void stopScrub();
   void play(TSoundTrackP soundtrack, int s0, int s1, bool loop,
             bool scrubbing = false);
+  // Sets the master mix player's output volume in [0,1].  Used by Ztoryc
+  // animatic to mute the mix when per-column players carry the audible
+  // signal (the silent mix still drives the audio-master clock via
+  // getAudioPlayedUSecs()).  No-op if the player is not yet created.
+  void setMasterVolume(double v);
 
   // Global main-audio enable flag — toggled by MI_ToggleMainAudio (sceneviewer.cpp).
   // scrub() checks this flag and returns early when audio is disabled.

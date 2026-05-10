@@ -6,18 +6,22 @@
 > Voci più vecchie di ~2 settimane → spostarle in `CHANGELOG_ARCHIVE.md`.
 
 ---
-## [2026-05-10] — Bug fix pre-release: Perspective Grid crash + shot viewer camera view
+## [2026-05-10] — Early Beta v0.2: overlay buttons shot viewer + symmetry guide fix
 
 ### Fixed
 - **Crash Perspective Grid Tool (SIGSEV)**: `m_perspectiveButton` era un pointer non inizializzato in `ComboViewerPanel` (che non chiama `initializeTitleBar()`). Fix: inizializzati `m_symmetryButton` e `m_perspectiveButton` a `nullptr` nel costruttore di `BaseViewerPanel` + null-guard in `onToolSwitched()` prima di dereferenziare entrambi. (`viewerpane.cpp`)
 - **Camera View e Render Preview non funzionavano in shot mode**: i bottoni nel title bar di `ZtoryAnimaticViewerPanel` (Camera Stand, Camera View, Preview) erano connessi permanentemente allo SceneViewer dell'animatic viewer (pagina 0 dello stack). In shot mode (pagina 1, ComboViewerPanel), i bottoni non avevano effetto sul viewer visibile. Fix: in `enterShotMode()` le connessioni vengono riinstradate al `ComboViewerPanel`; in `returnToAnimaticMode()` vengono riportate all'animatic viewer. Il shot viewer si apre di default in `CAMERA_REFERENCE`. (`ztoryanimatic.cpp`, `viewerpane.h`)
+- **Room nere quando si tornava al workflow storyboard con simmetria attiva**: causato dalla lambda `xsheetSwitched` che non ripristinava il routing dei bottoni quando l'xsheet tornava al livello principale via percorso diverso dal back button. Fix: aggiunto `restoreAnimaticButtons()` nella lambda. (`ztoryanimatic.cpp`)
+- **Symmetry Guide non funzionava in shot edit mode**: il bottone overlay triggherava `MI_ShowSymmetryGuide` via CommandManager, aggiornando la `TEnv` var ma senza mai chiamare `SymmetryTool::setGuideEnabled()` (che normalmente è in `onSymmetryGuideToggled()`, connessa solo nei viewer che chiamano `initializeTitleBar()`). Fix: aggiunta connessione diretta a `SymmetryTool`/`PerspectiveTool::setGuideEnabled()` nel costruttore di `ZtoryAnimaticViewerPanel`. (`ztoryanimatic.cpp`)
 
 ### Added
+- **Overlay buttons in shot edit mode**: bottoni Symmetry Guide e Perspective Grid nel title bar di `ZtoryAnimaticViewerPanel`, visibili solo in shot edit mode (enterShotMode/restoreAnimaticButtons). Bottoni Safe Area e Field Guide sempre visibili sull'animatic viewer. (`ztoryanimatic.cpp`)
 - `BaseViewerPanel::sceneViewer()`, `referenceModeButtonSet()`, `previewButton()` — accessor pubblici per permettere a `ZtoryAnimaticViewerPanel` di reindirizzare le connessioni dei bottoni senza accedere a membri protetti. (`viewerpane.h`)
+- `ZtoryAnimaticViewerPanel::restoreAnimaticButtons()` — helper che nasconde gli overlay buttons e ripristina il routing dei bottoni verso l'animatic viewer; chiamato in `returnToAnimaticMode()` e nella lambda `xsheetSwitched`. (`ztoryanimatic.cpp`)
 
 ### Notes
-- Task 21 (Volume per traccia audio) completato nella sessione di oggi prima dei bug fix
-- Early Beta (v0.2) milestone raggiunta: Undo/Redo ✅, audio toggle ✅, crash fix ✅, shot viewer fix ✅
+- Task 21 (Volume per traccia audio) completato nella sessione precedente dello stesso giorno
+- Early Beta (v0.2) milestone raggiunta: Undo/Redo ✅, audio toggle ✅, crash fix ✅, shot viewer camera view ✅, overlay buttons shot viewer ✅, symmetry guide fix ✅
 
 ---
 ## [2026-05-09] — Audio sub-scene fix completo + cleanup SLIP/onion residui

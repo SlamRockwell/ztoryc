@@ -567,6 +567,19 @@ void showEvent(QShowEvent *);
 void hideEvent(QHideEvent *);
 
 FlipConsole::~FlipConsole() {
+  // Stop and join the playback thread before destruction. Without this,
+  // QThread::~QThread() qFatal()s if the thread is still running at app
+  // shutdown (FlipConsole is destroyed while playback was active).
+  if (m_playbackExecutor.isRunning()) {
+    // Disconnect signals first: the executor emits nextFrame via
+    // BlockingQueuedConnection, so if the thread is mid-emit and the main
+    // thread is blocked in wait(), we deadlock.  Disconnecting lets the
+    // emit return immediately.
+    QObject::disconnect(&m_playbackExecutor, nullptr, nullptr, nullptr);
+    m_playbackExecutor.abort();
+    if (!m_playbackExecutor.wait(2000))
+      m_playbackExecutor.terminate();  // last-resort if abort flag missed
+  }
   // Ensure this console is removed from the shared visible-consoles list even
   // if hideEvent / setActive(false) was not called before deletion (e.g. when
   // clearRooms() calls delete directly on a room widget that was never hidden).

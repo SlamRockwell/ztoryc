@@ -314,7 +314,11 @@ void ToggleCommandHandler::execute() {
 
 ToggleCommandHandler viewTableToggle(MI_ViewTable, false);
 ToggleCommandHandler editInPlaceToggle(MI_ToggleEditInPlace, false);
-ToggleCommandHandler mainAudioToggle(MI_ToggleMainAudio, true);
+// Init m_status = false so the createToggle()->trigger() path (called when
+// MainAudioToggleAction env var is 1) flips it to true via execute(),
+// matching the QAction's checked=true state. Initializing with true caused
+// the visible inversion bug: icon ON → audio OFF and vice versa.
+ToggleCommandHandler mainAudioToggle(MI_ToggleMainAudio, false);
 ToggleCommandHandler fieldGuideToggle(MI_FieldGuide, false);
 ToggleCommandHandler safeAreaToggle(MI_SafeArea, false);
 ToggleCommandHandler rasterizePliToggle(MI_RasterizePli, false);

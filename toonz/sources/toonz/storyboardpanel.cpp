@@ -201,28 +201,35 @@ PanelWidget::PanelWidget(QWidget *parent)
   m_previewLabel->setStyleSheet("QLabel{background:#f0f0eb;border:none;color:#bbb;}");
   layout->addWidget(m_previewLabel);
 
+  // Helper lambda — sets up a QTextEdit with stable layout to avoid the
+  // QAbstractScrollArea layout-recursion crash that occurs when the default
+  // ScrollBarAsNeeded policy oscillates between "scrollbar visible/hidden",
+  // each toggle reflowing the document, retriggering layout, infinitely.
+  auto makeStableTextEdit = [](const QString &placeholder) {
+    QTextEdit *te = new QTextEdit();
+    te->setPlaceholderText(placeholder);
+    te->setFixedHeight(68);
+    // Lock vertical size policy (setFixedHeight already does, but be explicit
+    // so layout refreshes don't widen the constraint) and pin scroll bars to
+    // stable states.
+    te->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    te->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    te->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    te->setStyleSheet(
+      "QTextEdit{background:#2a2a2a;color:#eee;border:1px solid #444;font-size:11px;padding:2px;}");
+    return te;
+  };
+
   layout->addWidget(makeFieldLabel("Dialog"));
-  m_dialogField = new QTextEdit();
-  m_dialogField->setPlaceholderText("Enter dialogue...");
-  m_dialogField->setFixedHeight(68);
-  m_dialogField->setStyleSheet(
-    "QTextEdit{background:#2a2a2a;color:#eee;border:1px solid #444;font-size:11px;padding:2px;}");
+  m_dialogField = makeStableTextEdit("Enter dialogue...");
   layout->addWidget(m_dialogField);
 
   layout->addWidget(makeFieldLabel("Action Notes"));
-  m_actionField = new QTextEdit();
-  m_actionField->setPlaceholderText("Enter action notes...");
-  m_actionField->setFixedHeight(68);
-  m_actionField->setStyleSheet(
-    "QTextEdit{background:#2a2a2a;color:#eee;border:1px solid #444;font-size:11px;padding:2px;}");
+  m_actionField = makeStableTextEdit("Enter action notes...");
   layout->addWidget(m_actionField);
 
   layout->addWidget(makeFieldLabel("Notes"));
-  m_notesField = new QTextEdit();
-  m_notesField->setPlaceholderText("Enter notes...");
-  m_notesField->setFixedHeight(68);
-  m_notesField->setStyleSheet(
-    "QTextEdit{background:#2a2a2a;color:#eee;border:1px solid #444;font-size:11px;padding:2px;}");
+  m_notesField = makeStableTextEdit("Enter notes...");
   layout->addWidget(m_notesField);
 
   connect(m_matchButton, &QPushButton::clicked, this,

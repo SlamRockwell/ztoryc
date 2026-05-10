@@ -16,6 +16,7 @@
 #include <set>
 #include <QKeyEvent>
 #include <QMap>
+#include <map>
 #include <QSet>
 #include <QStackedWidget>
 #include <QToolButton>
@@ -42,7 +43,26 @@ public:
   void invalidateSoundTrack() {
     m_soundTrack        = TSoundTrackP();
     m_soundBuildPending = false;  // Allow a fresh async build
+    m_columnSoundTracks.clear();  // Per-column caches must rebuild too
   }
+
+  // Per-column un-mixed sound track, cached.  Used during play so each audio
+  // column can be played on its own TSoundOutputDevice (column->m_player) for
+  // real-time per-track volume control via QAudioOutput::setVolume().
+  TSoundTrackP requireColumnSoundTrack(int col);
+
+  // Start per-column audio playback from |startMainFrame| on each audio
+  // column's own m_player.  Each player runs at the column's m_volume,
+  // updated in real-time via TXshSoundColumn::setVolume().
+  void startPerColumnAudio(int startMainFrame);
+  // Stop every audio column's m_player.
+  void stopPerColumnAudio();
+  // Returns elapsed microseconds since play start, taken from the first
+  // audio column's player processedUsecs.  Used as the audio-master clock
+  // by ZtoryAnimaticViewer::onDrawFrame in place of the previous
+  // mainXsh->getAudioPlayedUSecs() (the muted mix on mainXsh->m_player did
+  // not advance processedUsecs reliably on macOS CoreAudio when volume=0).
+  qint64 getMasterAudioUsecs() const;
   // Viewer registers itself so the panel can call restartAudioIfPlaying().
   void setViewer(ZtoryAnimaticViewer *v) { m_viewer = v; }
   ZtoryAnimaticViewer *viewer() const { return m_viewer; }
@@ -132,6 +152,11 @@ private:
   // Dedicated device for per-frame scrub audio — separate from mainXsh->m_player
   // so that reset() for precision scrub never disrupts continuous playback.
   TSoundOutputDevice   *m_scrubDevice = nullptr;
+  // Per-column un-mixed sound tracks built on demand, keyed by column index.
+  // Used during play so each TXshSoundColumn plays on its own m_player with
+  // its own volume — enables real-time multi-track volume changes via
+  // QAudioOutput::setVolume() on each column's device.
+  std::map<int, TSoundTrackP> m_columnSoundTracks;
 };
 
 class ZtoryAnimaticRuler : public QWidget {
@@ -345,6 +370,11 @@ private:
   bool m_locked = false;
   bool m_muted  = false;
   bool m_solo   = false;
+  // Volume — mirrors TXshSoundColumn::getVolume() (range [0,1]).  Drawn as a
+  // small horizontal slider in the label area; drag updates the column's
+  // m_volume so the next mixingTogether() picks it up.
+  double m_volume         = 1.0;
+  bool   m_draggingVolume = false;
   // Set by applyMuteSolo() to dim the waveform when another track is solo'd.
   // Separate from m_muted so user state is never corrupted.
   bool m_effectiveMuted = false;
@@ -571,12 +601,16 @@ protected:
   bool eventFilter(QObject *obj, QEvent *e) override;
 
 private:
+  void restoreAnimaticButtons();
   ZtoryAnimaticViewer *m_viewer     = nullptr;
   ComboViewerPanel    *m_shotViewer = nullptr;
   QStackedWidget      *m_stack      = nullptr;
   QWidget             *m_topBar     = nullptr;  // back btn + link btn bar
   QToolButton         *m_backBtn    = nullptr;
   QToolButton         *m_linkBtn    = nullptr;
+  // Overlay buttons (symmetry, perspective, safe area, field guide):
+  // added to the panel title bar but only visible in shot mode.
+  QList<QWidget *>     m_overlayButtons;
 };
 
 // ---- ZtoryAnimaticPanel ----
