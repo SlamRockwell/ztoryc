@@ -783,6 +783,9 @@ void StoryboardPanel::addPanelWidget(int shotIdx, int panelIdx) {
 }
 
 void StoryboardPanel::connectPanelWidget(PanelWidget *pw) {
+  // Install event filter on text fields for text-edit undo (focusIn/focusOut).
+  for (QTextEdit *te : pw->textFields())
+    te->installEventFilter(this);
   connect(pw, &PanelWidget::editRequested, this, &StoryboardPanel::onEditShot);
   connect(pw, &PanelWidget::matchDurationRequested, this, &StoryboardPanel::onMatchDuration);
   connect(pw, &PanelWidget::durationChanged, this, &StoryboardPanel::onDurationChanged);
@@ -1652,6 +1655,20 @@ void StoryboardPanel::refreshFromScene() {
 // arrives, so only Delete (which lacks a global binding in most contexts) worked.
 bool StoryboardPanel::eventFilter(QObject *obj, QEvent *e) {
   const QEvent::Type t = e->type();
+
+  // ── Text field undo: capture snapshot before editing, push on focus out ──
+  if (t == QEvent::FocusIn || t == QEvent::FocusOut) {
+    if (qobject_cast<QTextEdit *>(obj)) {
+      if (t == QEvent::FocusIn && !m_textEditing) {
+        m_textEditing    = true;
+        m_textUndoBefore = captureSnapshot();
+      } else if (t == QEvent::FocusOut && m_textEditing) {
+        commitTextUndo();
+      }
+    }
+    return false;
+  }
+
   if (t != QEvent::ShortcutOverride && t != QEvent::KeyPress) return false;
 
   // Check if focus is inside this panel's subtree
@@ -2500,6 +2517,29 @@ void StoryboardPanel::commitDurationUndo() {
       new UndoBoardState(this, tr("Resize Shot Duration"),
                          std::move(m_pendingDurationBefore), std::move(after)));
   m_pendingDurationBefore.clear();
+}
+
+void StoryboardPanel::commitTextUndo() {
+  if (!m_textEditing) return;
+  m_textEditing = false;
+  auto after = captureSnapshot();
+  // Only push undo if any panel's text actually changed.
+  bool changed = (after.size() != m_textUndoBefore.size());
+  for (size_t i = 0; i < after.size() && !changed; i++) {
+    const auto &ap = after[i].data.panels;
+    const auto &bp = m_textUndoBefore[i].data.panels;
+    if (ap.size() != bp.size()) { changed = true; break; }
+    for (size_t j = 0; j < ap.size() && !changed; j++) {
+      changed = ap[j].dialog != bp[j].dialog ||
+                ap[j].action != bp[j].action ||
+                ap[j].notes  != bp[j].notes;
+    }
+  }
+  if (changed) {
+    TUndoManager::manager()->add(
+        new UndoBoardState(this, tr("Edit Text"),
+                           std::move(m_textUndoBefore), std::move(after)));
+  }
 }
 
 void StoryboardPanel::onMoveShot(int fromShot, int toShot) {

@@ -37,6 +37,7 @@
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QScrollArea>
+#include <QScrollBar>
 #include <QSplitter>
 #include <QMenu>
 #include <QLabel>
@@ -3286,6 +3287,7 @@ ZtoryAnimaticPanel::ZtoryAnimaticPanel(QWidget *parent) : TPanel(parent) {
 
   // Scroll area with ruler + track + audio
   QScrollArea *scroll = new QScrollArea(container);
+  m_scroll = scroll;
   m_scrollContent = new QWidget();
   m_scrollLay = new QVBoxLayout(m_scrollContent);
   m_scrollLay->setContentsMargins(0, 0, 0, 0);
@@ -3301,6 +3303,9 @@ ZtoryAnimaticPanel::ZtoryAnimaticPanel(QWidget *parent) : TPanel(parent) {
   // if every ancestor up to the scroll viewport also has mouse tracking.
   scroll->viewport()->setMouseTracking(true);
   m_scrollContent->setMouseTracking(true);
+  // Pan event filter: intercepts middle-mouse and space+left on ruler/track.
+  m_ruler->installEventFilter(this);
+  m_track->installEventFilter(this);
 
   // Layout: toolbar on top, scroll below
   lay->addWidget(toolbar);
@@ -3832,7 +3837,43 @@ void ZtoryAnimaticPanel::onCloneShots() {
 
 bool ZtoryAnimaticPanel::eventFilter(QObject *obj, QEvent *e) {
   const QEvent::Type t = e->type();
-  if (t != QEvent::ShortcutOverride && t != QEvent::KeyPress) return false;
+
+  // ── Middle-mouse / Space+drag panning on ruler or track ──────────────────
+  if (m_scroll && (obj == m_ruler || obj == m_track)) {
+    if (t == QEvent::MouseButtonPress) {
+      auto *me = static_cast<QMouseEvent *>(e);
+      bool wantPan = me->button() == Qt::MiddleButton ||
+                     (me->button() == Qt::LeftButton && m_spaceDown);
+      if (wantPan) {
+        m_panning         = true;
+        m_panAnchorGlobal = me->globalPos();
+        m_panAnchorScrollX = m_scroll->horizontalScrollBar()->value();
+        static_cast<QWidget *>(obj)->setCursor(Qt::ClosedHandCursor);
+        return true;
+      }
+    }
+    if (t == QEvent::MouseMove && m_panning) {
+      auto *me = static_cast<QMouseEvent *>(e);
+      int dx = m_panAnchorGlobal.x() - me->globalPos().x();
+      m_scroll->horizontalScrollBar()->setValue(qMax(0, m_panAnchorScrollX + dx));
+      return true;
+    }
+    if (t == QEvent::MouseButtonRelease && m_panning) {
+      auto *me = static_cast<QMouseEvent *>(e);
+      if (me->button() == Qt::MiddleButton || me->button() == Qt::LeftButton) {
+        m_panning = false;
+        auto *w = static_cast<QWidget *>(obj);
+        if (m_spaceDown) w->setCursor(Qt::OpenHandCursor);
+        else             w->unsetCursor();
+        return true;
+      }
+    }
+  }
+
+  // ── Key events ────────────────────────────────────────────────────────────
+  if (t != QEvent::ShortcutOverride && t != QEvent::KeyPress &&
+      t != QEvent::KeyRelease)
+    return false;
 
   // Check focus is inside this panel's subtree
   QWidget *fw = QApplication::focusWidget();
@@ -3842,7 +3883,25 @@ bool ZtoryAnimaticPanel::eventFilter(QObject *obj, QEvent *e) {
 
   if (!inPanel) return false;
 
-  QKeyEvent *ke  = static_cast<QKeyEvent *>(e);
+  QKeyEvent *ke = static_cast<QKeyEvent *>(e);
+
+  // Space key: track pressed state for pan mode; do NOT consume so play still works.
+  if (ke->key() == Qt::Key_Space && !ke->isAutoRepeat()) {
+    if (t == QEvent::KeyPress && !m_spaceDown) {
+      m_spaceDown = true;
+      m_ruler->setCursor(Qt::OpenHandCursor);
+      m_track->setCursor(Qt::OpenHandCursor);
+    } else if (t == QEvent::KeyRelease) {
+      m_spaceDown = false;
+      m_panning   = false;
+      m_ruler->unsetCursor();
+      m_track->unsetCursor();
+    }
+    return false;
+  }
+
+  if (t == QEvent::KeyRelease) return false;
+
   const bool cmd   = ke->modifiers() & Qt::ControlModifier;
   const bool shift = ke->modifiers() & Qt::ShiftModifier;
   const bool noMod = ke->modifiers() == Qt::NoModifier;
@@ -3900,6 +3959,18 @@ void ZtoryAnimaticPanel::keyPressEvent(QKeyEvent *e) {
   }
 
   TPanel::keyPressEvent(e);
+}
+
+void ZtoryAnimaticPanel::keyReleaseEvent(QKeyEvent *e) {
+  if (e->key() == Qt::Key_Space && !e->isAutoRepeat()) {
+    m_spaceDown = false;
+    m_panning   = false;
+    m_ruler->unsetCursor();
+    m_track->unsetCursor();
+    e->accept();
+    return;
+  }
+  TPanel::keyReleaseEvent(e);
 }
 
 void ZtoryAnimaticPanel::onShotClicked(int col) {
@@ -4940,6 +5011,16 @@ void ZtoryAnimaticPanel::onMatchSubsceneDuration(int col) {
 }
 
 void ZtoryAnimaticPanel::onZoomChanged(double ppf) {
+  // Zoom-to-cursor: compute cursor position in content coords BEFORE changing ppf.
+  int oldScrollX = m_scroll ? m_scroll->horizontalScrollBar()->value() : 0;
+  int cursorScreenX = -1;
+  if (m_scroll) {
+    QPoint vp = m_scroll->viewport()->mapFromGlobal(QCursor::pos());
+    if (m_scroll->viewport()->rect().contains(vp))
+      cursorScreenX = vp.x();
+  }
+
+  double oldPpf = m_ppf;
   m_ppf = ppf;
   m_ruler->setPixelsPerFrame(ppf);
   m_track->setPixelsPerFrame(ppf);
@@ -4952,6 +5033,16 @@ void ZtoryAnimaticPanel::onZoomChanged(double ppf) {
     m_zoomSlider->blockSignals(false);
   }
   updateTrackWidths();
+
+  // Adjust scrollbar so the frame under the cursor stays at the same screen position.
+  if (m_scroll && oldPpf > 0 && cursorScreenX >= 0) {
+    int contentX = cursorScreenX + oldScrollX;
+    if (contentX >= kLabelW) {
+      double frame = (double)(contentX - kLabelW) / oldPpf;
+      int newScrollX = (int)(kLabelW + frame * ppf) - cursorScreenX;
+      m_scroll->horizontalScrollBar()->setValue(qMax(0, newScrollX));
+    }
+  }
 }
 
 void ZtoryAnimaticPanel::onFrameChanged(int frame) {

@@ -655,6 +655,7 @@ public:
 
 protected:
   void contextMenuEvent(QContextMenuEvent *e) override;
+  void keyReleaseEvent(QKeyEvent *e) override;
 
 private:
   // ── Clipboard per Cmd+C/X/V ──────────────────────────────────────────────
@@ -664,10 +665,16 @@ private:
   ZtoryAnimaticTrack *m_track;
   QWidget *m_scrollContent = nullptr;
   QVBoxLayout *m_scrollLay = nullptr;
+  QScrollArea *m_scroll    = nullptr;
   QList<ZtoryAudioTrack *> m_audioTracks;
   QSlider *m_zoomSlider = nullptr;
   bool m_audioLinked = true;
   double m_ppf = 8.0;
+  // ── Panning state (Space+drag or Middle-mouse drag) ───────────────────────
+  bool   m_spaceDown       = false;
+  bool   m_panning         = false;
+  QPoint m_panAnchorGlobal;
+  int    m_panAnchorScrollX = 0;
   bool m_refreshing = false;      // re-entrancy guard for refreshFromScene
   bool m_refreshingAudio = false; // re-entrancy guard for refreshAudioTracks
   // Per-column mute/solo/lock state — persists across refreshAudioTracks() rebuilds

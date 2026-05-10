@@ -22,6 +22,7 @@
 ### Notes
 - Task 21 (Volume per traccia audio) completato nella sessione precedente dello stesso giorno
 - Early Beta (v0.2) milestone raggiunta: Undo/Redo ✅, audio toggle ✅, crash fix ✅, shot viewer camera view ✅, overlay buttons shot viewer ✅, symmetry guide fix ✅
+- Fix version: `ZtorycVersion.cmake` era già a `0.3` (next milestone) — ripristinato a `0.2.0` per la release corrente
 
 ---
 ## [2026-05-09] — Audio sub-scene fix completo + cleanup SLIP/onion residui

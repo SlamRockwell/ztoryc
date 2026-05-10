@@ -382,6 +382,7 @@ void ColumnFan::shiftFoldedStates(int col, int shift) {
     for (int c = (m_columns.size() - diff); c < m_columns.size(); c++) {
       m_columns[c].m_active  = true;
       m_columns[c].m_visible = true;
+      m_columns[c].m_width   = 0;  // reset to default width (peg columns set a custom narrow width)
     }
   } else if (newCol > col) {  // shift right
     int diff = newCol - col;

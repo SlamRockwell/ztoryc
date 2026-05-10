@@ -84,6 +84,7 @@ public:
   // Returns the full shot label (prefix + number), e.g. "SH020".
   // For Sequence-style combined labels, returns the SH part only.
   QString shotNumber() const;
+  QList<QTextEdit *> textFields() const { return {m_dialogField, m_actionField, m_notesField}; }
 signals:
   void totalDurationChanged(int frames);
   void editRequested(int shotIndex);
@@ -205,7 +206,12 @@ protected:
   void onShotRemovedAt(int col);  // called when merge/external op deletes a shot at col
   void onMatchDuration(int shotIdx);  // resize timeline column to sub-scene actual duration
   void commitDurationUndo();          // fires after coalescing timer expires
+  void commitTextUndo();              // fires when a text field loses focus
   void onBackToBoard();
+private:
+  // Text-field undo: snapshot taken on focusIn, pushed on focusOut.
+  bool m_textEditing = false;
+  std::vector<ZtoryShotSnap> m_textUndoBefore;
 };
 
 #endif // STORYBOARDPANEL_H
