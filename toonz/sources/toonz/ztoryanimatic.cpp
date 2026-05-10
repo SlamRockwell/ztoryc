@@ -188,6 +188,83 @@ int ZtoryAnimaticController::currentFrame() const {
   return m_frameHandle->getFrame();
 }
 
+void ZtoryAnimaticController::startPerColumnAudio(int startMainFrame) {
+  TXsheet *xsh = mainXsheet();
+  if (!xsh) return;
+  ToonzScene *scene = TApp::instance()->getCurrentScene()->getScene();
+  if (!scene) return;
+  double fps = scene->getProperties()->getOutputProperties()->getFrameRate();
+  if (fps <= 0.0) fps = 24.0;
+  if (!TXsheet::isMainAudioEnabled()) return;
+  if (!TSoundOutputDevice::installed()) return;
+  for (int c = 0; c < xsh->getColumnCount(); c++) {
+    TXshColumn *column = xsh->getColumn(c);
+    if (!column) continue;
+    TXshSoundColumn *sc = column->getSoundColumn();
+    if (!sc || sc->isEmpty()) continue;
+    TSoundTrackP colTrack = requireColumnSoundTrack(c);
+    if (!colTrack) continue;
+    double colSpf = colTrack->getSampleRate() / fps;
+    TINT32 ts0 = (TINT32)(startMainFrame * colSpf);
+    TINT32 colSamples = (TINT32)colTrack->getSampleCount();
+    if (ts0 >= colSamples) continue;
+    TINT32 ts1 = colSamples - 1;
+    if (ts1 <= ts0) continue;
+    sc->play(colTrack, ts0, ts1, false);
+  }
+}
+
+void ZtoryAnimaticController::stopPerColumnAudio() {
+  TXsheet *xsh = mainXsheet();
+  if (!xsh) return;
+  for (int c = 0; c < xsh->getColumnCount(); c++) {
+    TXshColumn *column = xsh->getColumn(c);
+    TXshSoundColumn *sc = column ? column->getSoundColumn() : nullptr;
+    if (sc) sc->stop();
+  }
+}
+
+qint64 ZtoryAnimaticController::getMasterAudioUsecs() const {
+  TXsheet *xsh = mainXsheet();
+  if (!xsh) return 0;
+  // First non-empty audio column with an active player.
+  for (int c = 0; c < xsh->getColumnCount(); c++) {
+    TXshColumn *column = xsh->getColumn(c);
+    TXshSoundColumn *sc = column ? column->getSoundColumn() : nullptr;
+    if (!sc || sc->isEmpty()) continue;
+    qint64 us = sc->getProcessedUsecs();
+    if (us > 0) return us;
+  }
+  return 0;
+}
+
+TSoundTrackP ZtoryAnimaticController::requireColumnSoundTrack(int col) {
+  auto it = m_columnSoundTracks.find(col);
+  if (it != m_columnSoundTracks.end() && it->second) return it->second;
+  TXsheet *xsh = mainXsheet();
+  if (!xsh) return TSoundTrackP();
+  TXshColumn *column = xsh->getColumn(col);
+  if (!column) return TSoundTrackP();
+  TXshSoundColumn *sc = column->getSoundColumn();
+  if (!sc || sc->isEmpty()) return TSoundTrackP();
+  TSoundTrackP track;
+  try {
+    // Pass fromFrame=0 explicitly so the resulting track is indexed by
+    // absolute main-xsheet frame: sample 0 == main frame 0.  Without this,
+    // getOverallSoundTrack defaults to fromFrame = getFirstRow() (the column's
+    // first non-empty row), making sample 0 == that row's frame.  Then the
+    // per-frame mapping `mainFrame * spf` reads the wrong portion of the
+    // track — for two columns whose first rows differ from 0 we'd hear them
+    // both from sample 0 ("frame 1") regardless of clip placement.
+    int toFrame = std::max(sc->getMaxFrame(), 0);
+    track = sc->getOverallSoundTrack(0, toFrame);
+  } catch (...) {
+    track = TSoundTrackP();
+  }
+  m_columnSoundTracks[col] = track;
+  return track;
+}
+
 TSoundTrackP ZtoryAnimaticController::requireSoundTrack() {
   if (m_soundTrack) return m_soundTrack;
   TXsheet *xsh = mainXsheet();
@@ -260,62 +337,17 @@ void ZtoryAnimaticController::onNativePlayingStatusChanged() {
   TXsheet      *mainXsh = mainXsheet();
 
   if (!fh->isPlaying()) {
-    // Playback stopped — stop background audio if we started it.
-    if (m_nativeAudioPlaying && mainXsh) mainXsh->stopScrub();
+    // Playback stopped — stop any audio we started.
+    if (mainXsh) mainXsh->stopScrub();
+    stopPerColumnAudio();
     m_nativeAudioPlaying  = false;
-    m_lastNativePlayFrame = -1;  // reset loop detector for next play session
+    m_lastNativePlayFrame = -1;
     return;
   }
-
-  // Block only if the animatic viewer is actively streaming audio (continuous
-  // play). Using isContinuousPlaying() instead of m_frameHandle->isPlaying()
-  // avoids blocking sub-scene playback audio when the animatic frame handle is
-  // stuck in "playing" state after a room switch without an explicit stop.
-  if (m_viewer && m_viewer->isContinuousPlaying()) return;
-
-  ToonzScene *scene = TApp::instance()->getCurrentScene()->getScene();
-  if (!scene) return;
-
-  ChildStack *cs = scene->getChildStack();
-  // Only handle a single level of nesting (main xsheet → shot sub-scene).
-  // If ancestorCount == 0 the user is at the top level; FlipConsole already
-  // handles audio via the normal BaseViewerPanel path.
-  // If ancestorCount > 1 the user is in a nested sub-scene — skip for now.
-  if (!cs || cs->getAncestorCount() != 1) return;
-
-  TSoundTrackP st = requireSoundTrack();
-  if (!st || !mainXsh) return;
-
-  // Map the current sub-scene frame to its position in the main xsheet.
-  int subFrame = fh->getFrame();
-  std::pair<TXsheet *, int> ancestor = cs->getAncestor(subFrame);
-  // If the row table doesn't have a mapping for subFrame, getAncestor returns
-  // (sub-xsheet, subFrame) instead of (main-xsheet, mainRow).  In that case
-  // the sub-frame has no corresponding main-xsheet position — those frames
-  // should play silent, not audio from sample 0.
-  if (ancestor.first != mainXsh) return;
-  int mainFrame = ancestor.second;
-
-  double fps = scene->getProperties()->getOutputProperties()->getFrameRate();
-  if (fps <= 0.0) fps = 24.0;
-  double spf = st->getSampleRate() / fps;
-
-  TINT32 startSample = (TINT32)(mainFrame * spf);
-  TINT32 totalSamples = (TINT32)st->getSampleCount();
-  int    animFrames   = videoFrameCount(mainXsh);
-  TINT32 endSample    = std::min((TINT32)(animFrames * spf), totalSamples - 1);
-
-  if (startSample > endSample) return;
-
-  if (!TXsheet::isMainAudioEnabled()) return;
-  // stopScrub() clears m_buffer so any residual data from a previous play
-  // call (e.g., rapid play/stop cycles) is discarded before we push the new
-  // segment.  Without this the hardware ring buffer can still contain a
-  // tail of the previous range, which the user perceives as audio playing
-  // "from frame 1" before the correct segment plays from mainFrame*spf.
-  mainXsh->stopScrub();
-  mainXsh->play(st.getPointer(), startSample, endSample, false);
-  m_nativeAudioPlaying = true;
+  // Play start: no work here.  onNativeFrameSwitched plays each frame's
+  // audio per-frame, so audio always follows the current frame mapping
+  // (like the video display).  This avoids the "permanent mute after a
+  // silent stretch" caused by buffering the entire range up-front.
 }
 
 void ZtoryAnimaticController::restartNativeAudioIfPlaying() {
@@ -331,47 +363,24 @@ void ZtoryAnimaticController::restartNativeAudioIfPlaying() {
 // handle and maps the sub-scene frame through ChildStack::getAncestor().
 void ZtoryAnimaticController::onNativeFrameSwitched() {
   TFrameHandle *fh = TApp::instance()->getCurrentFrame();
-  // The animatic owning audio still wins regardless of the play state below.
+  // The animatic owning audio always wins.
   if (m_viewer && m_viewer->isContinuousPlaying()) return;
-
-  // Native-viewer continuous play: streaming audio is already handled by
-  // onNativePlayingStatusChanged. But if play started on a sub-frame that
-  // wasn't yet in the mapped range (so audio didn't start), retry the start
-  // here as frames advance — this lets audio kick in once the playhead
-  // crosses into the mapped region.
-  if (fh->isPlaying()) {
-    int currentFrame = fh->getFrame();
-    // Detect FlipConsole loop-back: when the play range loops, the frame
-    // jumps backward.  Reset so the audio restarts (the previous cycle's
-    // buffer may have already drained naturally if the audio range is
-    // shorter than the play range, leaving m_nativeAudioPlaying stale).
-    if (m_lastNativePlayFrame >= 0 && currentFrame < m_lastNativePlayFrame &&
-        m_nativeAudioPlaying) {
-      TXsheet *mainXsh = mainXsheet();
-      if (mainXsh) mainXsh->stopScrub();
-      m_nativeAudioPlaying = false;
-    }
-    m_lastNativePlayFrame = currentFrame;
-
-    if (!m_nativeAudioPlaying) onNativePlayingStatusChanged();
-    return;
-  }
-  // Not playing — reset loop tracker for the next play session.
-  m_lastNativePlayFrame = -1;
 
   ToonzScene *scene = TApp::instance()->getCurrentScene()->getScene();
   if (!scene) return;
   ChildStack *cs = scene->getChildStack();
+  // Only when inside a sub-scene (ancestorCount==1).  At main level the
+  // FlipConsole's normal audio path handles things.
   if (!cs || cs->getAncestorCount() != 1) return;
 
   TSoundTrackP st = requireSoundTrack();
   TXsheet *mainXsh = mainXsheet();
   if (!st || !mainXsh) return;
 
+  // Map the current sub-frame to its main-xsheet row.  If the mapping is
+  // missing, the sub-frame has no audio source — silent.
   int subFrame = fh->getFrame();
   std::pair<TXsheet *, int> ancestor = cs->getAncestor(subFrame);
-  // Sub-frame must map to a main row; otherwise it's outside the sub-scene's
-  // mapped range and audio should be silent there.
   if (ancestor.first != mainXsh) return;
   int mainFrame = ancestor.second;
 
@@ -386,10 +395,39 @@ void ZtoryAnimaticController::onNativeFrameSwitched() {
   if (s1 >= totalSamples) s1 = totalSamples - 1;
 
   if (!TXsheet::isMainAudioEnabled()) return;
-  // Use the dedicated scrub device so it never overwrites mainXsh->m_player,
-  // which is used for continuous playback.
   if (!TSoundOutputDevice::installed()) return;
-  scrubDevice()->play(st, s0, s1, false);
+
+  // Per-frame audio: each sub-frame plays one frame of its mapped main-
+  // xsheet audio.  Mirrors the video frame mapping — when the sub-scene
+  // shows main frame N, we hear main frame N's audio.
+  if (fh->isPlaying()) {
+    // During play, push 1 frame of audio per audio column on its OWN
+    // TSoundOutputDevice (sc->m_player).  This gives each track an
+    // independent QAudioOutput whose volume can be changed in real time
+    // via TXshSoundColumn::setVolume() → m_player->setVolume().  CoreAudio
+    // mixes the per-track outputs in hardware, so multiple tracks play in
+    // sync without us having to rebuild a baked mix on every volume change.
+    for (int c = 0; c < mainXsh->getColumnCount(); c++) {
+      TXshColumn *column = mainXsh->getColumn(c);
+      if (!column) continue;
+      TXshSoundColumn *sc = column->getSoundColumn();
+      if (!sc || sc->isEmpty()) continue;
+      TSoundTrackP colTrack = requireColumnSoundTrack(c);
+      if (!colTrack) continue;
+      double colSpf = colTrack->getSampleRate() / fps;
+      TINT32 ts0 = (TINT32)(mainFrame * colSpf);
+      TINT32 ts1 = (TINT32)(ts0 + colSpf);
+      TINT32 colSamples = (TINT32)colTrack->getSampleCount();
+      if (ts0 >= colSamples) continue;
+      if (ts1 >= colSamples) ts1 = colSamples - 1;
+      sc->play(colTrack, ts0, ts1, false);
+    }
+    m_nativeAudioPlaying = true;
+  } else {
+    // Scrub uses the merged sound track on the dedicated scrub device —
+    // user wants to hear the whole mix at the playhead position.
+    scrubDevice()->play(st, s0, s1, false);
+  }
 }
 
 // ---- ZtoryAnimaticRuler ----
@@ -672,6 +710,14 @@ ZtoryAudioTrack::ZtoryAudioTrack(int col, const QString &name, QWidget *parent)
   setMouseTracking(true);
   setAttribute(Qt::WA_Hover);
 
+  // Read initial volume from the underlying audio column (saved in the .tnz).
+  TXsheet *xsh = ZtoryAnimaticController::instance()->mainXsheet();
+  if (xsh) {
+    TXshColumn *column = xsh->getColumn(m_col);
+    TXshSoundColumn *sc = column ? column->getSoundColumn() : nullptr;
+    if (sc) m_volume = sc->getVolume();
+  }
+
   // L/M/S state is driven purely via paintEvent + mousePressEvent hit-test.
   // No child QToolButton widgets — they don't render reliably inside custom-
   // painted QWidgets on macOS.
@@ -764,11 +810,34 @@ void ZtoryAudioTrack::paintEvent(QPaintEvent *) {
     p.drawText(r, Qt::AlignCenter, btns[i].txt);
   }
 
-  // Track name — below the buttons
+  // Volume slider — thin horizontal bar at the bottom of the label area.
+  // Click sets volume to position; drag adjusts continuously.  Range [0,1].
+  // Coordinates also used in mousePressEvent hit-test — keep in sync!
+  static const int kVolBarH    = 6;
+  static const int kVolBarBotMargin = 4;
+  const int volBarY  = trackH - kVolBarH - kVolBarBotMargin;
+  const int volBarX  = 4;
+  const int volBarW  = labelW - 8;
+  QRect volBar(volBarX, volBarY, volBarW, kVolBarH);
+  // Background track
+  p.fillRect(volBar, QColor(28, 28, 28));
+  // Filled portion
+  int filledW = (int)(m_volume * (volBarW - 2));
+  p.fillRect(volBar.x() + 1, volBar.y() + 1, filledW, kVolBarH - 2,
+             m_muted || m_effectiveMuted ? QColor(70, 70, 70)
+                                         : QColor(80, 140, 200));
+  // Knob position marker
+  int knobX = volBar.x() + 1 + filledW;
+  p.setPen(QPen(QColor(220, 230, 245), 1));
+  p.drawLine(knobX, volBar.y() - 1, knobX, volBar.y() + kVolBarH);
+
+  // Track name — between the buttons (top) and the volume slider (bottom)
   p.setPen(QColor(210, 210, 210));
   p.setFont(QFont("Arial", 8));
   int nameY = kBtnY + kBtnH + 2;
-  p.drawText(2, nameY, labelW - 4, trackH - nameY, Qt::AlignVCenter | Qt::AlignLeft, m_name);
+  int nameH = volBarY - nameY - 2;
+  if (nameH > 0)
+    p.drawText(2, nameY, labelW - 4, nameH, Qt::AlignVCenter | Qt::AlignLeft, m_name);
 
   p.setPen(QColor(65, 65, 65));
   p.drawLine(labelW, 0, labelW, trackH);
@@ -1017,6 +1086,27 @@ void ZtoryAudioTrack::mousePressEvent(QMouseEvent *e) {
       }
     }
   }
+  // Volume slider hit-test — must match coordinates in paintEvent exactly
+  if (e->button() == Qt::LeftButton) {
+    static const int kVolBarH = 6, kVolBarBotMargin = 4;
+    const int volBarY = m_trackHeight - kVolBarH - kVolBarBotMargin;
+    const int volBarX = 4;
+    const int volBarW = kLabelW - 8;
+    if (e->y() >= volBarY - 2 && e->y() <= volBarY + kVolBarH + 2 &&
+        e->x() >= volBarX && e->x() <= volBarX + volBarW) {
+      m_draggingVolume = true;
+      double v = double(e->x() - volBarX - 1) / double(volBarW - 2);
+      m_volume = qBound(0.0, v, 1.0);
+      TXsheet *xsh = ZtoryAnimaticController::instance()->mainXsheet();
+      if (xsh) {
+        TXshColumn *column = xsh->getColumn(m_col);
+        TXshSoundColumn *sc = column ? column->getSoundColumn() : nullptr;
+        if (sc) sc->setVolume(m_volume);
+      }
+      update();
+      return;
+    }
+  }
   // Ignore other label area clicks
   if (e->x() < kLabelW) return;
 
@@ -1071,6 +1161,28 @@ void ZtoryAudioTrack::mousePressEvent(QMouseEvent *e) {
 }
 
 void ZtoryAudioTrack::mouseMoveEvent(QMouseEvent *e) {
+  // Volume slider drag — must precede other drag handlers.
+  // sc->setVolume() updates the column's m_volume AND, if its m_player is
+  // currently playing, calls m_player->setVolume() which is applied by
+  // QAudioOutput in real time (zero-latency volume change during playback).
+  if (m_draggingVolume) {
+    const int volBarX = 4;
+    const int volBarW = kLabelW - 8;
+    double v = double(e->x() - volBarX - 1) / double(volBarW - 2);
+    double newVol = qBound(0.0, v, 1.0);
+    if (newVol != m_volume) {
+      m_volume = newVol;
+      TXsheet *xsh = ZtoryAnimaticController::instance()->mainXsheet();
+      if (xsh) {
+        TXshColumn *column = xsh->getColumn(m_col);
+        TXshSoundColumn *sc = column ? column->getSoundColumn() : nullptr;
+        if (sc) sc->setVolume(m_volume);
+      }
+      update();
+    }
+    return;
+  }
+
   if (m_draggingPreview) {
     int frame = frameAtX(e->x());
     m_previewR0 = std::min(m_previewDragStart, frame);
@@ -1166,6 +1278,17 @@ void ZtoryAudioTrack::leaveEvent(QEvent *) {
 }
 
 void ZtoryAudioTrack::mouseReleaseEvent(QMouseEvent *e) {
+  if (m_draggingVolume) {
+    m_draggingVolume = false;
+    // Invalidate the merged sound track cache so the next scrub uses the
+    // new volume.  During play this isn't needed (per-column players are
+    // used), but scrub still goes through the merged track on scrubDevice.
+    TXsheet *xsh = ZtoryAnimaticController::instance()->mainXsheet();
+    if (xsh) xsh->invalidateSound();
+    ZtoryAnimaticController::instance()->invalidateSoundTrack();
+    return;
+  }
+
   DragMode finishedMode = m_dragMode;
   m_dragMode = NoDrag;
   setCursor(m_razorActive ? Qt::CrossCursor : Qt::ArrowCursor);
@@ -2056,6 +2179,7 @@ void ZtoryAnimaticViewer::onDrawFrame(
       if (m_prevFlipFrame > 0 && frame < m_prevFlipFrame) {
         TXsheet *mainXsh2 = ctrl->mainXsheet();
         if (mainXsh2) mainXsh2->stopScrub();
+        ctrl->stopPerColumnAudio();
         m_continuousPlay = false;
         // Restart audio from FlipConsole's new start frame (0-based).
         int newStart = frame - 1;
@@ -2076,25 +2200,20 @@ void ZtoryAnimaticViewer::onDrawFrame(
           }
           TINT32 endSmp = std::min((TINT32)(stopFr * spf3), totalSmp - 1);
           if (startSmp <= endSmp && TXsheet::isMainAudioEnabled()) {
-            mainXsh2->play(m_sound, startSmp, endSmp, false);
+            ctrl->startPerColumnAudio(newStart);
             m_continuousPlay = true;
           }
         }
         targetFrame = newStart;
       } else {
-        // Audio-master clock: use QAudioOutput::processedUSecs() as the
-        // authoritative time source.  This is the hardware DAC clock and cannot
-        // drift relative to the actual audio output.  It eliminates A/V desync
-        // caused by timer jitter in FlipConsole or slow frame rendering.
-        //
-        //   targetFrame = playStartFrame + floor(audioElapsed_s * fps)
-        //
-        // During the first few milliseconds after play() the device may not have
-        // started yet (processedUsecs = 0).  In that case fall back to the
-        // FlipConsole frame (1-based → 0-based) so the first frames are still
-        // displayed while the DAC initialises.
+        // Audio-master clock: use the first audio column's QAudioOutput
+        // processedUSecs() as the authoritative time source.  We can't use
+        // mainXsh->m_player anymore — when its volume is 0 (muted because
+        // per-column players carry the audible audio), CoreAudio on macOS
+        // doesn't advance processedUSecs reliably.  Any column player works
+        // since they all start at the same time.
         TXsheet *mainXsh = ctrl->mainXsheet();
-        qint64 audioUsecs = mainXsh ? mainXsh->getAudioPlayedUSecs() : 0;
+        qint64 audioUsecs = ctrl->getMasterAudioUsecs();
         if (audioUsecs > 0) {
           targetFrame = m_playStartFrame + (int)(audioUsecs * m_fps / 1000000.0);
           int totalFrames = videoFrameCount(mainXsh);
@@ -2250,12 +2369,19 @@ void ZtoryAnimaticViewer::playAnimaticAudioFrame(int frame) {
 // single continuous-play call from the current frame to end-of-track.
 // Continuous play avoids per-frame buffer replacement (which causes glitches).
 void ZtoryAnimaticViewer::onAnimaticPlayingStatusChanged(bool playing) {
-  TXsheet *mainXsh = ZtoryAnimaticController::instance()->mainXsheet();
+  auto *ctrl = ZtoryAnimaticController::instance();
+  TXsheet *mainXsh = ctrl->mainXsheet();
   if (!playing) {
     // Stop the continuous audio stream.
     m_continuousPlay = false;
     m_prevFlipFrame  = 0;   // reset so next play starts fresh
-    if (mainXsh) mainXsh->stopScrub();
+    if (mainXsh) {
+      mainXsh->stopScrub();
+      // Restore the master volume — was muted during play because per-column
+      // players carried the audible signal.  Future plays start at full mix.
+      mainXsh->setMasterVolume(1.0);
+    }
+    ctrl->stopPerColumnAudio();
     // Clamp ctrl frame to valid video range — audio clock can advance it past
     // the video end if audio is longer than video.
     if (mainXsh) {
@@ -2328,7 +2454,11 @@ void ZtoryAnimaticViewer::onAnimaticPlayingStatusChanged(bool playing) {
   // refilled every 50 ms via QAudioOutput::notify.  One call avoids the
   // per-frame m_buffer replacement that caused glitches in the old approach.
   if (!TXsheet::isMainAudioEnabled()) return;  // audio toggle OFF
-  mainXsh->play(m_sound, startSample, endSample, false);
+  // Per-column audio playback only — no mainXsh mix.  Each column's
+  // m_player runs at its column's m_volume (real-time updates via
+  // column->setVolume).  The audio-master clock for onDrawFrame comes from
+  // ctrl->getMasterAudioUsecs() which reads the first column's processedUsecs.
+  ZtoryAnimaticController::instance()->startPerColumnAudio(startFrame);
   m_continuousPlay = true;
 }
 
@@ -2348,6 +2478,7 @@ void ZtoryAnimaticViewer::restartAudioIfPlaying() {
   // stopScrub() clears m_buffer so that any pending sendBuffer() callbacks
   // return immediately without writing stale data.
   mainXsh->stopScrub();
+  ctrl->stopPerColumnAudio();
 
   int startFrame = ctrl->currentFrame();
 
@@ -2381,10 +2512,10 @@ void ZtoryAnimaticViewer::restartAudioIfPlaying() {
   m_first           = false;
   m_playStartFrame  = startFrame;
 
-  // play() overwrites the QAudioOutput buffer in-place — no stop/restart.
-  // QAudioOutput continues streaming; new data replaces the old within ~100ms.
   if (!TXsheet::isMainAudioEnabled()) return;
-  mainXsh->play(m_sound, startSample, endSample, false);
+  // Per-column audio playback only.  Each column's player carries audible
+  // audio at its own volume; clock comes from getMasterAudioUsecs().
+  ctrl->startPerColumnAudio(startFrame);
 }
 
 void ZtoryAnimaticViewer::stopAudio() {
@@ -2850,6 +2981,21 @@ void ZtoryAnimaticViewerPanel::enterShotMode(int /*col*/) {
     // mirroring the double-click-to-enter gesture.
     m_shotViewer->installEventFilter(this);
   }
+
+  // Default the shot viewer to camera view — more useful than camera stand for shot editing.
+  m_shotViewer->sceneViewer()->setReferenceMode(SceneViewer::CAMERA_REFERENCE);
+
+  // Redirect title bar buttons (view mode + preview) from the animatic viewer
+  // to the shot viewer so they control the visible panel.
+  if (auto *bs = m_viewer->referenceModeButtonSet()) {
+    disconnect(bs, SIGNAL(selected(int)), m_viewer->sceneViewer(), SLOT(setReferenceMode(int)));
+    connect(bs, SIGNAL(selected(int)), m_shotViewer->sceneViewer(), SLOT(setReferenceMode(int)));
+  }
+  if (auto *pb = m_viewer->previewButton()) {
+    disconnect(pb, SIGNAL(toggled(bool)), m_viewer, SLOT(enableFullPreview(bool)));
+    connect(pb, SIGNAL(toggled(bool)), m_shotViewer, SLOT(enableFullPreview(bool)));
+  }
+
   m_stack->setCurrentIndex(1);
   m_topBar->show();
 }
@@ -2869,6 +3015,22 @@ bool ZtoryAnimaticViewerPanel::eventFilter(QObject *obj, QEvent *e) {
 void ZtoryAnimaticViewerPanel::returnToAnimaticMode() {
   // Close any open sub-scene, switch back to the animatic viewer page, and
   // (if linked) restore the side panels to animatic mode.
+
+  // Reconnect title bar buttons back to the animatic viewer before closing the sub-scene.
+  if (m_shotViewer) {
+    if (auto *bs = m_viewer->referenceModeButtonSet()) {
+      disconnect(bs, SIGNAL(selected(int)), m_shotViewer->sceneViewer(), SLOT(setReferenceMode(int)));
+      connect(bs, SIGNAL(selected(int)), m_viewer->sceneViewer(), SLOT(setReferenceMode(int)));
+    }
+    if (auto *pb = m_viewer->previewButton()) {
+      // Disable preview in shot viewer before leaving
+      m_shotViewer->sceneViewer()->enablePreview(SceneViewer::NO_PREVIEW);
+      if (pb->isChecked()) pb->setPressed(false);
+      disconnect(pb, SIGNAL(toggled(bool)), m_shotViewer, SLOT(enableFullPreview(bool)));
+      connect(pb, SIGNAL(toggled(bool)), m_viewer, SLOT(enableFullPreview(bool)));
+    }
+  }
+
   ToonzScene *scene = TApp::instance()->getCurrentScene()->getScene();
   if (scene) {
     while (scene->getChildStack()->getAncestorCount() > 0)

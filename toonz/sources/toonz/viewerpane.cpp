@@ -101,6 +101,9 @@ BaseViewerPanel::BaseViewerPanel(QWidget *parent, Qt::WindowFlags flags)
     : QFrame(parent) {
   TApp *app = TApp::instance();
 
+  m_symmetryButton    = nullptr;
+  m_perspectiveButton = nullptr;
+
   setFrameStyle(QFrame::StyledPanel);
 
   m_mainLayout = new QVBoxLayout();
@@ -1156,12 +1159,12 @@ void BaseViewerPanel::onToolSwitched() {
   TTool *tool = TApp::instance()->getCurrentTool()->getTool();
 
   if (tool->getName() == T_Symmetry) {
-    if (!ShowSymmetryGuide) {
+    if (!ShowSymmetryGuide && m_symmetryButton) {
       m_symmetryButton->setPressed(true);
       m_symmetryButton->toggled(true);
     }
   } else if (tool->getName() == T_PerspectiveGrid) {
-    if (!ShowPerspectiveGrids) {
+    if (!ShowPerspectiveGrids && m_perspectiveButton) {
       m_perspectiveButton->setPressed(true);
       m_perspectiveButton->toggled(true);
     }

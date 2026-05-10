@@ -80,6 +80,10 @@ public:
   void onDrawFrame(int frame, const ImagePainter::VisualSettings &settings,
                    QElapsedTimer *timer, qint64 targetInstant) override;
 
+  SceneViewer *sceneViewer() const { return m_sceneViewer; }
+  TPanelTitleBarButtonSet *referenceModeButtonSet() const { return m_referenceModeBs; }
+  TPanelTitleBarButtonForPreview *previewButton() const { return m_previewButton; }
+
   void onEnterPanel() {
     m_sceneViewer->setFocus(Qt::OtherFocusReason);
     // activate shortcut key for this flipconsole
