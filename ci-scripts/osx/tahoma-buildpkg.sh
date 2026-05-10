@@ -253,9 +253,41 @@ do
    fi
 done
 
-echo ">>> Re-signing portable app bundle after macdeployqt (ad-hoc)"
-codesign --force --deep --sign - --timestamp=none Ztoryc.app
-echo ">>> Verifying app signature"
+echo ">>> Re-signing portable app bundle after macdeployqt (ad-hoc, inner → outer)"
+
+# ffmpeg/ lives outside Contents/; `codesign --deep` alone can miss bundled dylibs there and
+# dyld then dies with EXC_BAD_ACCESS / CODESIGNING Invalid Page on launch.
+_codesign_inplace() {
+  local f="$1"
+  [[ -f "$f" ]] || return 0
+  file -b "$f" 2>/dev/null | grep -q "^Mach-O" || return 0
+  codesign --force --sign - --timestamp=none "$f"
+}
+
+sign_subtree_deep_first() {
+  local root="$1"
+  [[ -d "$root" ]] || return 0
+  # Deepest Mach-O slices first (-depth → children before dirs)
+  find "$root" -depth -type f 2>/dev/null | while IFS= read -r f; do
+    _codesign_inplace "$f"
+  done
+}
+
+echo ">>> Signing FFmpeg bundle (outside Contents/)"
+sign_subtree_deep_first Ztoryc.app/ffmpeg
+
+echo ">>> Signing Frameworks/*.dylib and framework binaries"
+sign_subtree_deep_first Ztoryc.app/Contents/Frameworks
+
+echo ">>> Signing Contents/MacOS executables"
+find Ztoryc.app/Contents/MacOS -depth -type f | while IFS= read -r f; do
+  _codesign_inplace "$f"
+done
+
+echo ">>> Signing app root bundle"
+codesign --force --sign - --timestamp=none Ztoryc.app
+
+echo ">>> Verifying app signature (strict)"
 codesign --verify --deep --strict --verbose=2 Ztoryc.app
 
 # Build DMG from the signed app only — do not run macdeployqt -dmg after signing.
