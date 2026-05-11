@@ -2,12 +2,13 @@
 #
 # Design:
 #   - Matrix: two native runners (brew prefix differs: /usr/local vs /opt/homebrew).
-#   - Speed: restore/save granular caches (brew downloads, ccache, ffmpeg, opencv,
-#     libgphoto2, tiff, rhubarb) so cold builds are rare; hot path reuses artifacts.
+#   - Speed: path-filtered push/PR; shallow checkout; granular caches (brew, ccache,
+#     ffmpeg, opencv, libgphoto2, tiff, rhubarb, dmgbuild venv); SKIP_DSYM_IN_PACKAGE
+#     skips slow dsymutil during packaging; upload-artifact uses low compression for CPU.
 #   - Correctness: packaging script verifies no Homebrew paths remain in the bundle.
 #
-# Triggers: manual workflow_dispatch (optional GitHub Release). Nightly steps are
-# conditional on upstream org + default branch (kept for fork parity).
+# Triggers: workflow_dispatch (optional GitHub Release); push/PR on relevant paths.
+# Nightly steps are conditional on upstream org + default branch (fork parity).
 name: Ztoryc macOS Build
 
 on:
@@ -22,6 +23,28 @@ on:
         type: string
         required: true
         default: 'v0.3.0'
+  push:
+    branches:
+      - master
+      - main
+    paths:
+      - '.github/workflows/macOS_build.yml'
+      - 'ci-scripts/**'
+      - 'toonz/**'
+      - 'thirdparty/**'
+      - 'stuff/**'
+      - 'plugins/**'
+  pull_request:
+    branches:
+      - master
+      - main
+    paths:
+      - '.github/workflows/macOS_build.yml'
+      - 'ci-scripts/**'
+      - 'toonz/**'
+      - 'thirdparty/**'
+      - 'stuff/**'
+      - 'plugins/**'
 
 jobs:
   macOS:
@@ -58,12 +81,14 @@ jobs:
       # Header metadata-only changes still match (safe default sloppiness set)
       CCACHE_SLOPPINESS: 'include_file_ctime,include_file_mtime'
       SKIP_PKG: '1'
+      # Packaging dsymutil loop is several minutes; CI DMGs rarely need dSYM bundles.
+      SKIP_DSYM_IN_PACKAGE: '1'
       # Quiets Node 20 deprecation for any action not yet on Node 24 (e.g. upload-artifact@v4).
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
     steps:
       - uses: actions/checkout@v5
         with:
-          fetch-depth: 0
+          fetch-depth: 1
       - name: Set portable DMG name from ZtorycVersion.cmake (semver)
         run: |
           set -euo pipefail
@@ -234,14 +259,29 @@ jobs:
         run: |
           test -f stuff/config/qss/Dark/Dark.qss
           test "$(find stuff/config/qss -name '*.qss' | wc -l | tr -d ' ')" -ge 1
+      - name: Restore dmgbuild Python venv cache
+        id: dmgbuild-venv
+        uses: actions/cache/restore@v5
+        with:
+          path: toonz/build/.dmgbuild-venv
+          key: ${{ runner.arch }}-${{ runner.os }}-dmgbuild-venv-${{ hashFiles('ci-scripts/osx/requirements-dmgbuild.txt', 'ci-scripts/osx/ztoryc_dmg_settings.py') }}
+          restore-keys: |
+            ${{ runner.arch }}-${{ runner.os }}-dmgbuild-venv-
       - name: Package portable app and DMG
         run: |
           set -euo pipefail
           bash ./ci-scripts/osx/tahoma-buildpkg.sh
+      - name: Save dmgbuild Python venv cache
+        if: ${{ success() && steps.dmgbuild-venv.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v5
+        with:
+          path: toonz/build/.dmgbuild-venv
+          key: ${{ runner.arch }}-${{ runner.os }}-dmgbuild-venv-${{ hashFiles('ci-scripts/osx/requirements-dmgbuild.txt', 'ci-scripts/osx/ztoryc_dmg_settings.py') }}
       - uses: actions/upload-artifact@v4
         with:
           name: Ztoryc-${{ env.ZTORYC_RELEASE_SEMVER }}-portable-osx-${{ matrix.suffix }}
           path: toonz/build/${{ env.ZTORYC_DMG_BASENAME }}
+          compression-level: 1
       - name: Get Nightly Release Date
         if: ${{ matrix.suffix == 'mactel' && github.repository_owner == 'tahoma2d' && github.event_name == 'push' && github.ref == 'refs/heads/master' }}
         run: |
@@ -382,7 +422,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          fetch-depth: 0
+          fetch-depth: 1
       - uses: actions/download-artifact@v4
         with:
           pattern: Ztoryc-*-portable-osx-*

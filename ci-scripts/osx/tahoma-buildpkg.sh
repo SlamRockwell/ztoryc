@@ -120,19 +120,22 @@ then
    find "$TOONZDIR/Ztoryc.app/Contents/Frameworks"/libgphoto2* -name '*.la' -exec rm -f {} \; 2>/dev/null || true
 fi
 
-echo ">>> Creating DSYM files"
-if [ -d $TOONZDIR/DSYM ]
-then
-   rm -rf $TOONZDIR/DSYM
+# dSYM generation is slow (dsymutil per helper binary). CI sets SKIP_DSYM_IN_PACKAGE=1
+# to save several minutes; unset locally for Ztoryc.dSYM beside the .app.
+if [ "${SKIP_DSYM_IN_PACKAGE:-0}" = "1" ]; then
+   echo ">>> Skipping DSYM bundle (SKIP_DSYM_IN_PACKAGE=1)"
+else
+   echo ">>> Creating DSYM files"
+   if [ -d $TOONZDIR/DSYM ]; then
+      rm -rf $TOONZDIR/DSYM
+   fi
+   for X in `find $TOONZDIR/Ztoryc.app/Contents/MacOS -type f`
+   do
+      chmod u+w "$X" 2>/dev/null || true
+      dsymutil -o $TOONZDIR/DSYM $X
+      # No strip(1): stripping breaks embedded signatures and recent macOS kills at dlopen.
+   done
 fi
-
-for X in `find $TOONZDIR/Ztoryc.app/Contents/MacOS -type f`
-do
-   chmod u+w "$X" 2>/dev/null || true
-   dsymutil -o $TOONZDIR/DSYM $X
-   # No strip(1): like upstream Tahoma2D mac packaging we do not re-codesign the bundle;
-   # stripping breaks embedded signatures and recent macOS kills at dlopen.
-done
 
 if [ -d $TOONZDIR/Ztoryc.app/DSYM ]
 then
@@ -359,6 +362,8 @@ echo ">>> Moving DSYM beside Ztoryc.app (not inside .app — breaks codesign --d
 if [ -d "$TOONZDIR/DSYM" ]; then
    rm -rf "$TOONZDIR/Ztoryc.dSYM" 2>/dev/null || true
    mv "$TOONZDIR/DSYM" "$TOONZDIR/Ztoryc.dSYM"
+elif [ "${SKIP_DSYM_IN_PACKAGE:-0}" = "1" ]; then
+   rm -rf "$TOONZDIR/Ztoryc.dSYM" 2>/dev/null || true
 fi
 
 if [ "${SKIP_PKG:-0}" != "1" ]; then
