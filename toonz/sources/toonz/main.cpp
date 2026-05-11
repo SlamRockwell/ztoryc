@@ -396,9 +396,9 @@ int main(int argc, char *argv[]) {
   ZtoryApplication a(argc, argv);
 
 #ifdef MACOSX
-  // Portable layout uses .../Ztoryc.app/tahomastuff for themes/QSS. Detection in
-  // setWorkingDirectory() needs QCoreApplication::applicationDirPath(), which is
-  // only valid after QApplication — repeat so bundled stuff is found on dev builds.
+  // Portable layout uses Contents/Resources/tahomastuff (or legacy .../Ztoryc.app/
+  // tahomastuff). Detection in setWorkingDirectory() needs applicationDirPath(),
+  // which is only valid after QApplication — repeat so bundled stuff is found.
   TEnv::setApplicationFileName(argv[0]);
 
   // This workaround is to avoid missing left button problem on Qt5.6.0.

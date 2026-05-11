@@ -244,15 +244,23 @@ public:
 
 #ifdef MACOSX
     // On macOS the CWD at launch is often "/" (not the app dir), so the check
-    // above fails. Also, Sierra+ translocates apps. Look for tahomastuff
-    // inside the .app bundle: applicationDirPath() = .../Ztoryc.app/Contents/MacOS
-    // so ../../tahomastuff resolves to .../Ztoryc.app/tahomastuff.
+    // above fails. Also, Sierra+ translocates apps. Look for tahomastuff next to
+    // the executable: applicationDirPath() = .../Ztoryc.app/Contents/MacOS
+    //
+    // Prefer Contents/Resources/tahomastuff (only Contents at .app root — needed
+    // for codesign --deep). Legacy portable builds used .../Ztoryc.app/tahomastuff
+    // (../../tahomastuff from MacOS).
     if (!m_isPortable) {
       QString appDir = QCoreApplication::applicationDirPath();
       if (!appDir.isEmpty()) {
-        portableCheck  = TFilePath(appDir) + "../../tahomastuff";
+        portableCheck  = TFilePath(appDir) + "../Resources/tahomastuff";
         portableStatus = TFileStatus(portableCheck);
         m_isPortable   = portableStatus.doesExist();
+        if (!m_isPortable) {
+          portableCheck  = TFilePath(appDir) + "../../tahomastuff";
+          portableStatus = TFileStatus(portableCheck);
+          m_isPortable   = portableStatus.doesExist();
+        }
         if (m_isPortable)
           m_workingDirectory = portableCheck.getParentDir().getQString();
       }

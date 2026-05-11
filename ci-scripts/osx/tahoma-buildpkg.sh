@@ -42,49 +42,51 @@ then
    export TOONZDIR=$TOONZDIR/Release
 fi
 
-if [ -d $TOONZDIR/Ztoryc.app/tahomastuff ]
+if [ -d "$TOONZDIR/Ztoryc.app/Contents/Resources/tahomastuff" ]
 then
-   # In case of prior builds, replace stuff folder
-   rm -rf $TOONZDIR/Ztoryc.app/tahomastuff
+   rm -rf "$TOONZDIR/Ztoryc.app/Contents/Resources/tahomastuff"
 fi
 
 if [ -d thirdparty/apps/ffmpeg/bin ]
 then
-   echo ">>> Copying FFmpeg to Ztoryc.app/ffmpeg"
-   if [ -d $TOONZDIR/Ztoryc.app/ffmpeg ]
+   echo ">>> Copying FFmpeg to Ztoryc.app/Contents/Resources/ffmpeg"
+   if [ -d $TOONZDIR/Ztoryc.app/Contents/Resources/ffmpeg ]
    then
-      # In case of prior builds, replace ffmpeg folder
-      rm -rf $TOONZDIR/Ztoryc.app/ffmpeg
+      rm -rf $TOONZDIR/Ztoryc.app/Contents/Resources/ffmpeg
    fi
-   mkdir $TOONZDIR/Ztoryc.app/ffmpeg
-   cp -R thirdparty/apps/ffmpeg/bin/ffmpeg thirdparty/apps/ffmpeg/bin/ffprobe $TOONZDIR/Ztoryc.app/ffmpeg
+   mkdir $TOONZDIR/Ztoryc.app/Contents/Resources/ffmpeg
+   cp -R thirdparty/apps/ffmpeg/bin/ffmpeg thirdparty/apps/ffmpeg/bin/ffprobe $TOONZDIR/Ztoryc.app/Contents/Resources/ffmpeg
    if [ -d thirdparty/apps/ffmpeg/libs ]
    then
-      cp -R thirdparty/apps/ffmpeg/libs $TOONZDIR/Ztoryc.app/ffmpeg/
+      cp -R thirdparty/apps/ffmpeg/libs $TOONZDIR/Ztoryc.app/Contents/Resources/ffmpeg/
    elif [ -d thirdparty/apps/ffmpeg/lib ]
    then
-      cp -R thirdparty/apps/ffmpeg/lib $TOONZDIR/Ztoryc.app/ffmpeg/
+      cp -R thirdparty/apps/ffmpeg/lib $TOONZDIR/Ztoryc.app/Contents/Resources/ffmpeg/
    fi
-   chmod -R 755 $TOONZDIR/Ztoryc.app/ffmpeg
+   chmod -R 755 $TOONZDIR/Ztoryc.app/Contents/Resources/ffmpeg
 fi
 
 if [ -d thirdparty/apps/rhubarb ]
 then
-   echo ">>> Copying Rhubarb Lip Sync to Ztoryc.app/rhubarb"
-   if [ -d $TOONZDIR/Ztoryc.app/rhubarb ]
+   echo ">>> Copying Rhubarb Lip Sync to Ztoryc.app/Contents/Resources/rhubarb"
+   if [ -d $TOONZDIR/Ztoryc.app/Contents/Resources/rhubarb ]
    then
-      # In case of prior builds, replace rhubarb folder
-      rm -rf $TOONZDIR/Ztoryc.app/rhubarb
+      rm -rf $TOONZDIR/Ztoryc.app/Contents/Resources/rhubarb
    fi
-   mkdir $TOONZDIR/Ztoryc.app/rhubarb
-   cp -R thirdparty/apps/rhubarb/rhubarb thirdparty/apps/rhubarb/res $TOONZDIR/Ztoryc.app/rhubarb
-   chmod -R 755 $TOONZDIR/Ztoryc.app/rhubarb
+   mkdir $TOONZDIR/Ztoryc.app/Contents/Resources/rhubarb
+   cp -R thirdparty/apps/rhubarb/rhubarb thirdparty/apps/rhubarb/res $TOONZDIR/Ztoryc.app/Contents/Resources/rhubarb
+   chmod -R 755 $TOONZDIR/Ztoryc.app/Contents/Resources/rhubarb
 fi
 
 if [ ! -d $TOONZDIR/Ztoryc.app/Contents/Frameworks ]
 then
    mkdir $TOONZDIR/Ztoryc.app/Contents/Frameworks
 fi
+mkdir -p "$TOONZDIR/Ztoryc.app/Contents/Resources"
+# Legacy portable layout put tahomastuff/ffmpeg/rhubarb next to Contents; that
+# breaks codesign --deep (unsealed bundle root). Remove leftovers from old runs.
+rm -rf "$TOONZDIR/Ztoryc.app/tahomastuff" "$TOONZDIR/Ztoryc.app/ffmpeg" \
+       "$TOONZDIR/Ztoryc.app/rhubarb" "$TOONZDIR/Ztoryc.app/DSYM" 2>/dev/null || true
 
 if [ -d thirdparty/canon/Framework ]
 then
@@ -182,6 +184,15 @@ function checkLibFile() {
             checkLibFile $TOONZDIR/Ztoryc.app/Contents/Frameworks/$Y
             DEPFILE=$ORIGDEPFILE
          fi
+         # libgfortran -> @rpath/libgcc_s.* is shorter than @executable_path/../Frameworks/...
+         # install_name_tool cannot lengthen it without relinking (-headerpad). We vendor
+         # libgcc_s and strip brew LC_RPATH so @loader_path / bundle rpaths resolve instead.
+         case "$LIBFILE" in
+            */libgfortran*.dylib)
+               case "$DEPFILE" in
+                  @rpath/libgcc_s*) continue ;;
+               esac ;;
+         esac
          if [ "$Y" != "$W" ]
          then
             echo "Fixing $DEPFILE in $LIBFILE"
@@ -203,32 +214,140 @@ function checkLibFile() {
    done
 }
 
+# --- Portable Mach-O: dyld + library validation (EXC_BAD_ACCESS / CODESIGNING) ---
+# macdeployqt leaves Qt PlugIns with install ids under /opt/homebrew/.../plugins/.
+# Vendored libgcc_s still carries the Cellar id until rewritten. Either can make
+# dyld map "invalid" pages when the file is inside an ad-hoc bundle. Fix install
+# names to @executable_path/../<path-under-Contents/> and strip brew LC_RPATH.
+
+ztoryc_macho_lc_rpaths() {
+   otool -l "$1" 2>/dev/null | awk '
+      /cmd LC_RPATH/ {p=1; next}
+      p && /^[[:space:]]*path / {
+         line=$0
+         sub(/^[[:space:]]*path[[:space:]]+/,"",line)
+         sub(/[[:space:]]*\(offset.*$/,"",line)
+         if (line != "") print line
+         p=0; next
+      }
+      p && /^[[:space:]]*cmd / { p=0 }
+   '
+}
+
+ztoryc_lc_rpath_is_brew() {
+   case "$1" in
+      /opt/homebrew/*|/usr/local/opt/*|/usr/local/Cellar/*) return 0 ;;
+      "$BREW_PREFIX"/*) return 0 ;;
+   esac
+   return 1
+}
+
+ztoryc_fix_brew_install_ids() {
+   local BUNDLE_ROOT="$REPO_ROOT/$TOONZDIR/Ztoryc.app"
+   [ -d "$BUNDLE_ROOT/Contents" ] || return 0
+   while IFS= read -r _M; do
+      file "$_M" 2>/dev/null | grep -q 'Mach-O' || continue
+      _id=$(otool -D "$_M" 2>/dev/null | tail -1 | sed 's/^[[:space:]]*//')
+      case "$_id" in
+         /opt/homebrew/*|/usr/local/opt/*|/usr/local/Cellar/*)
+            _rel="${_M#*/Contents/}"
+            if [ "$_rel" = "$_M" ]; then
+               echo "ERROR: ztoryc_fix_brew_install_ids: path has no /Contents/: $_M"
+               exit 1
+            fi
+            chmod u+w "$_M" 2>/dev/null || true
+            if ! install_name_tool -id "@executable_path/../$_rel" "$_M"; then
+               echo "ERROR: install_name_tool -id failed: $_M (was: $_id)"
+               exit 1
+            fi
+            ;;
+      esac
+   done < <(find "$BUNDLE_ROOT/Contents" -type f 2>/dev/null)
+}
+
+ztoryc_strip_brew_lc_rpath_all() {
+   local BUNDLE_ROOT="$REPO_ROOT/$TOONZDIR/Ztoryc.app"
+   local _M _rp _pass _any
+   while IFS= read -r _M; do
+      file "$_M" 2>/dev/null | grep -q 'Mach-O' || continue
+      chmod u+w "$_M" 2>/dev/null || true
+      for _pass in $(seq 1 30); do
+         _any=
+         while IFS= read -r _rp; do
+            [ -z "$_rp" ] && continue
+            ztoryc_lc_rpath_is_brew "$_rp" || continue
+            _any=1
+            install_name_tool -delete_rpath "$_rp" "$_M" 2>/dev/null || true
+         done < <(ztoryc_macho_lc_rpaths "$_M")
+         [ -z "$_any" ] && break
+      done
+   done < <(find "$BUNDLE_ROOT/Contents" -type f 2>/dev/null)
+}
+
+ztoryc_verify_portable_macho() {
+   local BUNDLE_ROOT="$REPO_ROOT/$TOONZDIR/Ztoryc.app"
+   local _M _rp _id _fail _dep
+   _fail=0
+   while IFS= read -r _M; do
+      file "$_M" 2>/dev/null | grep -q 'Mach-O' || continue
+      while IFS= read -r _rp; do
+         ztoryc_lc_rpath_is_brew "$_rp" || continue
+         echo "ERROR: forbidden LC_RPATH in $_M -> $_rp"
+         _fail=1
+      done < <(ztoryc_macho_lc_rpaths "$_M")
+      _id=$(otool -D "$_M" 2>/dev/null | tail -1 | sed 's/^[[:space:]]*//')
+      case "$_id" in
+         /opt/homebrew/*|/usr/local/opt/*|/usr/local/Cellar/*)
+            echo "ERROR: forbidden install name in $_M -> $_id"
+            _fail=1
+            ;;
+      esac
+      while IFS= read -r _dep; do
+         case "$_dep" in
+            /opt/homebrew/*|/usr/local/opt/*|/usr/local/Cellar/*)
+               echo "ERROR: forbidden dylib path in $_M -> $_dep"
+               _fail=1
+               ;;
+         esac
+      done < <(otool -L "$_M" 2>/dev/null | tail -n +2 | sed 's/^[[:space:]]*//;s/ (compatibility.*//')
+   done < <(find "$BUNDLE_ROOT/Contents" -type f 2>/dev/null)
+   if [ "$_fail" != 0 ]; then
+      echo "ERROR: bundle verification failed (Homebrew paths still embedded)."
+      exit 1
+   fi
+}
+
 for FILE in `find $TOONZDIR/Ztoryc.app/Contents -type f | grep -v -e"\.h" -e"\.prl" -e"\.plist" -e"\.conf" -e"\.icns" -e"EDSDK" -e"\/Headers\/"`
 do
    checkLibFile $FILE
 done
 
-# gfortran / OpenMP often link libgcc_s from Homebrew GCC; it must live in Frameworks
-# with load paths rewritten or macOS library validation kills the process at dlopen.
+# gfortran uses @rpath/libgcc_s.1.1.dylib; strip brew LC_RPATH so dyld does not
+# pick /opt/homebrew before Frameworks. Ship GCC's libgcc_s next to libgfortran
+# (no -change on libgfortran — longer paths do not fit without -headerpad).
 echo ">>> Vendoring libgcc_s from GCC toolchain (if present)"
 _LIBGCC_SRC=$(find "$BREW_PREFIX/opt/gcc" "$BREW_PREFIX/Cellar/gcc" -name 'libgcc_s*.dylib' 2>/dev/null | head -1)
 if [ -n "$_LIBGCC_SRC" ] && [ -f "$_LIBGCC_SRC" ]; then
    _LIBGCC_BASE=$(basename "$_LIBGCC_SRC")
    cp -f "$_LIBGCC_SRC" "$TOONZDIR/Ztoryc.app/Contents/Frameworks/"
+   chmod u+w "$TOONZDIR/Ztoryc.app/Contents/Frameworks/$_LIBGCC_BASE" 2>/dev/null || true
    chmod 644 "$TOONZDIR/Ztoryc.app/Contents/Frameworks/$_LIBGCC_BASE"
-   find "$TOONZDIR/Ztoryc.app/Contents" -type f 2>/dev/null | while IFS= read -r _M; do
-      file "$_M" 2>/dev/null | grep -q 'Mach-O' || continue
-      while IFS= read -r _OLD; do
-         case "$_OLD" in
-            /*) install_name_tool -change "$_OLD" "@executable_path/../Frameworks/$_LIBGCC_BASE" "$_M" 2>/dev/null || true ;;
-         esac
-      done < <(otool -L "$_M" 2>/dev/null | sed -e 's/^[[:space:]]*//' -e 's/ (compatibility.*$//' | grep 'libgcc_s' || true)
-   done
-   install_name_tool -id "@executable_path/../Frameworks/$_LIBGCC_BASE" "$TOONZDIR/Ztoryc.app/Contents/Frameworks/$_LIBGCC_BASE" 2>/dev/null || true
 fi
 
-echo ">>> Moving DYSM to Ztoryc.app"
-mv $TOONZDIR/DSYM $TOONZDIR/Ztoryc.app
+echo ">>> Rewriting Mach-O install names that still point at Homebrew (PlugIns, libgcc_s, …)"
+ztoryc_fix_brew_install_ids
+
+echo ">>> Removing Homebrew LC_RPATH from bundled Mach-O (portable @rpath resolution)"
+ztoryc_strip_brew_lc_rpath_all
+
+echo ">>> Verifying no Homebrew absolute paths remain in bundle Mach-O"
+ztoryc_verify_portable_macho
+
+echo ">>> Moving DSYM beside Ztoryc.app (not inside .app — breaks codesign --deep)"
+if [ -d "$TOONZDIR/DSYM" ]; then
+   rm -rf "$TOONZDIR/Ztoryc.dSYM" 2>/dev/null || true
+   mv "$TOONZDIR/DSYM" "$TOONZDIR/Ztoryc.dSYM"
+fi
 
 if [ "${SKIP_PKG:-0}" != "1" ]; then
   echo ">>> Creating Ztoryc-install-osx.pkg"
@@ -241,13 +360,13 @@ fi
 FINAL_DMG_NAME="${ZTORYC_DMG_BASENAME:-Ztoryc-portable-osx.dmg}"
 echo ">>> Creating portable DMG: $FINAL_DMG_NAME (dmgbuild — no Finder during build)"
 
-cp -R "$STUFF_SRC" "$TOONZDIR/Ztoryc.app/tahomastuff"
-chmod -R 777 "$TOONZDIR/Ztoryc.app/tahomastuff"
+cp -R "$STUFF_SRC" "$TOONZDIR/Ztoryc.app/Contents/Resources/tahomastuff"
+chmod -R u+rwX,go+rX "$TOONZDIR/Ztoryc.app/Contents/Resources/tahomastuff"
 
-find "$TOONZDIR/Ztoryc.app/tahomastuff" -name .gitkeep -exec rm -f {} \;
+find "$TOONZDIR/Ztoryc.app/Contents/Resources/tahomastuff" -name .gitkeep -exec rm -f {} \;
 
-if [[ ! -f "$TOONZDIR/Ztoryc.app/tahomastuff/config/qss/Dark/Dark.qss" ]]; then
-  echo "ERROR: After copy, portable bundle missing $TOONZDIR/Ztoryc.app/tahomastuff/config/qss/Dark/Dark.qss"
+if [[ ! -f "$TOONZDIR/Ztoryc.app/Contents/Resources/tahomastuff/config/qss/Dark/Dark.qss" ]]; then
+  echo "ERROR: After copy, portable bundle missing $TOONZDIR/Ztoryc.app/Contents/Resources/tahomastuff/config/qss/Dark/Dark.qss"
   exit 1
 fi
 
@@ -261,6 +380,25 @@ find Ztoryc.app -name '._*' -exec rm -f {} \; 2>/dev/null || true
 xattr -cr Ztoryc.app 2>/dev/null || true
 chmod -R u+rwX Ztoryc.app 2>/dev/null || true
 chflags -R nouchg,noschg Ztoryc.app 2>/dev/null || true
+
+# install_name_tool invalidates code signatures on modified Mach-O files; ad-hoc
+# re-seal (-s -) is required for dlopen/library validation on current macOS (not
+# Apple Developer ID signing — same as sealing a locally built .app after edits).
+echo ">>> Ad-hoc codesign Ztoryc.app (--deep, after Mach-O path edits)"
+if command -v codesign >/dev/null 2>&1; then
+   codesign --force --sign - --timestamp=none --deep Ztoryc.app || {
+      echo "ERROR: codesign --deep failed (install Xcode Command Line Tools)."
+      exit 1
+   }
+else
+   echo "ERROR: codesign not in PATH — bundle will likely crash after install_name_tool."
+   exit 1
+fi
+
+if [ "${SKIP_DMG:-0}" = "1" ]; then
+   echo ">>> SKIP_DMG=1 — skipping portable DMG (bundle: $REPO_ROOT/$TOONZDIR/Ztoryc.app)"
+   exit 0
+fi
 
 OUTPUT_DMG="$REPO_ROOT/toonz/build/$FINAL_DMG_NAME"
 mkdir -p "$(dirname "$OUTPUT_DMG")"
