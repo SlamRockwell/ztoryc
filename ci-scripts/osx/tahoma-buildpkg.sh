@@ -58,7 +58,10 @@ then
    fi
    mkdir $TOONZDIR/Ztoryc.app/ffmpeg
    cp -R thirdparty/apps/ffmpeg/bin/ffmpeg thirdparty/apps/ffmpeg/bin/ffprobe $TOONZDIR/Ztoryc.app/ffmpeg
-   if [ -d thirdparty/apps/ffmpeg/lib ]
+   if [ -d thirdparty/apps/ffmpeg/libs ]
+   then
+      cp -R thirdparty/apps/ffmpeg/libs $TOONZDIR/Ztoryc.app/ffmpeg/
+   elif [ -d thirdparty/apps/ffmpeg/lib ]
    then
       cp -R thirdparty/apps/ffmpeg/lib $TOONZDIR/Ztoryc.app/ffmpeg/
    fi
@@ -99,7 +102,7 @@ then
    cp -R "$BREW_PREFIX/lib/libgphoto2" $TOONZDIR/Ztoryc.app/Contents/Frameworks
    cp -R "$BREW_PREFIX/lib/libgphoto2_port" $TOONZDIR/Ztoryc.app/Contents/Frameworks
 
-   rm $TOONZDIR/Ztoryc.app/Contents/Frameworks/libgphoto2/print-camera-list
+   rm -f $TOONZDIR/Ztoryc.app/Contents/Frameworks/libgphoto2/print-camera-list
    find $TOONZDIR/Ztoryc.app/Contents/Frameworks/libgphoto2* -name *.la -exec rm -f {} \;
 fi
 
@@ -111,6 +114,7 @@ fi
 
 for X in `find $TOONZDIR/Ztoryc.app/Contents/MacOS -type f`
 do
+   chmod u+w "$X" 2>/dev/null || true
    dsymutil -o $TOONZDIR/DSYM $X
    strip -S $X
 done
@@ -203,6 +207,25 @@ do
    checkLibFile $FILE
 done
 
+# gfortran / OpenMP often link libgcc_s from Homebrew GCC; it must live in Frameworks
+# with load paths rewritten or macOS library validation kills the process at dlopen.
+echo ">>> Vendoring libgcc_s from GCC toolchain (if present)"
+_LIBGCC_SRC=$(find "$BREW_PREFIX/opt/gcc" "$BREW_PREFIX/Cellar/gcc" -name 'libgcc_s*.dylib' 2>/dev/null | head -1)
+if [ -n "$_LIBGCC_SRC" ] && [ -f "$_LIBGCC_SRC" ]; then
+   _LIBGCC_BASE=$(basename "$_LIBGCC_SRC")
+   cp -f "$_LIBGCC_SRC" "$TOONZDIR/Ztoryc.app/Contents/Frameworks/"
+   chmod 644 "$TOONZDIR/Ztoryc.app/Contents/Frameworks/$_LIBGCC_BASE"
+   find "$TOONZDIR/Ztoryc.app/Contents" -type f 2>/dev/null | while IFS= read -r _M; do
+      file "$_M" 2>/dev/null | grep -q 'Mach-O' || continue
+      while IFS= read -r _OLD; do
+         case "$_OLD" in
+            /*) install_name_tool -change "$_OLD" "@executable_path/../Frameworks/$_LIBGCC_BASE" "$_M" 2>/dev/null || true ;;
+         esac
+      done < <(otool -L "$_M" 2>/dev/null | sed -e 's/^[[:space:]]*//' -e 's/ (compatibility.*$//' | grep 'libgcc_s' || true)
+   done
+   install_name_tool -id "@executable_path/../Frameworks/$_LIBGCC_BASE" "$TOONZDIR/Ztoryc.app/Contents/Frameworks/$_LIBGCC_BASE" 2>/dev/null || true
+fi
+
 echo ">>> Moving DYSM to Ztoryc.app"
 mv $TOONZDIR/DSYM $TOONZDIR/Ztoryc.app
 
@@ -215,7 +238,7 @@ else
 fi
 
 FINAL_DMG_NAME="${ZTORYC_DMG_BASENAME:-Ztoryc-portable-osx.dmg}"
-echo ">>> Creating portable DMG: $FINAL_DMG_NAME"
+echo ">>> Creating portable DMG: $FINAL_DMG_NAME (dmgbuild — no Finder during build)"
 
 cp -R "$STUFF_SRC" "$TOONZDIR/Ztoryc.app/tahomastuff"
 chmod -R 777 "$TOONZDIR/Ztoryc.app/tahomastuff"
@@ -229,81 +252,92 @@ fi
 
 cd $TOONZDIR
 
+# Drag-to-Applications can fail with error -8060 if the bundle has odd xattrs,
+# immutable flags, or non-writable Mach-O (e.g. strip skipped on read-only files).
+echo ">>> Normalizing Ztoryc.app for install-by-copy (xattr, flags, permissions)"
+find Ztoryc.app -name '.DS_Store' -exec rm -f {} \; 2>/dev/null || true
+find Ztoryc.app -name '._*' -exec rm -f {} \; 2>/dev/null || true
+xattr -cr Ztoryc.app 2>/dev/null || true
+chmod -R u+rwX Ztoryc.app 2>/dev/null || true
+chflags -R nouchg,noschg Ztoryc.app 2>/dev/null || true
+
+# strip(1) and install_name_tool(1) break embedded signatures; without re-signing,
+# launch fails at dlopen with EXC_BAD_ACCESS / CODESIGNING (Invalid Page) on recent macOS.
+echo ">>> Ad-hoc codesign Ztoryc.app (--deep, after Mach-O edits)"
+if command -v codesign >/dev/null 2>&1; then
+   codesign --force --sign - --timestamp=none --deep Ztoryc.app || {
+      echo "ERROR: codesign --deep failed (need Xcode Command Line Tools)."
+      exit 1
+   }
+else
+   echo "ERROR: codesign not found in PATH — cannot seal the app bundle after strip."
+   exit 1
+fi
+
 OUTPUT_DMG="$REPO_ROOT/toonz/build/$FINAL_DMG_NAME"
 mkdir -p "$(dirname "$OUTPUT_DMG")"
 
-# macdeployqt copies/fixes Qt frameworks and dylibs — that MUST happen before signing.
-# (Previously we signed here then ran macdeployqt -dmg, which invalidated signatures and
-# caused dyld Code Signature Invalid crashes at launch on Apple Silicon.)
+if ! python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)'; then
+   echo "ERROR: dmgbuild requires Python 3.10 or newer (found $(python3 -V 2>&1))"
+   exit 1
+fi
 
-let MAXTRY=10
+DMG_VENV="$REPO_ROOT/toonz/build/.dmgbuild-venv"
+DMG_REQ="$SCRIPT_DIR/requirements-dmgbuild.txt"
+if [ ! -x "$DMG_VENV/bin/dmgbuild" ]; then
+   echo ">>> Installing dmgbuild into $DMG_VENV (one-time; needs network for pip)"
+   python3 -m venv "$DMG_VENV"
+   # --no-cache-dir avoids noisy/broken pip cache deserialization on some machines
+   "$DMG_VENV/bin/pip" install -q --no-cache-dir --upgrade pip
+   "$DMG_VENV/bin/pip" install -q --no-cache-dir -r "$DMG_REQ"
+fi
 
+DMG_BG_FALLBACK="$SCRIPT_DIR/assets/ztoryc-dmg-background.png"
+
+# dmgbuild does not mount the *output* DMG. This only clears stale /Volumes/Ztoryc*
+# from a previous local open of an installer DMG (avoids name clashes / busy volume).
+if [ -z "${CI:-}" ] && [ -z "${GITHUB_ACTIONS:-}" ]; then
+   _had_ztoryc_vol=0
+   while IFS= read -r _vol; do
+      [ -n "$_vol" ] || continue
+      _had_ztoryc_vol=1
+      hdiutil detach "$_vol" -force >/dev/null 2>&1 || true
+   done < <(find /Volumes -maxdepth 1 \( -name 'Ztoryc' -o -name 'Ztoryc *' \) 2>/dev/null)
+   if [ "$_had_ztoryc_vol" = "1" ]; then
+      echo ">>> Detached leftover Ztoryc installer volume(s) under /Volumes (not opened by this script)"
+   fi
+fi
+
+let MAXTRY=5
 for TRY in $(seq 1 $MAXTRY)
 do
    if [ $TRY -gt 1 ]; then
-      echo ">>> macdeployqt retry $TRY/$MAXTRY..."
-      sleep 2
+      echo ">>> dmgbuild retry $TRY/$MAXTRY..."
+      sleep $((TRY * 3))
    fi
-   if "$QTDIR/bin/macdeployqt" Ztoryc.app -verbose=0; then
-      break
+   DMG_STAGE=$(mktemp -d "$REPO_ROOT/toonz/build/.ztoryc_dmg_bg.XXXXXX")
+   mkdir -p "$DMG_STAGE/.background"
+   if ! python3 "$SCRIPT_DIR/render-dmg-background.py" "$DMG_STAGE/.background/background.png"; then
+      echo ">>> WARN: render-dmg-background.py failed, trying fallback asset"
+      if [ -f "$DMG_BG_FALLBACK" ]; then
+         cp "$DMG_BG_FALLBACK" "$DMG_STAGE/.background/background.png"
+      fi
    fi
-   if [ "$TRY" -eq "$MAXTRY" ]; then
-      echo "ERROR: macdeployqt failed after $MAXTRY attempts"
-      exit 1
-   fi
-done
 
-echo ">>> Re-signing portable app bundle after macdeployqt (ad-hoc, inner → outer)"
-
-# ffmpeg/ lives outside Contents/; `codesign --deep` alone can miss bundled dylibs there and
-# dyld then dies with EXC_BAD_ACCESS / CODESIGNING Invalid Page on launch.
-_codesign_inplace() {
-  local f="$1"
-  [[ -f "$f" ]] || return 0
-  file -b "$f" 2>/dev/null | grep -q "^Mach-O" || return 0
-  codesign --force --sign - --timestamp=none "$f"
-}
-
-sign_subtree_deep_first() {
-  local root="$1"
-  [[ -d "$root" ]] || return 0
-  # Deepest Mach-O slices first (-depth → children before dirs)
-  find "$root" -depth -type f 2>/dev/null | while IFS= read -r f; do
-    _codesign_inplace "$f"
-  done
-}
-
-echo ">>> Signing FFmpeg bundle (outside Contents/)"
-sign_subtree_deep_first Ztoryc.app/ffmpeg
-
-echo ">>> Signing Frameworks/*.dylib and framework binaries"
-sign_subtree_deep_first Ztoryc.app/Contents/Frameworks
-
-echo ">>> Signing Contents/MacOS executables"
-find Ztoryc.app/Contents/MacOS -depth -type f | while IFS= read -r f; do
-  _codesign_inplace "$f"
-done
-
-echo ">>> Signing app root bundle"
-codesign --force --sign - --timestamp=none Ztoryc.app
-
-echo ">>> Verifying app signature (strict)"
-codesign --verify --deep --strict --verbose=2 Ztoryc.app
-
-# Build DMG from the signed app only — do not run macdeployqt -dmg after signing.
-for TRY in $(seq 1 $MAXTRY)
-do
-   if [ $TRY -gt 1 ]; then
-      echo ">>> hdiutil retry $TRY/$MAXTRY..."
-      sleep 2
-   fi
+   APP_ABS="$(pwd)/Ztoryc.app"
+   BG_ABS="$DMG_STAGE/.background/background.png"
    rm -f "$OUTPUT_DMG"
-   if hdiutil create -volname "Ztoryc" -srcfolder Ztoryc.app -ov -format UDZO "$OUTPUT_DMG"; then
+
+   if "$DMG_VENV/bin/dmgbuild" -s "$SCRIPT_DIR/ztoryc_dmg_settings.py" \
+         -D "app=$APP_ABS" -D "bg=$BG_ABS" \
+         "Ztoryc" "$OUTPUT_DMG"; then
+      rm -rf "$DMG_STAGE"
       echo ">>> DMG created successfully: $OUTPUT_DMG"
       exit 0
    fi
+   rm -rf "$DMG_STAGE"
 done
 
-echo "ERROR: DMG creation failed after $MAXTRY attempts. Aborting!"
+echo "ERROR: dmgbuild failed after $MAXTRY attempts. Aborting!"
 exit 1
 

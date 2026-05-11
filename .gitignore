@@ -93,5 +93,6 @@ toonz/Tahoma2D.app.extras/
 # Ztoryc
 .claude/
 /toonz/Ztoryc.app/
+/toonz/build/.dmgbuild-venv/
 thirdparty/superlu/SuperLU_4.1/TESTING/
 .tmp-ztoryc-test/

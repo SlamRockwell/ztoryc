@@ -16,10 +16,10 @@ if [[ ! -x "$BREW_PREFIX/bin/ffmpeg" ]]; then
   exit 1
 fi
 
-echo ">>> Bundling FFmpeg CLI from $BREW_PREFIX (dylibs → thirdparty/apps/ffmpeg/lib)"
+echo ">>> Bundling FFmpeg CLI from $BREW_PREFIX (dylibs → thirdparty/apps/ffmpeg/libs)"
 FFDEST="$APPS/ffmpeg"
 rm -rf "$FFDEST"
-mkdir -p "$FFDEST/bin" "$FFDEST/lib"
+mkdir -p "$FFDEST/bin" "$FFDEST/libs"
 
 cp "$BREW_PREFIX/bin/ffmpeg" "$BREW_PREFIX/bin/ffprobe" "$FFDEST/bin/"
 
@@ -28,8 +28,9 @@ if ! command -v dylibbundler >/dev/null 2>&1; then
   brew install dylibbundler
 fi
 
-dylibbundler -of -b -x "$FFDEST/bin/ffmpeg" -d "$FFDEST/lib"
-dylibbundler -of -b -x "$FFDEST/bin/ffprobe" -d "$FFDEST/lib"
+# dylibbundler rewrites load commands to @executable_path/../libs/*.dylib — target dir must be **libs** (not lib).
+dylibbundler -of -b -x "$FFDEST/bin/ffmpeg" -d "$FFDEST/libs"
+dylibbundler -of -b -x "$FFDEST/bin/ffprobe" -d "$FFDEST/libs"
 
 echo ">>> Bundled ffmpeg linkage:"
 otool -L "$FFDEST/bin/ffmpeg" | head -25
@@ -40,7 +41,7 @@ if [[ ! -x "$RH/rhubarb" ]]; then
   rm -rf "$RH"
   (
     cd "$APPS"
-    wget "https://github.com/tahoma2d/rhubarb-lip-sync/releases/download/${TAHOMA_RHUBARB_RELEASE}/rhubarb-lip-sync-tahoma2d-osx.zip"
+    curl -fsSL -o rhubarb-lip-sync-tahoma2d-osx.zip "https://github.com/tahoma2d/rhubarb-lip-sync/releases/download/${TAHOMA_RHUBARB_RELEASE}/rhubarb-lip-sync-tahoma2d-osx.zip"
     unzip rhubarb-lip-sync-tahoma2d-osx.zip -d rhubarb
     rm -f rhubarb-lip-sync-tahoma2d-osx.zip
   )
