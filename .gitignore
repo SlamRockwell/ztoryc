@@ -96,3 +96,7 @@ toonz/Tahoma2D.app.extras/
 /toonz/build/.dmgbuild-venv/
 thirdparty/superlu/SuperLU_4.1/TESTING/
 .tmp-ztoryc-test/
+
+# Staged FFmpeg + Rhubarb from ci-scripts/osx/tahoma-bundle-apps.sh (or CI cache).
+# Dylibs and binaries — never commit; reproduce locally with the bundle script.
+/thirdparty/apps/

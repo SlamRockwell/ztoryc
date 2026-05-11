@@ -1,3 +1,13 @@
+# Ztoryc macOS CI — portable DMG per architecture (Intel + Apple Silicon).
+#
+# Design:
+#   - Matrix: two native runners (brew prefix differs: /usr/local vs /opt/homebrew).
+#   - Speed: restore/save granular caches (brew downloads, ccache, ffmpeg, opencv,
+#     libgphoto2, tiff, rhubarb) so cold builds are rare; hot path reuses artifacts.
+#   - Correctness: packaging script verifies no Homebrew paths remain in the bundle.
+#
+# Triggers: manual workflow_dispatch (optional GitHub Release). Nightly steps are
+# conditional on upstream org + default branch (kept for fork parity).
 name: Ztoryc macOS Build
 
 on:
@@ -15,6 +25,11 @@ on:
 
 jobs:
   macOS:
+    concurrency:
+      # Per-architecture: a new push cancels the *previous* run for this matrix leg only
+      # (Intel and Apple Silicon stay parallel).
+      group: ztoryc-macos-${{ github.ref }}-${{ matrix.suffix }}
+      cancel-in-progress: true
     strategy:
       fail-fast: false
       matrix:
@@ -26,6 +41,9 @@ jobs:
           - runner: macos-15
             suffix: silicon
     runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        shell: bash
     permissions:
       contents: write
     env:
@@ -59,12 +77,14 @@ jobs:
           echo "DMG output: Ztoryc-${SEMVER}-portable-osx-${{ matrix.suffix }}.dmg (from $F)"
       - name: Homebrew prefix (cache paths + deps)
         run: echo "BREW_PREFIX=$(brew --prefix)" >> $GITHUB_ENV
-      - name: Setup cmake
+      - name: Setup CMake
         uses: jwlawson/actions-setup-cmake@v2
         with:
           cmake-version: '3.31.6'
-      - name: Use cmake
-        run: cmake --version
+      - name: CMake version
+        run: |
+          set -euo pipefail
+          cmake --version
       - name: Restore Homebrew downloads cache
         id: brew-cache-restore
         uses: actions/cache/restore@v5
@@ -73,10 +93,6 @@ jobs:
           key: ${{ runner.arch }}-${{ runner.os }}-brew-${{ hashFiles('ci-scripts/osx/tahoma-install.sh') }}
           restore-keys: |
             ${{ runner.arch }}-${{ runner.os }}-brew-
-      - name: CI cache expectations
-        run: |
-          echo "Hot path (minutes): deps caches hit + ccache on ffmpeg/opencv/gphoto/Ztoryc + Rhubarb cache; FFmpeg CLI staged from brew (no release zip)."
-          echo "Cold path (~1h): rebuild native deps when dep scripts change or caches evicted."
       - name: Restore cache
         id: restore-cache
         uses: actions/cache/restore@v5
@@ -138,8 +154,9 @@ jobs:
           path: |
             thirdparty/tiff-4.2.0
           key: ${{ runner.arch }}-${{ runner.os }}-tiff-${{ hashFiles('ci-scripts/osx/tahoma-build.sh', 'thirdparty/tiff-4.2.0/configure') }}
-      - name: Install Dependencies
+      - name: Install dependencies
         run: |
+          set -euo pipefail
           ci-scripts/osx/tahoma-install.sh
           brew install ccache
           mkdir -p /Users/runner/.ccache
@@ -217,8 +234,10 @@ jobs:
         run: |
           test -f stuff/config/qss/Dark/Dark.qss
           test "$(find stuff/config/qss -name '*.qss' | wc -l | tr -d ' ')" -ge 1
-      - name: Create Package
-        run: bash ./ci-scripts/osx/tahoma-buildpkg.sh
+      - name: Package portable app and DMG
+        run: |
+          set -euo pipefail
+          bash ./ci-scripts/osx/tahoma-buildpkg.sh
       - uses: actions/upload-artifact@v4
         with:
           name: Ztoryc-${{ env.ZTORYC_RELEASE_SEMVER }}-portable-osx-${{ matrix.suffix }}
@@ -353,6 +372,9 @@ jobs:
     needs: macOS
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.publish_release == 'true'
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
     permissions:

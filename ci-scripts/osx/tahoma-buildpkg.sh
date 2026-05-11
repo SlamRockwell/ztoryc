@@ -1,7 +1,20 @@
 #!/bin/bash
-# Bundles the full repo "stuff" tree (themes live in stuff/config/qss/). Paths must
-# not depend on the caller's cwd — GitHub Actions runs from repo root, but local
-# runs may not.
+#
+# Ztoryc macOS packaging — produces a portable, ad-hoc–signed .app and optional DMG.
+#
+# Prerequisites (typical CI order):
+#   1. CMake build has emitted toonz/build/toonz/Ztoryc.app
+#   2. Optional: thirdparty/apps/{ffmpeg,rhubarb} from tahoma-bundle-apps.sh (gitignored)
+#   3. Qt macdeployqt available via QTDIR (Homebrew qt@5)
+#
+# Environment:
+#   SKIP_PKG=1     Skip .pkg installer (CI uses this; DMG still built unless SKIP_DMG=1)
+#   SKIP_DMG=1     Stop after codesign (fast local iteration)
+#   BREW_PREFIX    Homebrew prefix (default: brew --prefix)
+#   ZTORYC_DMG_BASENAME  Output DMG filename (default: Ztoryc-portable-osx.dmg)
+#
+# Paths are anchored to REPO_ROOT after an early cd — do not rely on caller cwd.
+#
 export TAHOMA2DVERSION=1.6
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -36,10 +49,9 @@ else
 fi
 export TOONZDIR=toonz/build/toonz
 
-# If found, use Xcode Release build
-if [ -d $TOONZDIR/Release ]
-then
-   export TOONZDIR=$TOONZDIR/Release
+# If present, use Xcode-style Release subdirectory for the app bundle
+if [ -d "$TOONZDIR/Release" ]; then
+   export TOONZDIR="$TOONZDIR/Release"
 fi
 
 if [ -d "$TOONZDIR/Ztoryc.app/Contents/Resources/tahomastuff" ]
@@ -105,7 +117,7 @@ then
    cp -R "$BREW_PREFIX/lib/libgphoto2_port" $TOONZDIR/Ztoryc.app/Contents/Frameworks
 
    rm -f $TOONZDIR/Ztoryc.app/Contents/Frameworks/libgphoto2/print-camera-list
-   find $TOONZDIR/Ztoryc.app/Contents/Frameworks/libgphoto2* -name *.la -exec rm -f {} \;
+   find "$TOONZDIR/Ztoryc.app/Contents/Frameworks"/libgphoto2* -name '*.la' -exec rm -f {} \; 2>/dev/null || true
 fi
 
 echo ">>> Creating DSYM files"
