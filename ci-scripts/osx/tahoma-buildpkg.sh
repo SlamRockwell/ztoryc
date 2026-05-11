@@ -116,7 +116,8 @@ for X in `find $TOONZDIR/Ztoryc.app/Contents/MacOS -type f`
 do
    chmod u+w "$X" 2>/dev/null || true
    dsymutil -o $TOONZDIR/DSYM $X
-   strip -S $X
+   # No strip(1): like upstream Tahoma2D mac packaging we do not re-codesign the bundle;
+   # stripping breaks embedded signatures and recent macOS kills at dlopen.
 done
 
 if [ -d $TOONZDIR/Ztoryc.app/DSYM ]
@@ -253,26 +254,13 @@ fi
 cd $TOONZDIR
 
 # Drag-to-Applications can fail with error -8060 if the bundle has odd xattrs,
-# immutable flags, or non-writable Mach-O (e.g. strip skipped on read-only files).
+# immutable flags, or non-writable Mach-O.
 echo ">>> Normalizing Ztoryc.app for install-by-copy (xattr, flags, permissions)"
 find Ztoryc.app -name '.DS_Store' -exec rm -f {} \; 2>/dev/null || true
 find Ztoryc.app -name '._*' -exec rm -f {} \; 2>/dev/null || true
 xattr -cr Ztoryc.app 2>/dev/null || true
 chmod -R u+rwX Ztoryc.app 2>/dev/null || true
 chflags -R nouchg,noschg Ztoryc.app 2>/dev/null || true
-
-# strip(1) and install_name_tool(1) break embedded signatures; without re-signing,
-# launch fails at dlopen with EXC_BAD_ACCESS / CODESIGNING (Invalid Page) on recent macOS.
-echo ">>> Ad-hoc codesign Ztoryc.app (--deep, after Mach-O edits)"
-if command -v codesign >/dev/null 2>&1; then
-   codesign --force --sign - --timestamp=none --deep Ztoryc.app || {
-      echo "ERROR: codesign --deep failed (need Xcode Command Line Tools)."
-      exit 1
-   }
-else
-   echo "ERROR: codesign not found in PATH — cannot seal the app bundle after strip."
-   exit 1
-fi
 
 OUTPUT_DMG="$REPO_ROOT/toonz/build/$FINAL_DMG_NAME"
 mkdir -p "$(dirname "$OUTPUT_DMG")"
