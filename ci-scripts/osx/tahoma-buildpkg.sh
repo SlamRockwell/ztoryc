@@ -401,16 +401,35 @@ chflags -R nouchg,noschg Ztoryc.app 2>/dev/null || true
 # install_name_tool invalidates code signatures on modified Mach-O files; ad-hoc
 # re-seal (-s -) is required for dlopen/library validation on current macOS (not
 # Apple Developer ID signing — same as sealing a locally built .app after edits).
-echo ">>> Ad-hoc codesign Ztoryc.app (--deep, after Mach-O path edits)"
-if command -v codesign >/dev/null 2>&1; then
-   codesign --force --sign - --timestamp=none --deep Ztoryc.app || {
-      echo "ERROR: codesign --deep failed (install Xcode Command Line Tools)."
-      exit 1
-   }
-else
+#
+# libgphoto2 ships camera/port drivers as MH_BUNDLE .so files under versioned dirs
+# (e.g. Frameworks/libgphoto2_port/0.12.1/*.so). codesign --deep then fails with
+# "bundle format unrecognized … In subcomponent: …/0.12.1" — seal each loadable first.
+if ! command -v codesign >/dev/null 2>&1; then
    echo "ERROR: codesign not in PATH — bundle will likely crash after install_name_tool."
    exit 1
 fi
+
+# libgphoto2 ships camera/port drivers as MH_BUNDLE .so files under versioned dirs
+# (e.g. Frameworks/libgphoto2_port/0.12.1/*.so). codesign --deep then fails with
+# "bundle format unrecognized … In subcomponent: …/0.12.1" — seal each loadable first.
+echo ">>> Ad-hoc codesign libgphoto2 driver bundles (.so/.dylib under libgphoto2*)"
+_gphoto_sign_failed=0
+while IFS= read -r -d '' _gpf; do
+   if ! codesign --force --sign - --timestamp=none "$_gpf"; then
+      echo "ERROR: codesign failed on $_gpf"
+      _gphoto_sign_failed=1
+   fi
+done < <(find Ztoryc.app/Contents/Frameworks \( -path '*/libgphoto2/*' -o -path '*/libgphoto2_port/*' \) \( -name '*.so' -o -name '*.dylib' \) -type f -print0 2>/dev/null)
+if [ "$_gphoto_sign_failed" != "0" ]; then
+   exit 1
+fi
+
+echo ">>> Ad-hoc codesign Ztoryc.app (--deep, after Mach-O path edits)"
+codesign --force --sign - --timestamp=none --deep Ztoryc.app || {
+   echo "ERROR: codesign --deep failed (install Xcode Command Line Tools)."
+   exit 1
+}
 
 if [ "${SKIP_DMG:-0}" = "1" ]; then
    echo ">>> SKIP_DMG=1 — skipping portable DMG (bundle: $REPO_ROOT/$TOONZDIR/Ztoryc.app)"
