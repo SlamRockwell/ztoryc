@@ -420,10 +420,12 @@ ztoryc_is_macho_file() {
 }
 
 ztoryc_adhoc_sign_macho_files() {
-   local _mf _count _sign_out
+   local _main _mf _count _sign_out _tmp_main
+   _main="Ztoryc.app/Contents/MacOS/Ztoryc"
    _count=0
    while IFS= read -r -d '' _mf; do
       ztoryc_is_macho_file "$_mf" || continue
+      [ "$_mf" = "$_main" ] && continue
       chmod u+w "$_mf" 2>/dev/null || true
       if ! _sign_out="$(codesign --force --sign - --timestamp=none "$_mf" 2>&1)"; then
          echo "$_sign_out"
@@ -432,14 +434,40 @@ ztoryc_adhoc_sign_macho_files() {
       fi
       _count=$((_count + 1))
    done < <(find Ztoryc.app/Contents -type f -print0)
+   _tmp_main="$(mktemp "$REPO_ROOT/toonz/build/.ztoryc_main_sign.XXXXXX")"
+   cp "$_main" "$_tmp_main"
+   codesign --remove-signature "$_tmp_main" 2>/dev/null || true
+   if ! _sign_out="$(codesign --force --sign - --timestamp=none --identifier io.github.ztoryc.Ztoryc "$_tmp_main" 2>&1)"; then
+      echo "$_sign_out"
+      rm -f "$_tmp_main"
+      echo "ERROR: failed to ad-hoc sign main executable: $_main"
+      exit 1
+   fi
+   cp "$_tmp_main" "$_main"
+   rm -f "$_tmp_main"
+   _count=$((_count + 1))
    echo ">>> Ad-hoc signed $_count Mach-O file(s)"
 }
 
 ztoryc_verify_codesign() {
-   local _mf _fail
+   local _main _mf _fail _tmp_main
+   _main="Ztoryc.app/Contents/MacOS/Ztoryc"
    _fail=0
    while IFS= read -r -d '' _mf; do
       ztoryc_is_macho_file "$_mf" || continue
+      if [ "$_mf" = "$_main" ]; then
+         # codesign treats the main executable path as the whole .app bundle.
+         # Verify a copy so we validate the Mach-O page hashes, not resources.
+         _tmp_main="$(mktemp "$REPO_ROOT/toonz/build/.ztoryc_main_verify.XXXXXX")"
+         cp "$_mf" "$_tmp_main"
+         if ! codesign -v "$_tmp_main" >/dev/null 2>&1; then
+            echo "ERROR: invalid Mach-O code signature: $_mf"
+            codesign -v "$_tmp_main" 2>&1 | sed 's/^/       /'
+            _fail=1
+         fi
+         rm -f "$_tmp_main"
+         continue
+      fi
       if ! codesign -v "$_mf" >/dev/null 2>&1; then
          echo "ERROR: invalid Mach-O code signature: $_mf"
          codesign -v "$_mf" 2>&1 | sed 's/^/       /'
@@ -449,20 +477,12 @@ ztoryc_verify_codesign() {
    if [ "$_fail" != 0 ]; then
       exit 1
    fi
-   if ! codesign -v Ztoryc.app; then
-      echo "ERROR: invalid Ztoryc.app bundle signature."
-      exit 1
-   fi
 }
 
 echo ">>> Re-sealing Mach-O files with ad-hoc signatures (no certificate, no --deep)"
 rm -rf Ztoryc.app/Contents/_CodeSignature 2>/dev/null || true
 ztoryc_adhoc_sign_macho_files
-if ! _sign_out="$(codesign --force --sign - --timestamp=none Ztoryc.app 2>&1)"; then
-   echo "$_sign_out"
-   echo "ERROR: failed to ad-hoc sign Ztoryc.app."
-   exit 1
-fi
+rm -rf Ztoryc.app/Contents/_CodeSignature 2>/dev/null || true
 echo ">>> Verifying portable bundle code signatures"
 ztoryc_verify_codesign
 
