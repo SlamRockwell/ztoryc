@@ -1,6 +1,9 @@
 #!/bin/bash
 #
 # Ztoryc macOS packaging — produces a portable .app and optional DMG.
+# After install_name_tool, embedded signatures are invalid; dyld may SIGKILL with
+# CODESIGNING / Invalid Page. We strip those signatures (--remove-signature only),
+# remove Contents/_CodeSignature, and do NOT ad-hoc re-seal (no codesign -s -).
 #
 # Prerequisites (typical CI order):
 #   1. CMake build has emitted toonz/build/toonz/Ztoryc.app
@@ -402,7 +405,24 @@ xattr -cr Ztoryc.app 2>/dev/null || true
 chmod -R u+rwX Ztoryc.app 2>/dev/null || true
 chflags -R nouchg,noschg Ztoryc.app 2>/dev/null || true
 
-# No codesign in this script (project policy).
+# Not ad-hoc signing: only drop broken LC_CODE_SIGNATURE left after path rewrites.
+if ! command -v codesign >/dev/null 2>&1; then
+   echo "ERROR: codesign not in PATH (needed for --remove-signature)."
+   exit 1
+fi
+echo ">>> Removing invalid Mach-O signatures (codesign --remove-signature; no -s - seal)"
+while IFS= read -r -d '' _mf; do
+   case "$_mf" in
+   */Resources/tahomastuff/*) continue ;;
+   esac
+   _ft="$(file -b "$_mf" 2>/dev/null || true)"
+   case "$_ft" in
+   Mach-O\ *)
+      codesign --remove-signature "$_mf" 2>/dev/null || true
+      ;;
+   esac
+done < <(find Ztoryc.app -type f -print0)
+rm -rf Ztoryc.app/Contents/_CodeSignature 2>/dev/null || true
 
 if [ "${SKIP_DMG:-0}" = "1" ]; then
    echo ">>> SKIP_DMG=1 — skipping portable DMG (bundle: $REPO_ROOT/$TOONZDIR/Ztoryc.app)"
