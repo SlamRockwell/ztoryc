@@ -368,7 +368,12 @@ fi
 if [ "${SKIP_PKG:-0}" != "1" ]; then
   echo ">>> Creating Ztoryc-install-osx.pkg"
   toonz/installer/osx/app.rb "$TOONZDIR" "$STUFF_SRC" toonz/installer/osx/scripts $TAHOMA2DVERSION
-  mv $TOONZDIR/Ztoryc-install-osx.pkg $TOONZDIR/..
+  if [ -f "$TOONZDIR/Ztoryc-install-osx.pkg" ]; then
+    mv "$TOONZDIR/Ztoryc-install-osx.pkg" "$TOONZDIR/.."
+  else
+    echo "ERROR: Missing $TOONZDIR/Ztoryc-install-osx.pkg after app.rb"
+    exit 1
+  fi
 else
   echo ">>> Skipping PKG (SKIP_PKG=1)"
 fi

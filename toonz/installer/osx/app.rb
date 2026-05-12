@@ -18,10 +18,17 @@ end
 # Constant group
 BUILD_DIR = ARGV[0]
 SRC_STUFF_DIR = ARGV[1]
-SRC_SCRIPTS_DIR = ARGV[2] 
+SRC_SCRIPTS_DIR = ARGV[2]
 VERSION = ARGV[3]
 VIRTUAL_ROOT = "#{BUILD_DIR}/VirtualRoot"
-APP_BUNDLE = "#{BUILD_DIR}/Ztoryc.app"
+# Same as ci-scripts/osx/tahoma-buildpkg.sh: bundle may live under BUILD_DIR/Release/
+APP_BUNDLE = if File.exist?("#{BUILD_DIR}/Release/Ztoryc.app")
+               "#{BUILD_DIR}/Release/Ztoryc.app"
+             elsif File.exist?("#{BUILD_DIR}/Ztoryc.app")
+               "#{BUILD_DIR}/Ztoryc.app"
+             else
+               abort("ERROR: Ztoryc.app not found at #{BUILD_DIR}/Ztoryc.app or #{BUILD_DIR}/Release/Ztoryc.app — build the app first.")
+             end
 APP = "Applications"
 
 PKG_ID = "io.github.ztoryc"
