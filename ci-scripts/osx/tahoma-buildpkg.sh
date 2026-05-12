@@ -402,32 +402,37 @@ chflags -R nouchg,noschg Ztoryc.app 2>/dev/null || true
 # re-seal (-s -) is required for dlopen/library validation on current macOS (not
 # Apple Developer ID signing — same as sealing a locally built .app after edits).
 #
-# libgphoto2 ships camera/port drivers as MH_BUNDLE .so files under versioned dirs
-# (e.g. Frameworks/libgphoto2_port/0.12.1/*.so). codesign --deep then fails with
-# "bundle format unrecognized … In subcomponent: …/0.12.1" — seal each loadable first.
+# codesign --deep fails on libgphoto2* version directories (e.g. libgphoto2_port/0.12.1):
+# "bundle format unrecognized … In subcomponent: …/0.12.1" — the tree is loose .so
+# bundles, not a nested .framework. Seal every Mach-O file, then sign the .app root
+# without --deep (same ad-hoc outcome; avoids the deep walker choking on those dirs).
 if ! command -v codesign >/dev/null 2>&1; then
    echo "ERROR: codesign not in PATH — bundle will likely crash after install_name_tool."
    exit 1
 fi
 
-# libgphoto2 ships camera/port drivers as MH_BUNDLE .so files under versioned dirs
-# (e.g. Frameworks/libgphoto2_port/0.12.1/*.so). codesign --deep then fails with
-# "bundle format unrecognized … In subcomponent: …/0.12.1" — seal each loadable first.
-echo ">>> Ad-hoc codesign libgphoto2 driver bundles (.so/.dylib under libgphoto2*)"
-_gphoto_sign_failed=0
-while IFS= read -r -d '' _gpf; do
-   if ! codesign --force --sign - --timestamp=none "$_gpf"; then
-      echo "ERROR: codesign failed on $_gpf"
-      _gphoto_sign_failed=1
+echo ">>> Ad-hoc codesign each Mach-O in Ztoryc.app (no --deep; libgphoto2-safe)"
+_macho_signed=0
+while IFS= read -r -d '' _mf; do
+   case "$_mf" in
+   */_CodeSignature/*) continue ;;
+   */Resources/tahomastuff/*) continue ;;
+   esac
+   _ft="$(file -b "$_mf" 2>/dev/null || true)"
+   case "$_ft" in
+   Mach-O\ *) ;;
+   *) continue ;;
+   esac
+   if ! codesign --force --sign - --timestamp=none "$_mf"; then
+      echo "ERROR: codesign failed on $_mf"
+      exit 1
    fi
-done < <(find Ztoryc.app/Contents/Frameworks \( -path '*/libgphoto2/*' -o -path '*/libgphoto2_port/*' \) \( -name '*.so' -o -name '*.dylib' \) -type f -print0 2>/dev/null)
-if [ "$_gphoto_sign_failed" != "0" ]; then
-   exit 1
-fi
+   _macho_signed=$((_macho_signed + 1))
+done < <(find Ztoryc.app -type f -print0)
 
-echo ">>> Ad-hoc codesign Ztoryc.app (--deep, after Mach-O path edits)"
-codesign --force --sign - --timestamp=none --deep Ztoryc.app || {
-   echo "ERROR: codesign --deep failed (install Xcode Command Line Tools)."
+echo ">>> Ad-hoc codesign Ztoryc.app bundle ($_macho_signed Mach-O files sealed; no --deep)"
+codesign --force --sign - --timestamp=none Ztoryc.app || {
+   echo "ERROR: codesign failed on Ztoryc.app (install Xcode Command Line Tools)."
    exit 1
 }
 
