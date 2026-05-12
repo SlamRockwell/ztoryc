@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Ztoryc macOS packaging — produces a portable, ad-hoc–signed .app and optional DMG.
+# Ztoryc macOS packaging — produces a portable .app and optional DMG.
 #
 # Prerequisites (typical CI order):
 #   1. CMake build has emitted toonz/build/toonz/Ztoryc.app
@@ -9,7 +9,7 @@
 #
 # Environment:
 #   SKIP_PKG=1     Skip .pkg installer (CI uses this; DMG still built unless SKIP_DMG=1)
-#   SKIP_DMG=1     Stop after codesign (fast local iteration)
+#   SKIP_DMG=1     Stop after normalizing the .app, before building the DMG (fast local iteration)
 #   BREW_PREFIX    Homebrew prefix (default: brew --prefix)
 #   ZTORYC_DMG_BASENAME  Output DMG filename (default: Ztoryc-portable-osx.dmg)
 #
@@ -95,8 +95,7 @@ then
    mkdir $TOONZDIR/Ztoryc.app/Contents/Frameworks
 fi
 mkdir -p "$TOONZDIR/Ztoryc.app/Contents/Resources"
-# Legacy portable layout put tahomastuff/ffmpeg/rhubarb next to Contents; that
-# breaks codesign --deep (unsealed bundle root). Remove leftovers from old runs.
+# Legacy portable layout put tahomastuff/ffmpeg/rhubarb next to Contents; remove leftovers.
 rm -rf "$TOONZDIR/Ztoryc.app/tahomastuff" "$TOONZDIR/Ztoryc.app/ffmpeg" \
        "$TOONZDIR/Ztoryc.app/rhubarb" "$TOONZDIR/Ztoryc.app/DSYM" 2>/dev/null || true
 
@@ -358,7 +357,7 @@ ztoryc_strip_brew_lc_rpath_all
 echo ">>> Verifying no Homebrew absolute paths remain in bundle Mach-O"
 ztoryc_verify_portable_macho
 
-echo ">>> Moving DSYM beside Ztoryc.app (not inside .app — breaks codesign --deep)"
+echo ">>> Moving DSYM beside Ztoryc.app (not inside .app bundle)"
 if [ -d "$TOONZDIR/DSYM" ]; then
    rm -rf "$TOONZDIR/Ztoryc.dSYM" 2>/dev/null || true
    mv "$TOONZDIR/DSYM" "$TOONZDIR/Ztoryc.dSYM"
@@ -398,43 +397,7 @@ xattr -cr Ztoryc.app 2>/dev/null || true
 chmod -R u+rwX Ztoryc.app 2>/dev/null || true
 chflags -R nouchg,noschg Ztoryc.app 2>/dev/null || true
 
-# install_name_tool invalidates code signatures on modified Mach-O files; ad-hoc
-# re-seal (-s -) is required for dlopen/library validation on current macOS (not
-# Apple Developer ID signing — same as sealing a locally built .app after edits).
-#
-# codesign --deep fails on libgphoto2* version directories (e.g. libgphoto2_port/0.12.1):
-# "bundle format unrecognized … In subcomponent: …/0.12.1" — the tree is loose .so
-# bundles, not a nested .framework. Seal every Mach-O file, then sign the .app root
-# without --deep (same ad-hoc outcome; avoids the deep walker choking on those dirs).
-if ! command -v codesign >/dev/null 2>&1; then
-   echo "ERROR: codesign not in PATH — bundle will likely crash after install_name_tool."
-   exit 1
-fi
-
-echo ">>> Ad-hoc codesign each Mach-O in Ztoryc.app (no --deep; libgphoto2-safe)"
-_macho_signed=0
-while IFS= read -r -d '' _mf; do
-   case "$_mf" in
-   */_CodeSignature/*) continue ;;
-   */Resources/tahomastuff/*) continue ;;
-   esac
-   _ft="$(file -b "$_mf" 2>/dev/null || true)"
-   case "$_ft" in
-   Mach-O\ *) ;;
-   *) continue ;;
-   esac
-   if ! codesign --force --sign - --timestamp=none "$_mf"; then
-      echo "ERROR: codesign failed on $_mf"
-      exit 1
-   fi
-   _macho_signed=$((_macho_signed + 1))
-done < <(find Ztoryc.app -type f -print0)
-
-echo ">>> Ad-hoc codesign Ztoryc.app bundle ($_macho_signed Mach-O files sealed; no --deep)"
-codesign --force --sign - --timestamp=none Ztoryc.app || {
-   echo "ERROR: codesign failed on Ztoryc.app (install Xcode Command Line Tools)."
-   exit 1
-}
+# No codesign in this script (project policy).
 
 if [ "${SKIP_DMG:-0}" = "1" ]; then
    echo ">>> SKIP_DMG=1 — skipping portable DMG (bundle: $REPO_ROOT/$TOONZDIR/Ztoryc.app)"
