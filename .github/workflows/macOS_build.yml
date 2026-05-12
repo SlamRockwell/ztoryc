@@ -19,10 +19,10 @@ on:
         type: boolean
         default: false
       release_tag:
-        description: 'Tag name (e.g. v0.3.0); keep in sync with toonz/cmake/ZtorycVersion.cmake'
+        description: 'Optional tag name override. Leave empty to use v<version> from toonz/cmake/ZtorycVersion.cmake.'
         type: string
-        required: true
-        default: 'v0.3.0'
+        required: false
+        default: ''
   push:
     branches:
       - master
@@ -428,6 +428,21 @@ jobs:
           pattern: Ztoryc-*-portable-osx-*
           merge-multiple: true
           path: release-files
+      - name: Resolve release version from ZtorycVersion.cmake
+        id: release_version
+        run: |
+          set -euo pipefail
+          F="toonz/cmake/ZtorycVersion.cmake"
+          MAJOR=$(sed -n 's/^set(ZTORYC_VERSION_MAJOR \([0-9]*\)).*/\1/p' "$F")
+          MINOR=$(sed -n 's/^set(ZTORYC_VERSION_MINOR \([0-9]*\)).*/\1/p' "$F")
+          PATCH=$(sed -n 's/^set(ZTORYC_VERSION_PATCH \([0-9]*\)).*/\1/p' "$F")
+          SEMVER="${MAJOR}.${MINOR}.${PATCH}"
+          TAG="${{ github.event.inputs.release_tag }}"
+          if [ -z "$TAG" ]; then
+            TAG="v${SEMVER}"
+          fi
+          echo "semver=$SEMVER" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
       - name: List downloaded DMGs
         run: find release-files -name '*.dmg' -print
       - name: Resolve DMG paths for release (artifact zip keeps toonz/build/… layout)
@@ -452,7 +467,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          TAG="${{ github.event.inputs.release_tag }}"
+          TAG="${{ steps.release_version.outputs.tag }}"
           git fetch origin --tags --force
           if git rev-parse "$TAG" >/dev/null 2>&1; then
             echo "Tag $TAG already exists at $(git rev-parse "$TAG")"
@@ -467,14 +482,14 @@ jobs:
           artifactErrorsFailBuild: true
           artifacts: ${{ steps.release_dmgs.outputs.mactel }},${{ steps.release_dmgs.outputs.silicon }}
           artifactContentType: "raw"
-          name: Ztoryc ${{ github.event.inputs.release_tag }}
+          name: Ztoryc ${{ steps.release_version.outputs.tag }}
           body: |
-            Ztoryc macOS **${{ github.event.inputs.release_tag }}** — Intel (x86_64) and Apple Silicon (arm64) portable DMGs.
+            Ztoryc macOS **${{ steps.release_version.outputs.tag }}** — Intel (x86_64) and Apple Silicon (arm64) portable DMGs.
 
-            Filenames include app semver from `toonz/cmake/ZtorycVersion.cmake` (e.g. `Ztoryc-0.3.0-portable-osx-mactel.dmg`).
+            Filenames include app semver from `toonz/cmake/ZtorycVersion.cmake` (`Ztoryc-${{ steps.release_version.outputs.semver }}-portable-osx-*.dmg`).
 
             Built from commit ${{ github.sha }}.
           prerelease: false
           replacesArtifacts: true
-          tag: ${{ github.event.inputs.release_tag }}
+          tag: ${{ steps.release_version.outputs.tag }}
           token: ${{ secrets.GITHUB_TOKEN }}

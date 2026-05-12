@@ -7,6 +7,7 @@ application = defines["app"]  # noqa: F821
 _background = defines["bg"]  # noqa: F821
 
 format = "UDZO"
+filesystem = "APFS"
 compression_level = 9
 
 files = [application]

@@ -2,8 +2,8 @@
 #
 # Ztoryc macOS packaging — produces a portable .app and optional DMG.
 # After install_name_tool, embedded signatures are invalid; dyld may SIGKILL with
-# CODESIGNING / Invalid Page. We strip those signatures (--remove-signature only),
-# remove Contents/_CodeSignature, and do NOT ad-hoc re-seal (no codesign -s -).
+# CODESIGNING / Invalid Page. Re-seal the portable bundle ad hoc after every
+# Mach-O rewrite; this uses no certificate/notarization and avoids --deep.
 #
 # Prerequisites (typical CI order):
 #   1. CMake build has emitted toonz/build/toonz/Ztoryc.app
@@ -405,24 +405,66 @@ xattr -cr Ztoryc.app 2>/dev/null || true
 chmod -R u+rwX Ztoryc.app 2>/dev/null || true
 chflags -R nouchg,noschg Ztoryc.app 2>/dev/null || true
 
-# Not ad-hoc signing: only drop broken LC_CODE_SIGNATURE left after path rewrites.
 if ! command -v codesign >/dev/null 2>&1; then
-   echo "ERROR: codesign not in PATH (needed for --remove-signature)."
+   echo "ERROR: codesign not in PATH (needed to ad-hoc seal the portable bundle)."
    exit 1
 fi
-echo ">>> Removing invalid Mach-O signatures (codesign --remove-signature; no -s - seal)"
-while IFS= read -r -d '' _mf; do
-   case "$_mf" in
-   */Resources/tahomastuff/*) continue ;;
-   esac
-   _ft="$(file -b "$_mf" 2>/dev/null || true)"
+
+ztoryc_is_macho_file() {
+   local _ft
+   _ft="$(file -b "$1" 2>/dev/null || true)"
    case "$_ft" in
-   Mach-O\ *)
-      codesign --remove-signature "$_mf" 2>/dev/null || true
-      ;;
+      Mach-O\ *) return 0 ;;
    esac
-done < <(find Ztoryc.app -type f -print0)
+   return 1
+}
+
+ztoryc_adhoc_sign_macho_files() {
+   local _mf _count _sign_out
+   _count=0
+   while IFS= read -r -d '' _mf; do
+      ztoryc_is_macho_file "$_mf" || continue
+      chmod u+w "$_mf" 2>/dev/null || true
+      if ! _sign_out="$(codesign --force --sign - --timestamp=none "$_mf" 2>&1)"; then
+         echo "$_sign_out"
+         echo "ERROR: failed to ad-hoc sign Mach-O: $_mf"
+         exit 1
+      fi
+      _count=$((_count + 1))
+   done < <(find Ztoryc.app/Contents -type f -print0)
+   echo ">>> Ad-hoc signed $_count Mach-O file(s)"
+}
+
+ztoryc_verify_codesign() {
+   local _mf _fail
+   _fail=0
+   while IFS= read -r -d '' _mf; do
+      ztoryc_is_macho_file "$_mf" || continue
+      if ! codesign -v "$_mf" >/dev/null 2>&1; then
+         echo "ERROR: invalid Mach-O code signature: $_mf"
+         codesign -v "$_mf" 2>&1 | sed 's/^/       /'
+         _fail=1
+      fi
+   done < <(find Ztoryc.app/Contents -type f -print0)
+   if [ "$_fail" != 0 ]; then
+      exit 1
+   fi
+   if ! codesign -v Ztoryc.app; then
+      echo "ERROR: invalid Ztoryc.app bundle signature."
+      exit 1
+   fi
+}
+
+echo ">>> Re-sealing Mach-O files with ad-hoc signatures (no certificate, no --deep)"
 rm -rf Ztoryc.app/Contents/_CodeSignature 2>/dev/null || true
+ztoryc_adhoc_sign_macho_files
+if ! _sign_out="$(codesign --force --sign - --timestamp=none Ztoryc.app 2>&1)"; then
+   echo "$_sign_out"
+   echo "ERROR: failed to ad-hoc sign Ztoryc.app."
+   exit 1
+fi
+echo ">>> Verifying portable bundle code signatures"
+ztoryc_verify_codesign
 
 if [ "${SKIP_DMG:-0}" = "1" ]; then
    echo ">>> SKIP_DMG=1 — skipping portable DMG (bundle: $REPO_ROOT/$TOONZDIR/Ztoryc.app)"
@@ -495,4 +537,3 @@ done
 
 echo "ERROR: dmgbuild failed after $MAXTRY attempts. Aborting!"
 exit 1
-
