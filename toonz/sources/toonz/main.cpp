@@ -88,6 +88,8 @@
 #include <QLibraryInfo>
 #include <QHash>
 #include <QPainterPath>
+#include <QDir>
+#include <QStandardPaths>
 
 #ifdef _WIN32
 #ifndef x64
@@ -127,6 +129,41 @@ static void lastWarningError(QString msg) {
   DVGui::error(msg);
   // exit(0);
 }
+
+//-----------------------------------------------------------------------------
+
+#ifdef MACOSX
+static void configureWritablePortableProfiles() {
+  if (!TEnv::getIsPortable()) return;
+
+  QString dataRoot =
+      QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
+  if (dataRoot.isEmpty()) return;
+
+  TFilePath writableProfiles(dataRoot + "/profiles");
+  TFilePath bundledProfiles =
+      TEnv::getStuffDir() + TEnv::getSystemPathMap().at("PROFILES");
+
+  bool needsProfileBootstrap =
+      !TFileStatus(writableProfiles).doesExist() ||
+      !TFileStatus(writableProfiles + "layouts").doesExist();
+
+  if (needsProfileBootstrap) {
+    if (!QDir().mkpath(dataRoot))
+      fatalError(QString("Cannot create writable Ztoryc data folder: ") +
+                 dataRoot);
+
+    if (TFileStatus(bundledProfiles).doesExist())
+      TSystem::copyDir(writableProfiles, bundledProfiles, true);
+    else if (!QDir().mkpath(writableProfiles.getQString()))
+      fatalError(QString("Cannot create writable Ztoryc profiles folder: ") +
+                 writableProfiles.getQString());
+  }
+
+  TEnv::setArgPathValue(std::string(systemVarPrefix) + "PROFILES",
+                        writableProfiles.getQString().toStdString());
+}
+#endif
 
 //-----------------------------------------------------------------------------
 
@@ -172,6 +209,10 @@ static void initToonzEnv(QHash<QString, QString> &argPathValues) {
   QCoreApplication::setOrganizationDomain("");
   QCoreApplication::setApplicationName(
       QString::fromStdString(TEnv::getApplicationName()));
+
+#ifdef MACOSX
+  configureWritablePortableProfiles();
+#endif
 
   /*-- TAHOMA2DROOTのPathの確認 --*/
   // controllo se la xxxroot e' definita e corrisponde ad un folder esistente

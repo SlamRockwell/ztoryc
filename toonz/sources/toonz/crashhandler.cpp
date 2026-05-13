@@ -389,7 +389,8 @@ static void printBacktrace(std::string &out) {
     if (infoFound) module = std::string(info.dli_fname);
 
 #ifdef MACOSX
-    if (module.find("Tahoma2D.app/Contents/MacOS") != std::string::npos) {
+    if (module.find("Ztoryc.app/Contents/MacOS") != std::string::npos ||
+        module.find("Tahoma2D.app/Contents/MacOS") != std::string::npos) {
       std::string dsym = module;
       int pos          = dsym.find("Contents");
       dsym.replace(pos, 14, "DSYM/Contents/Resources/DWARF");
@@ -483,11 +484,11 @@ CrashHandler::CrashHandler(QWidget *parent, TFilePath crashFile, QString crashRe
   setWindowFlags(Qt::Window | Qt::WindowTitleHint | Qt::CustomizeWindowHint);
 
   QStringList sl;
-  sl.append(tr("<b>Tahoma2D crashed unexpectedly.</b>"));
+  sl.append(tr("<b>Ztoryc crashed unexpectedly.</b>"));
   sl.append("");
   sl.append(tr("A crash report has been generated."));
   sl.append(
-      tr("To report, click 'Open Issue Webpage' to access Tahoma2D's Issues "
+      tr("To report, click 'Open Issue Webpage' to access Ztoryc's Issues "
          "page on GitHub."));
   sl.append(tr("Click on the 'New issue' button and fill out the form."));
   sl.append("");
@@ -525,7 +526,7 @@ CrashHandler::CrashHandler(QWidget *parent, TFilePath crashFile, QString crashRe
   ret = ret && connect(closeBtn, SIGNAL(clicked()), this, SLOT(accept()));
   if (!ret) throw TException();
 
-  setWindowTitle(tr("Tahoma2D crashed!"));
+  setWindowTitle(tr("Ztoryc crashed!"));
   setLayout(mainLayout);
 }
 
@@ -555,7 +556,7 @@ void CrashHandler::copyClipboard() {
 //-----------------------------------------------------------------------------
 
 void CrashHandler::openWebpage() {
-  QDesktopServices::openUrl(QUrl("https://github.com/tahoma2d/tahoma2d/issues"));
+  QDesktopServices::openUrl(QUrl("https://github.com/matitanimata/ztoryc/issues"));
 }  
 
 //-----------------------------------------------------------------------------
