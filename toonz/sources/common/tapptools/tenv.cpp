@@ -565,7 +565,7 @@ std::string TEnv::getTahomaBaseVersionString() {
 }
 
 std::string TEnv::getApplicationDisplayTitle() {
-  return getApplicationFullName() + " · Tahoma2D " + getTahomaBaseVersionString();
+  return getApplicationFullName();
 }
 
 void TEnv::setModuleName(std::string moduleName) {
