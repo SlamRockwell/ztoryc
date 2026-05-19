@@ -261,7 +261,16 @@ TSoundTrackP ZtoryAnimaticController::requireColumnSoundTrack(int col) {
     // per-frame mapping `mainFrame * spf` reads the wrong portion of the
     // track — for two columns whose first rows differ from 0 we'd hear them
     // both from sample 0 ("frame 1") regardless of clip placement.
-    int toFrame = std::max(sc->getMaxFrame(), 0);
+    //
+    // CRITICAL: cap toFrame at videoFrameCount() — NOT sc->getMaxFrame().
+    // sc->getMaxFrame() returns the end frame of the audio FILE (can be hours).
+    // If an audio file is 2 hours long but the video is 1700 frames,
+    // getOverallSoundTrack(0, 172800) allocates ~1.27 GB per track.
+    // 18 such tracks = 23 GB.  We only need audio up to the last video frame.
+    int audioEnd = std::max(sc->getMaxFrame(), 0);
+    int vidEnd   = videoFrameCount(xsh) - 1;
+    int toFrame  = std::min(audioEnd, vidEnd);
+    if (toFrame < 0) toFrame = 0;
     track = sc->getOverallSoundTrack(0, toFrame);
   } catch (...) {
     track = TSoundTrackP();
