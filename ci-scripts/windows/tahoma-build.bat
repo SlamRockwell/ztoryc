@@ -32,9 +32,17 @@ cmake ..\sources -G %MSVCVERSION%  -Ax64 -DQT_PATH=%QT_PATH% -DBOOST_ROOT=%BOOST
 
 
 IF EXIST C:\ProgramData\chocolatey\bin\cl.exe (
- 	msbuild /p:CLToolPath=C:\ProgramData\chocolatey\bin /p:UseMultiToolTask=true /p:Configuration=RelWithDebInfo /m /verbosity:minimal ALL_BUILD.vcxproj
+ 	msbuild /p:CLToolPath=C:\ProgramData\chocolatey\bin /p:UseMultiToolTask=true /p:Configuration=RelWithDebInfo /m /verbosity:minimal ALL_BUILD.vcxproj || exit /b 1
 ) ELSE (
-	msbuild /p:Configuration=RelWithDebInfo /m /verbosity:minimal ALL_BUILD.vcxproj
+	msbuild /p:Configuration=RelWithDebInfo /m /verbosity:minimal ALL_BUILD.vcxproj || exit /b 1
+)
+
+REM Fail the build if Ztoryc.exe wasn't actually produced (msbuild may report
+REM partial-success exits even when the final exe link failed).  Without this
+REM check the packaging step silently ships a portable .zip missing Ztoryc.exe.
+IF NOT EXIST RelWithDebInfo\Ztoryc.exe (
+    echo ERROR: RelWithDebInfo\Ztoryc.exe was not produced by msbuild.
+    exit /b 1
 )
 
 cd ../..

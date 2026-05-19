@@ -1839,7 +1839,13 @@ void TXsheet::stopScrub() {
 }
 
 void TXsheet::setMasterVolume(double v) {
+#ifndef _WIN32
+  // TSoundOutputDevice exposes setVolume only on non-Windows backends
+  // (see tsound.h — Windows audio path has no per-device volume API).
   if (m_player) m_player->setVolume(v);
+#else
+  (void)v;
+#endif
 }
 
 //-----------------------------------------------------------------------------
