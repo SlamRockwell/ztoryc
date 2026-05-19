@@ -776,11 +776,19 @@ void MainWindow::readSettings(const QString &argumentLayoutFileName) {
   }
 
   /*- If the layout files were loaded from template, then save them as private
-   * ones -*/
-  if (!m_isSwitchingRooms) {
-    makePrivate(rooms);
-    writeRoomList(rooms);
-  }
+   * ones.  Previously skipped when m_isSwitchingRooms (workflow switch) — but
+   * that left an inconsistent state on first switch into a workflow:
+   * writeSettings() in switchRoomChoice() then writes layouts.txt to the
+   * user dir, but the per-room .ini files only exist in the template dir.
+   * Next time the user switches back, readRoomList() reads the user-dir
+   * layouts.txt, builds paths via fp.getParentDir() + filename, finds the
+   * .ini files missing, leaves `rooms` empty, and the fallback block at
+   * line ~751 creates the 6 generic 2D/StopMotion/Timing/FX/Browser/History
+   * rooms — Storyboard then visibly shows Tradigital rooms.
+   * Make private unconditionally; the m_isSwitchingRooms guard in
+   * switchRoomChoice() already prevents re-entrancy here. */
+  makePrivate(rooms);
+  writeRoomList(rooms);
 
   // Imposto la stanza corrente
   TFilePath fp = ToonzFolder::getRoomsFile(currentRoomFileName);
