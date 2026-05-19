@@ -96,10 +96,15 @@ QString autodetectFFmpeg() {
   QStringList folderList;
 
   folderList.append(".");
-  folderList.append("./ffmpeg");  // ffmpeg folder
+  folderList.append("./ffmpeg");      // legacy: <appDir>/ffmpeg/ffmpeg
+  folderList.append("./ffmpeg/bin");  // CI bundle: <appDir>/ffmpeg/bin/ffmpeg
 
-  folderList.append(TEnv::getWorkingDirectory().getQString() +
-                    "/ffmpeg");  // ffmpeg folder
+  // On macOS portable, getWorkingDirectory() resolves to
+  // Ztoryc.app/Contents/Resources (parent of tahomastuff).  CI script
+  // ci-scripts/osx/tahoma-buildpkg.sh installs FFmpeg under
+  // Contents/Resources/ffmpeg/bin/ffmpeg — search that path too.
+  folderList.append(TEnv::getWorkingDirectory().getQString() + "/ffmpeg");
+  folderList.append(TEnv::getWorkingDirectory().getQString() + "/ffmpeg/bin");
 
 #ifndef _WIN32
   folderList.append("/app/bin");
@@ -148,21 +153,30 @@ void setFFmpegTimeout(int secs) {
 
 //-----------------------------------------------------------------------------
 
-void runFFmpeg(QProcess &process, const QStringList &arguments) {
-  QString dir = Preferences::instance()->getFfmpegPath();
-//  if (dir.at(0) == '.')  // Relative path
-//    dir = QCoreApplication::applicationDirPath() + "/" + dir;
+// Resolve a possibly-relative FFmpeg directory to an absolute path.
+// Stored Preferences value may be:
+//   - empty (no FFmpeg configured)
+//   - relative ("." / "./ffmpeg" / "./ffmpeg/bin") — relative to the app dir
+//   - absolute ("/opt/homebrew/bin", "C:\\ffmpeg\\bin")
+// QProcess::start() with a relative command resolves it against the *current*
+// working directory, which on macOS at launch is "/", not the bundle.  Without
+// this resolution, runFFmpeg/runFFprobe silently fail to start.
+static QString resolveFFmpegDir(const QString &dir) {
+  if (dir.isEmpty()) return dir;
+  if (dir.at(0) == '.')
+    return QCoreApplication::applicationDirPath() + "/" + dir;
+  return dir;
+}
 
+void runFFmpeg(QProcess &process, const QStringList &arguments) {
+  QString dir = resolveFFmpegDir(Preferences::instance()->getFfmpegPath());
   process.start(dir + FFMPEG_EXE, arguments);
 }
 
 //-----------------------------------------------------------------------------
 
 void runFFprobe(QProcess &process, const QStringList &arguments) {
-  QString dir = Preferences::instance()->getFfmpegPath();
-//  if (dir.at(0) == '.')  // Relative path
-//    dir = QCoreApplication::applicationDirPath() + "/" + dir;
-
+  QString dir = resolveFFmpegDir(Preferences::instance()->getFfmpegPath());
   process.start(dir + FFPROBE_EXE, arguments);
 }
 
