@@ -189,6 +189,13 @@ contains the \c toBeModified bit.
   //! getImage() to rebuild it.
   bool invalidate(const std::string &id);
 
+  //! Invalidates every builder currently flagged as cached, removing each
+  //! cached image from TImageCache and resetting the cached/modified flags.
+  //! Intended to release the cache after long-running operations (e.g. render)
+  //! where every loaded frame would otherwise stay resident.
+  //! Returns the number of entries invalidated.
+  int invalidateAllCached();
+
   /*!
 Overrides the image builder, and manually associates an image to the specified
 identifier,

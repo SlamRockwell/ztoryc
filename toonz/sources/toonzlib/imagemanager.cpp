@@ -442,6 +442,26 @@ bool ImageManager::invalidate(const std::string &id) {
 
 //-----------------------------------------------------------------------------
 
+int ImageManager::invalidateAllCached() {
+  QWriteLocker locker(&m_imp->m_tableLock);
+  int count = 0;
+  TImageCache *cache = TImageCache::instance();
+  for (auto &kv : m_imp->m_builders) {
+    ImageBuilderP &builder = kv.second;
+    if (!builder || !builder->m_cached) continue;
+    // Skip builders whose images are still being edited — invalidating
+    // a modified image would lose unsaved work.
+    if (builder->m_modified) continue;
+    builder->invalidate();
+    builder->m_cached = false;
+    cache->remove(kv.first);
+    ++count;
+  }
+  return count;
+}
+
+//-----------------------------------------------------------------------------
+
 bool ImageManager::setImage(const std::string &id, const TImageP &img) {
   if (!img) return invalidate(id);
 

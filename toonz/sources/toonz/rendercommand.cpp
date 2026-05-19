@@ -16,6 +16,7 @@
 
 // TnzLib includes
 #include "toonz/preferences.h"
+#include "toonz/imagemanager.h"
 #include "toonz/toonzscene.h"
 #include "toonz/tscenehandle.h"
 #include "toonz/txsheet.h"
@@ -84,6 +85,14 @@ public:
     bool isPreview = (m_fp.getType() == "noext");
 
     TImageCache::instance()->remove(::to_string(m_fp.getWideString() + L".0"));
+
+    // Release every level image cached during rendering.  Without this the
+    // cache keeps every loaded frame resident — observed 10 GB+ retained on a
+    // 350-frame PNG sequence, 75 GB+ on longer renders, both leading to macOS
+    // swap thrash and freezes.  invalidateAllCached() skips modified builders
+    // so unsaved edits are preserved.
+    if (!isPreview) ImageManager::instance()->invalidateAllCached();
+
     TNotifier::instance()->notify(TSceneNameChange());
 
     if (Preferences::instance()->isGeneratedMovieViewEnabled()) {
