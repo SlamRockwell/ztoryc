@@ -399,6 +399,31 @@ find "$TOONZDIR/Ztoryc.app/Contents/Resources/tahomastuff" -name .gitkeep -exec 
 # is sufficient — no SystemVar.ini needed.
 rm -f "$TOONZDIR/Ztoryc.app/Contents/Resources/SystemVar.ini"
 
+# libimage.dylib was built against libtiff.5 (legacy formula libtiff44 in brew),
+# but ships with a hardcoded absolute path /usr/local/lib/libtiff.5.dylib.
+# On user machines that path doesn't exist (Apple Silicon brew uses
+# /opt/homebrew/lib, and current libtiff is .6).  Result: dyld halts at launch
+# with "Library not loaded: /usr/local/lib/libtiff.5.dylib".
+# Fix: rewrite the load command to a portable @executable_path/libtiff.5.dylib
+# and ship the libtiff.5.dylib from libtiff44 next to the binary.
+LIBIMAGE="$TOONZDIR/Ztoryc.app/Contents/MacOS/libimage.dylib"
+if [ -f "$LIBIMAGE" ]; then
+  echo ">>> Patching libimage.dylib libtiff.5 reference + bundling libtiff.5"
+  install_name_tool -change \
+    /usr/local/lib/libtiff.5.dylib \
+    @executable_path/libtiff.5.dylib \
+    "$LIBIMAGE" 2>/dev/null || true
+  # Source libtiff.5 from the libtiff44 brew formula (ABI matches libimage build).
+  LIBTIFF5_SRC="$BREW_PREFIX/opt/libtiff44/lib/libtiff.5.dylib"
+  if [ -f "$LIBTIFF5_SRC" ]; then
+    cp "$LIBTIFF5_SRC" "$TOONZDIR/Ztoryc.app/Contents/MacOS/libtiff.5.dylib"
+    chmod u+w "$TOONZDIR/Ztoryc.app/Contents/MacOS/libtiff.5.dylib"
+  else
+    echo "ERROR: $LIBTIFF5_SRC not found. Run: brew install libtiff44"
+    exit 1
+  fi
+fi
+
 if [[ ! -f "$TOONZDIR/Ztoryc.app/Contents/Resources/tahomastuff/config/qss/Dark/Dark.qss" ]]; then
   echo "ERROR: After copy, portable bundle missing $TOONZDIR/Ztoryc.app/Contents/Resources/tahomastuff/config/qss/Dark/Dark.qss"
   exit 1

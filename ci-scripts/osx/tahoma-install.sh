@@ -20,4 +20,9 @@ brew install openjpeg libresample protobuf boost qt@5 clang-format glew lz4 lzo 
 brew list meson >/dev/null 2>&1 || brew install meson
 brew list ninja >/dev/null 2>&1 || brew install ninja
 brew install dylibbundler
+# libtiff44: legacy libtiff.5.dylib needed at runtime — libimage.dylib in the
+# bundle still references /usr/local/lib/libtiff.5.dylib (compiled against
+# libtiff 4.4.x ABI).  tahoma-buildpkg.sh patches that load command to
+# @executable_path/libtiff.5.dylib and copies the .dylib from this formula.
+brew install libtiff44
 brew install automake autoconf gettext pkg-config libtool libusb-compat gd libexif libdeflate
