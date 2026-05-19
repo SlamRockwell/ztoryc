@@ -384,10 +384,21 @@ fi
 FINAL_DMG_NAME="${ZTORYC_DMG_BASENAME:-Ztoryc-portable-osx.dmg}"
 echo ">>> Creating portable DMG: $FINAL_DMG_NAME (dmgbuild — no Finder during build)"
 
-cp -R "$STUFF_SRC" "$TOONZDIR/Ztoryc.app/Contents/Resources/tahomastuff"
+# rsync with --exclude='profiles/users/' so the bundle does not ship the
+# build machine's private user layouts/preferences (these would otherwise be
+# read by any user with the same OS username as the builder, and leak the
+# builder's settings to everyone else).
+# The CMake POST_BUILD step already uses this rsync for ZTORYC_BUNDLE_STUFF;
+# mirror the same exclusion here in the CI packager.
+rsync -a --delete --exclude='profiles/users/***' \
+  "$STUFF_SRC/" "$TOONZDIR/Ztoryc.app/Contents/Resources/tahomastuff/"
+# Recreate an empty profiles/users with .gitkeep so the app does not need to
+# mkdir at runtime (and so it is visible inside the read-only DMG).
+mkdir -p "$TOONZDIR/Ztoryc.app/Contents/Resources/tahomastuff/profiles/users"
+touch "$TOONZDIR/Ztoryc.app/Contents/Resources/tahomastuff/profiles/users/.gitkeep"
 chmod -R u+rwX,go+rX "$TOONZDIR/Ztoryc.app/Contents/Resources/tahomastuff"
 
-find "$TOONZDIR/Ztoryc.app/Contents/Resources/tahomastuff" -name .gitkeep -exec rm -f {} \;
+find "$TOONZDIR/Ztoryc.app/Contents/Resources/tahomastuff" -name .gitkeep -not -path '*/profiles/users/*' -exec rm -f {} \;
 
 # Remove SystemVar.ini from portable bundle: toonz/install/SystemVar.ini holds
 # absolute /Applications/Ztoryc/Ztoryc_stuff/... paths intended for non-portable
