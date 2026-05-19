@@ -149,6 +149,15 @@ public:
     // return if the path is registered by command line argument
     std::string argVar = getArgPathValue(varName);
     if (argVar != "") return TFilePath(argVar);
+    // In portable mode, ignore SystemVar.ini path values so callers fall back
+    // to tahomastuff-relative paths via getStuffDir().  The committed
+    // toonz/install/SystemVar.ini holds absolute /Applications/... paths
+    // intended for non-portable installs (brew, system-wide); the CMake
+    // POST_BUILD copies it into the .app bundle.  In a CI portable .app
+    // that also contains Contents/Resources/tahomastuff, the absolute paths
+    // override the portable layout and PROFILES/LAYOUTS/etc. cannot be
+    // resolved — Storyboard rooms disappear, workflow switch crashes.
+    if (m_isPortable) return TFilePath();
     return TFilePath(getSystemVarValue(varName));
   }
 
@@ -591,8 +600,9 @@ TFilePathSet TEnv::getSystemVarPathSetValue(std::string varName) {
   TFilePathSet lst;
   EnvGlobals *eg = EnvGlobals::instance();
   // if the path is registered by command line argument, then use it
-  std::string value      = eg->getArgPathValue(varName);
-  if (value == "") value = eg->getSystemVarValue(varName);
+  std::string value = eg->getArgPathValue(varName);
+  // In portable mode, ignore SystemVar.ini (see getSystemVarPathValue() comment).
+  if (value == "" && !eg->getIsPortable()) value = eg->getSystemVarValue(varName);
   int len                = (int)value.size();
   int i                  = 0;
   int j                  = value.find(';');

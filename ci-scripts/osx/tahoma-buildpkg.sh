@@ -389,6 +389,16 @@ chmod -R u+rwX,go+rX "$TOONZDIR/Ztoryc.app/Contents/Resources/tahomastuff"
 
 find "$TOONZDIR/Ztoryc.app/Contents/Resources/tahomastuff" -name .gitkeep -exec rm -f {} \;
 
+# Remove SystemVar.ini from portable bundle: toonz/install/SystemVar.ini holds
+# absolute /Applications/Ztoryc/Ztoryc_stuff/... paths intended for non-portable
+# (brew / system-wide) installs.  CMake POST_BUILD copies it into the .app,
+# but in a portable bundle those absolute paths override the portable layout
+# (PROFILES, LAYOUTS, ...) and cause the Storyboard workflow to fail to load
+# rooms — symptom: clicking Storyboard makes the workflow "disappear" or
+# crashes on workflow switch.  Portable detection (tahomastuff next to MacOS)
+# is sufficient — no SystemVar.ini needed.
+rm -f "$TOONZDIR/Ztoryc.app/Contents/Resources/SystemVar.ini"
+
 if [[ ! -f "$TOONZDIR/Ztoryc.app/Contents/Resources/tahomastuff/config/qss/Dark/Dark.qss" ]]; then
   echo "ERROR: After copy, portable bundle missing $TOONZDIR/Ztoryc.app/Contents/Resources/tahomastuff/config/qss/Dark/Dark.qss"
   exit 1
