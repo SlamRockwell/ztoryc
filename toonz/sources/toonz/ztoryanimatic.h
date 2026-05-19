@@ -331,6 +331,10 @@ signals:
   void lockedChanged(int col, bool on);
   void muteToggleRequested(int col);
   void soloToggleRequested(int col);
+  void selectionCleared();  // emitted when this track clears its own selection
+
+public slots:
+  void clearSelection();    // clears m_selSeg and repaints
 
 protected:
   bool event(QEvent *) override;
@@ -340,6 +344,8 @@ protected:
   void mouseReleaseEvent(QMouseEvent *) override;
   void leaveEvent(QEvent *) override;
   void keyPressEvent(QKeyEvent *) override;
+  void focusInEvent(QFocusEvent *) override;
+  void focusOutEvent(QFocusEvent *) override;
 
 private:
   // L/M/S buttons are drawn in paintEvent and clicked via hit-test in mousePressEvent
@@ -351,6 +357,7 @@ private:
   int m_trackHeight = 50;
   QPixmap m_waveformCache;
   bool m_waveformDirty = true;
+  int  m_cacheOffsetX  = 0;   // track-coord x of the left edge of m_waveformCache
   // Preview bar
   int  m_previewR0        = -1;
   int  m_previewR1        = -1;
@@ -378,6 +385,10 @@ private:
   // Set by applyMuteSolo() to dim the waveform when another track is solo'd.
   // Separate from m_muted so user state is never corrupted.
   bool m_effectiveMuted = false;
+  // Focus highlight — true while this widget has keyboard focus
+  bool m_hasFocus = false;
+  // Undo snapshot taken at drag/trim start; committed in mouseReleaseEvent
+  TXshSoundColumn *m_undoBefore = nullptr;
 };
 
 // ---- ZtoryStoryStrip ----

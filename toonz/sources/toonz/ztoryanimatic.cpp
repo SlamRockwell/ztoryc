@@ -751,13 +751,65 @@ void ZtoryAudioTrack::setSolo(bool on) {
   update();
 }
 
-// Static clipboard for audio segments
-static struct {
-  int col = -1;
-  int r0 = -1, r1 = -1;
-  std::vector<TXshCell> cells;
-  bool isCut = false;
-} s_audioClipboard;
+// ── Audio undo ────────────────────────────────────────────────────────────────
+// Stores before/after clones of the sound column for a single edit operation.
+// assignLevels() reconstructs the column from the clone's internal level list.
+class UndoAudioEdit final : public TUndo {
+  int               m_col;
+  TXshSoundColumn  *m_before;
+  TXshSoundColumn  *m_after;
+  QString           m_label;
+
+  void restore(TXshSoundColumn *src) const {
+    TXsheet *xsh = ZtoryAnimaticController::instance()->mainXsheet();
+    if (!xsh) return;
+    TXshColumn *col = xsh->getColumn(m_col);
+    TXshSoundColumn *sc = col ? col->getSoundColumn() : nullptr;
+    if (!sc) return;
+    sc->assignLevels(src);
+    TApp::instance()->getCurrentXsheet()->notifyXsheetChanged();
+  }
+public:
+  UndoAudioEdit(int col, TXshSoundColumn *before, TXshSoundColumn *after,
+                const QString &label)
+      : m_col(col), m_before(before), m_after(after), m_label(label) {}
+  ~UndoAudioEdit() { delete m_before; delete m_after; }
+  void    undo() const override { restore(m_before); }
+  void    redo() const override { restore(m_after); }
+  int     getSize() const override { return sizeof(*this); }
+  QString getHistoryString() override { return m_label; }
+};
+
+class UndoAddAudioTrack final : public TUndo {
+  int m_col;  // column index that was inserted
+public:
+  explicit UndoAddAudioTrack(int col) : m_col(col) {}
+  void undo() const override {
+    TXsheet *xsh = ZtoryAnimaticController::instance()->mainXsheet();
+    if (!xsh) return;
+    xsh->removeColumn(m_col);
+    TApp::instance()->getCurrentXsheet()->notifyXsheetChanged();
+  }
+  void redo() const override {
+    TXsheet *xsh = ZtoryAnimaticController::instance()->mainXsheet();
+    if (!xsh) return;
+    xsh->insertColumn(m_col, TXshColumn::eSoundType);
+    TApp::instance()->getCurrentXsheet()->notifyXsheetChanged();
+  }
+  int     getSize() const override { return sizeof(*this); }
+  QString getHistoryString() override { return QObject::tr("Add Audio Track"); }
+};
+
+// ── Audio clipboard ───────────────────────────────────────────────────────────
+// Stores cloned ColumnLevel objects from the copied/cut selection.
+struct AudioClipboard {
+  int originFrame = 0;          // visibleStartFrame of the first clipped level
+  std::vector<ColumnLevel *> levels;  // owned clones
+  bool empty() const { return levels.empty(); }
+  void clear() { for (auto *l : levels) delete l; levels.clear(); }
+  ~AudioClipboard() { clear(); }
+};
+static AudioClipboard s_audioClip;
 
 std::vector<ZtoryAudioTrack::Segment> ZtoryAudioTrack::findSegments() const {
   std::vector<Segment> segs;
@@ -780,7 +832,7 @@ std::vector<ZtoryAudioTrack::Segment> ZtoryAudioTrack::findSegments() const {
   return segs;
 }
 
-void ZtoryAudioTrack::paintEvent(QPaintEvent *) {
+void ZtoryAudioTrack::paintEvent(QPaintEvent *e) {
   QPainter p(this);
   const int labelW = kLabelW;
   const int trackW = width() - labelW;
@@ -847,9 +899,32 @@ void ZtoryAudioTrack::paintEvent(QPaintEvent *) {
   p.setPen(QColor(65, 65, 65));
   p.drawLine(labelW, 0, labelW, trackH);
 
-  // Rebuild waveform cache when ppf or size changed
-  if (m_waveformDirty || m_waveformCache.size() != QSize(trackW, trackH)) {
-    m_waveformCache = QPixmap(trackW, trackH);
+  // Viewport-aware waveform cache.
+  // We only allocate and render pixels within the VISIBLE area + a small
+  // overscan, so a 10,000-frame scene never creates a 80,000px-wide QPixmap.
+  // Cache miss = visible area scrolled outside the cached band, or data changed.
+  const int kOverscan = 600;  // extra pixels rendered beyond clip on each side
+  const QRect clip = e->rect();
+  // Visible range in track coordinates (relative to the label-right edge)
+  const int visX0 = qMax(0, clip.left() - labelW);
+  const int visX1 = qMin(trackW, clip.right() - labelW + 1);
+
+  // Desired cache band: clamp to actual track width
+  const int bandX0 = qMax(0, visX0 - kOverscan);
+  const int bandX1 = qMin(trackW, visX1 + kOverscan);
+  const int bandW  = qMax(1, bandX1 - bandX0);
+
+  // Cache is stale if: data changed, height changed, or visible area
+  // scrolled outside the rendered band.
+  bool needRebuild = m_waveformDirty
+      || m_waveformCache.isNull()
+      || m_waveformCache.height() != trackH
+      || visX0 < m_cacheOffsetX
+      || visX1 > m_cacheOffsetX + m_waveformCache.width();
+
+  if (needRebuild) {
+    m_cacheOffsetX  = bandX0;
+    m_waveformCache = QPixmap(bandW, trackH);
     m_waveformCache.fill(QColor(25, 25, 25));
     m_waveformDirty = false;
 
@@ -863,7 +938,7 @@ void ZtoryAudioTrack::paintEvent(QPaintEvent *) {
     // artefacts that getOverallSoundTrack() could introduce.
     QPainter cp(&m_waveformCache);
     cp.setPen(QColor(60, 60, 60));
-    cp.drawLine(0, center, trackW, center);
+    cp.drawLine(0, center, bandW, center);
 
     if (sc && sc->getColumnLevelCount() > 0) {
       double fps = 24.0;
@@ -901,8 +976,7 @@ void ZtoryAudioTrack::paintEvent(QPaintEvent *) {
           if (s1 > s0) {
             double mn = 0, mx = 0;
             d.track->getMinMaxPressure(s0, s1, TSound::MONO, mn, mx);
-            peak = std::max(peak,
-                            std::max(std::fabs(mn), std::fabs(mx)));
+            peak = std::max(peak, std::max(std::fabs(mn), std::fabs(mx)));
           }
         }
 
@@ -911,13 +985,13 @@ void ZtoryAudioTrack::paintEvent(QPaintEvent *) {
 
         for (auto &d : cldata) {
           double samplesPerPixel = d.sampleRate / fps / m_ppf;
-          int vsf  = d.cl->getVisibleStartFrame();
-          int pxL  = (int)(vsf * m_ppf);
-          int pxR  = (int)((d.cl->getVisibleEndFrame() + 1) * m_ppf);
-          pxL = qBound(0, pxL, trackW);
-          pxR = qBound(0, pxR, trackW);
+          int vsf = d.cl->getVisibleStartFrame();
+          // Clamp CL pixel range to the cache band
+          int pxL = qBound(bandX0, (int)(vsf * m_ppf), bandX1);
+          int pxR = qBound(bandX0, (int)((d.cl->getVisibleEndFrame() + 1) * m_ppf), bandX1);
 
           for (int px = pxL; px < pxR; px++) {
+            // px is in track coords; cp paints in cache coords (px - bandX0)
             double relFrame = (double)px / m_ppf - vsf;
             TINT32 s0 = (TINT32)((d.cl->getStartOffset() + relFrame)
                                   * d.sampleRate / fps);
@@ -935,7 +1009,8 @@ void ZtoryAudioTrack::paintEvent(QPaintEvent *) {
             yMax = qBound(2, yMax, trackH - 2);
             yMin = qBound(2, yMin, trackH - 2);
             if (yMax > yMin) std::swap(yMax, yMin);
-            cp.drawLine(px, yMax, px, yMin);
+            // Draw into cache: x offset by -bandX0
+            cp.drawLine(px - bandX0, yMax, px - bandX0, yMin);
           }
         }
       }
@@ -958,13 +1033,19 @@ void ZtoryAudioTrack::paintEvent(QPaintEvent *) {
       p.fillRect(labelW, 0, trackW, trackH, QColor(42, 42, 42));
 
       // 2. For each segment, blit the corresponding slice from the waveform
-      //    cache (cache is position-aware: pixel px = frame px/ppf)
+      //    cache (cache covers [m_cacheOffsetX .. m_cacheOffsetX+cache.width()))
       for (auto &s : segs) {
-        int x0 = (int)(s.r0 * m_ppf);          // offset within cache
+        int x0 = (int)(s.r0 * m_ppf);          // offset in track coords
         int x1 = (int)((s.r1 + 1) * m_ppf);
         int w  = x1 - x0;
         if (w <= 0) continue;
-        p.drawPixmap(labelW + x0, 0, m_waveformCache, x0, 0, w, trackH);
+        // Clamp to the cached band; fall back to gap color outside it
+        int cx0 = qMax(x0, m_cacheOffsetX);
+        int cx1 = qMin(x1, m_cacheOffsetX + m_waveformCache.width());
+        if (cx0 < cx1) {
+          p.drawPixmap(labelW + cx0, 0, m_waveformCache,
+                       cx0 - m_cacheOffsetX, 0, cx1 - cx0, trackH);
+        }
       }
 
       // 3. Draw 1px borders at each segment edge
@@ -1017,11 +1098,33 @@ void ZtoryAudioTrack::paintEvent(QPaintEvent *) {
   int phx = labelW + (int)(m_currentFrame * m_ppf) + (int)(m_ppf / 2);
   p.setPen(QColor(255, 100, 0));
   p.drawLine(phx, 0, phx, trackH);
+
+  // Focus indicator: bright border around the whole track when keyboard-focused
+  if (m_hasFocus) {
+    p.setPen(QPen(QColor(80, 160, 255), 2));
+    p.drawRect(1, 1, width() - 2, trackH - 2);
+  }
 }
 
 void ZtoryAudioTrack::setRazorActive(bool on) {
   m_razorActive = on;
   setCursor(on ? Qt::CrossCursor : Qt::ArrowCursor);
+}
+
+void ZtoryAudioTrack::clearSelection() {
+  if (m_selSeg.r0 >= 0) { m_selSeg = {-1, -1}; update(); }
+}
+
+void ZtoryAudioTrack::focusInEvent(QFocusEvent *e) {
+  m_hasFocus = true;
+  update();
+  QWidget::focusInEvent(e);
+}
+
+void ZtoryAudioTrack::focusOutEvent(QFocusEvent *e) {
+  m_hasFocus = false;
+  update();
+  QWidget::focusOutEvent(e);
 }
 
 void ZtoryAudioTrack::setCutFrames(const QVector<int> &frames) {
@@ -1135,17 +1238,24 @@ void ZtoryAudioTrack::mousePressEvent(QMouseEvent *e) {
   }
   // Select / drag / trim segment — blocked when locked
   if (e->button() == Qt::LeftButton && !m_razorActive && !m_locked) {
+    setFocus(Qt::MouseFocusReason);
     int frame = frameAtX(e->x());
     int mx = e->x();
     auto segs = findSegments();
     m_selSeg = {-1, -1};
     m_dragMode = NoDrag;
+    delete m_undoBefore; m_undoBefore = nullptr;
     for (auto &s : segs) {
       if (frame < s.r0 || frame > s.r1) continue;
       m_selSeg = s;
       m_dragOrigR0 = s.r0;
       m_dragOrigR1 = s.r1;
       m_dragStartFrame = frame;
+      // Snapshot for undo — taken once at drag start
+      TXsheet *xsh = ZtoryAnimaticController::instance()->mainXsheet();
+      TXshColumn *c = xsh ? xsh->getColumn(m_col) : nullptr;
+      TXshSoundColumn *sc = c ? c->getSoundColumn() : nullptr;
+      if (sc) m_undoBefore = dynamic_cast<TXshSoundColumn *>(sc->clone());
       // Edge detection: 6px zone at each border
       int xLeft  = kLabelW + (int)(s.r0 * m_ppf);
       int xRight = kLabelW + (int)((s.r1 + 1) * m_ppf);
@@ -1161,6 +1271,8 @@ void ZtoryAudioTrack::mousePressEvent(QMouseEvent *e) {
       }
       break;
     }
+    // If clicked on empty area, notify siblings to clear selection too
+    if (m_selSeg.r0 < 0) emit selectionCleared();
     update();
   }
 }
@@ -1319,12 +1431,19 @@ void ZtoryAudioTrack::mouseReleaseEvent(QMouseEvent *e) {
       TXshSoundColumn *sc = column ? column->getSoundColumn() : nullptr;
       if (sc) {
         sc->shiftLevelInRange(m_dragOrigR0, m_dragOrigR1, finalDelta);
+        TXshSoundColumn *after = dynamic_cast<TXshSoundColumn *>(sc->clone());
+        TUndoManager::manager()->add(
+            new UndoAudioEdit(m_col, m_undoBefore, after, tr("Move Audio")));
+        m_undoBefore = nullptr;  // ownership transferred
         invalidateWaveform();
         ZtoryAnimaticController::instance()->invalidateSoundTrack();
         emit segmentMoved();
       } else {
         m_selSeg = {m_dragOrigR0, m_dragOrigR0 + segLen};
+        delete m_undoBefore; m_undoBefore = nullptr;
       }
+    } else {
+      delete m_undoBefore; m_undoBefore = nullptr;
     }
     update();
     return;
@@ -1336,18 +1455,27 @@ void ZtoryAudioTrack::mouseReleaseEvent(QMouseEvent *e) {
     TXshColumn *column = xsh ? xsh->getColumn(m_col) : nullptr;
     TXshSoundColumn *sc = column ? column->getSoundColumn() : nullptr;
     if (sc) {
+      bool changed = false;
       if (finishedMode == TrimLeft) {
         int delta = m_selSeg.r0 - m_dragOrigR0;
-        if (delta != 0)
-          sc->modifyCellRange(m_dragOrigR0, delta, true);
+        if (delta != 0) { sc->modifyCellRange(m_dragOrigR0, delta, true); changed = true; }
       } else {
         int delta = m_selSeg.r1 - m_dragOrigR1;
-        if (delta != 0)
-          sc->modifyCellRange(m_dragOrigR1, delta, false);
+        if (delta != 0) { sc->modifyCellRange(m_dragOrigR1, delta, false); changed = true; }
+      }
+      if (changed) {
+        TXshSoundColumn *after = dynamic_cast<TXshSoundColumn *>(sc->clone());
+        TUndoManager::manager()->add(
+            new UndoAudioEdit(m_col, m_undoBefore, after, tr("Trim Audio")));
+        m_undoBefore = nullptr;  // ownership transferred
+      } else {
+        delete m_undoBefore; m_undoBefore = nullptr;
       }
       invalidateWaveform();
       ZtoryAnimaticController::instance()->invalidateSoundTrack();
       emit segmentMoved();
+    } else {
+      delete m_undoBefore; m_undoBefore = nullptr;
     }
     update();
     return;
@@ -1383,41 +1511,85 @@ void ZtoryAudioTrack::clipboardCopy(ZtoryAudioTrack *src) {
   if (!src || src->m_selSeg.r0 < 0) return;
   TXsheet *xsh = ZtoryAnimaticController::instance()->mainXsheet();
   if (!xsh) return;
+  TXshColumn *c = xsh->getColumn(src->m_col);
+  TXshSoundColumn *sc = c ? c->getSoundColumn() : nullptr;
+  if (!sc) return;
+
+  s_audioClip.clear();
+  s_audioClip.originFrame = src->m_selSeg.r0;
+
   int r0 = src->m_selSeg.r0, r1 = src->m_selSeg.r1;
-  s_audioClipboard.col = src->m_col;
-  s_audioClipboard.r0 = r0;
-  s_audioClipboard.r1 = r1;
-  s_audioClipboard.isCut = false;
-  s_audioClipboard.cells.clear();
-  for (int r = r0; r <= r1; r++)
-    s_audioClipboard.cells.push_back(xsh->getCell(r, src->m_col));
+  for (int i = 0; i < sc->getColumnLevelCount(); i++) {
+    ColumnLevel *cl = sc->getColumnLevel(i);
+    if (cl->getVisibleEndFrame() < r0 || cl->getVisibleStartFrame() > r1) continue;
+    s_audioClip.levels.push_back(cl->clone());
+  }
 }
 
 void ZtoryAudioTrack::clipboardCut(ZtoryAudioTrack *src) {
-  // TODO(audio-drag): TXshSoundColumn requires ColumnLevel API, not clearCells.
-  // For now, cut is a copy-only operation (no delete of the source).
+  if (!src || src->m_selSeg.r0 < 0) return;
   clipboardCopy(src);
+  // Delete the selection with undo.
+  TXsheet *xsh = ZtoryAnimaticController::instance()->mainXsheet();
+  if (!xsh) return;
+  TXshColumn *c = xsh->getColumn(src->m_col);
+  TXshSoundColumn *sc = c ? c->getSoundColumn() : nullptr;
+  if (!sc) return;
+  TXshSoundColumn *before = dynamic_cast<TXshSoundColumn *>(sc->clone());
+  sc->clearCells(src->m_selSeg.r0, src->m_selSeg.r1 - src->m_selSeg.r0 + 1);
+  TXshSoundColumn *after = dynamic_cast<TXshSoundColumn *>(sc->clone());
+  TUndoManager::manager()->add(
+      new UndoAudioEdit(src->m_col, before, after, QObject::tr("Cut Audio")));
+  src->m_selSeg = {-1, -1};
+  TApp::instance()->getCurrentXsheet()->notifyXsheetChanged();
 }
 
-void ZtoryAudioTrack::clipboardPaste(ZtoryAudioTrack *dst, int frame) {
-  // TODO(audio-drag): TXshSoundColumn requires ColumnLevel API, not setCell.
-  // Paste is disabled until the proper API is implemented.
-  Q_UNUSED(dst); Q_UNUSED(frame);
+void ZtoryAudioTrack::clipboardPaste(ZtoryAudioTrack *dst, int targetFrame) {
+  if (s_audioClip.empty() || !dst) return;
+  TXsheet *xsh = ZtoryAnimaticController::instance()->mainXsheet();
+  if (!xsh) return;
+  TXshColumn *c = xsh->getColumn(dst->m_col);
+  TXshSoundColumn *sc = c ? c->getSoundColumn() : nullptr;
+  if (!sc) return;
+  TXshSoundColumn *before = dynamic_cast<TXshSoundColumn *>(sc->clone());
+  int offset = targetFrame - s_audioClip.originFrame;
+  for (ColumnLevel *cl : s_audioClip.levels) {
+    ColumnLevel *copy = cl->clone();
+    int newVsf = cl->getVisibleStartFrame() + offset;
+    sc->adoptLevel(copy, newVsf);
+  }
+  TXshSoundColumn *after = dynamic_cast<TXshSoundColumn *>(sc->clone());
+  TUndoManager::manager()->add(
+      new UndoAudioEdit(dst->m_col, before, after, QObject::tr("Paste Audio")));
+  TApp::instance()->getCurrentXsheet()->notifyXsheetChanged();
 }
 
 void ZtoryAudioTrack::keyPressEvent(QKeyEvent *e) {
+  if (m_locked) { QWidget::keyPressEvent(e); return; }
   bool ctrl = (e->modifiers() & Qt::ControlModifier);
-  if (ctrl && e->key() == Qt::Key_X) { clipboardCut(this); return; }
-  if (ctrl && e->key() == Qt::Key_C) { clipboardCopy(this); return; }
+  if (ctrl && e->key() == Qt::Key_X) { clipboardCut(this); e->accept(); return; }
+  if (ctrl && e->key() == Qt::Key_C) { clipboardCopy(this); e->accept(); return; }
   if (ctrl && e->key() == Qt::Key_V) {
-    // Paste at the start of the selected segment, or at current frame
     int frame = (m_selSeg.r0 >= 0) ? m_selSeg.r0 : m_currentFrame;
     clipboardPaste(this, frame);
+    e->accept();
     return;
   }
-  if (e->key() == Qt::Key_Delete || e->key() == Qt::Key_Backspace) {
-    // TODO(audio-drag): TXshSoundColumn requires ColumnLevel API, not clearCells.
-    // Delete is disabled until the proper API is implemented.
+  if (!ctrl && (e->key() == Qt::Key_Delete || e->key() == Qt::Key_Backspace)) {
+    if (m_selSeg.r0 < 0) { QWidget::keyPressEvent(e); return; }
+    TXsheet *xsh = ZtoryAnimaticController::instance()->mainXsheet();
+    if (!xsh) { QWidget::keyPressEvent(e); return; }
+    TXshColumn *c = xsh->getColumn(m_col);
+    TXshSoundColumn *sc = c ? c->getSoundColumn() : nullptr;
+    if (!sc) { QWidget::keyPressEvent(e); return; }
+    TXshSoundColumn *before = dynamic_cast<TXshSoundColumn *>(sc->clone());
+    sc->clearCells(m_selSeg.r0, m_selSeg.r1 - m_selSeg.r0 + 1);
+    TXshSoundColumn *after = dynamic_cast<TXshSoundColumn *>(sc->clone());
+    TUndoManager::manager()->add(
+        new UndoAudioEdit(m_col, before, after, QObject::tr("Delete Audio")));
+    m_selSeg = {-1, -1};
+    TApp::instance()->getCurrentXsheet()->notifyXsheetChanged();
+    e->accept();
     return;
   }
   QWidget::keyPressEvent(e);
@@ -3316,6 +3488,10 @@ ZtoryAnimaticPanel::ZtoryAnimaticPanel(QWidget *parent) : TPanel(parent) {
           this, &ZtoryAnimaticPanel::onFrameChanged);
   connect(m_track, &ZtoryAnimaticTrack::shotClicked,
           this, &ZtoryAnimaticPanel::onShotClicked);
+  // Clear audio track selection when the video track is clicked
+  connect(m_track, &ZtoryAnimaticTrack::shotClicked, this, [this]() {
+    for (auto *at : m_audioTracks) at->clearSelection();
+  });
   connect(m_track, &ZtoryAnimaticTrack::shotDoubleClicked,
           this, &ZtoryAnimaticPanel::onShotDoubleClicked);
   // Sync selection to ZtoryModel so Board's merge button can use it.
@@ -3574,6 +3750,16 @@ void ZtoryAnimaticPanel::refreshAudioTracks() {
     m_scrollLay->insertWidget(insertIdx, at);
     m_audioTracks.append(at);
   }
+
+  // Cross-connect: when one track clears its selection, clear all others.
+  // Also clear audio selection when the video track receives a click.
+  for (auto *src : m_audioTracks) {
+    connect(src, &ZtoryAudioTrack::selectionCleared, this, [this, src]() {
+      for (auto *other : m_audioTracks)
+        if (other != src) other->clearSelection();
+    });
+  }
+
   updateCutFrames();
   restoreTrackStates();
   m_refreshingAudio = false;
@@ -3882,6 +4068,9 @@ bool ZtoryAnimaticPanel::eventFilter(QObject *obj, QEvent *e) {
     if (w == this) { inPanel = true; break; }
 
   if (!inPanel) return false;
+
+  // Audio tracks handle their own shortcuts (Delete, Ctrl+C/X/V) — don't intercept.
+  if (qobject_cast<ZtoryAudioTrack *>(fw)) return false;
 
   QKeyEvent *ke = static_cast<QKeyEvent *>(e);
 
@@ -4626,22 +4815,45 @@ void ZtoryAnimaticPanel::onRazorRequested(int col, int splitFrame) {
   ZtoryModel::instance()->resequenceXsheet();
 
   // Linked razor: also split audio tracks at the same absolute frame.
+  // cloneChild(col) inserted a new column at newCol=col+1, shifting every
+  // column that was at index >= newCol by +1.  m_audioTracks still carry
+  // pre-insert indices, so we must correct them before accessing the xsheet.
+  struct AudioRazorEntry { int oldIdx; int newIdx; TXshSoundColumn *before = nullptr; };
+  QList<AudioRazorEntry> audioEntries;
   if (m_audioLinked) {
-    // splitFrame is already an absolute frame in the main xsheet.
-    // We must iterate a copy because splitAudioColumn may add columns,
-    // which would invalidate the audio tracks list.
-    QList<int> audioCols;
-    for (auto *at : m_audioTracks) audioCols.append(at->columnIndex());
-    for (int ac : audioCols) splitAudioColumn(mainXsh, ac, splitFrame);
+    for (auto *at : m_audioTracks) {
+      int oldIdx = at->columnIndex();
+      int newIdx = (oldIdx >= newCol) ? oldIdx + 1 : oldIdx;
+      TXshColumn *c = mainXsh->getColumn(newIdx);
+      TXshSoundColumn *sc = c ? c->getSoundColumn() : nullptr;
+      if (!sc) continue;  // shouldn't happen, but skip non-sound columns
+      AudioRazorEntry e;
+      e.oldIdx = oldIdx;
+      e.newIdx = newIdx;
+      e.before = dynamic_cast<TXshSoundColumn *>(sc->clone());
+      audioEntries.append(e);
+    }
+    for (auto &e : audioEntries) splitAudioColumn(mainXsh, e.newIdx, splitFrame);
   }
 
   m_track->refreshFromScene();
   refreshAudioTracks();
 
-  if (board) {
-    auto after = board->captureSnapshot();
-    TUndoManager::manager()->add(
-        new UndoBoardState(board, tr("Razor"), std::move(before), std::move(after)));
+  // Group board state + audio edits into a single undoable step.
+  {
+    TUndoScopedBlock undoBlock;
+    if (board) {
+      auto after = board->captureSnapshot();
+      TUndoManager::manager()->add(
+          new UndoBoardState(board, tr("Razor"), std::move(before), std::move(after)));
+    }
+    for (auto &e : audioEntries) {
+      TXshColumn *c = mainXsh->getColumn(e.newIdx);
+      TXshSoundColumn *sc = c ? c->getSoundColumn() : nullptr;
+      TXshSoundColumn *aft = sc ? dynamic_cast<TXshSoundColumn *>(sc->clone()) : nullptr;
+      TUndoManager::manager()->add(
+          new UndoAudioEdit(e.newIdx, e.before, aft, tr("Razor Audio")));
+    }
   }
 }
 
@@ -4649,7 +4861,14 @@ void ZtoryAnimaticPanel::onAudioRazorRequested(int col, int frame) {
   if (!ZtoryModel::assertMainXsheet(/*showWarning=*/false)) return;
   TXsheet *xsh = ZtoryAnimaticController::instance()->mainXsheet();
   if (!xsh) return;
+  TXshColumn *c = xsh->getColumn(col);
+  TXshSoundColumn *sc = c ? c->getSoundColumn() : nullptr;
+  if (!sc) return;
+  TXshSoundColumn *before = dynamic_cast<TXshSoundColumn *>(sc->clone());
   splitAudioColumn(xsh, col, frame);
+  TXshSoundColumn *after = dynamic_cast<TXshSoundColumn *>(sc->clone());
+  TUndoManager::manager()->add(
+      new UndoAudioEdit(col, before, after, tr("Razor Audio")));
   TApp::instance()->getCurrentXsheet()->notifyXsheetChanged();
   refreshAudioTracks();
 }
@@ -4673,9 +4892,18 @@ void ZtoryAnimaticPanel::onSegmentDroppedOutside(int srcCol, int origR0,
   TXshColumn *srcColumn = xsh->getColumn(srcCol);
   TXshSoundColumn *srcSc = srcColumn ? srcColumn->getSoundColumn() : nullptr;
   if (!srcSc) return;
+  int dstCol = target->columnIndex();
+  TXshColumn *dstColumn = xsh->getColumn(dstCol);
+  TXshSoundColumn *dstSc = dstColumn ? dstColumn->getSoundColumn() : nullptr;
+  if (!dstSc) return;
+
+  // Snapshot both columns before the move.
+  TXshSoundColumn *srcBefore = dynamic_cast<TXshSoundColumn *>(srcSc->clone());
+  TXshSoundColumn *dstBefore = dynamic_cast<TXshSoundColumn *>(dstSc->clone());
+
   int midFrame = (origR0 + origR1) / 2;
   ColumnLevel *cl = srcSc->detachLevelByFrame(midFrame);
-  if (!cl) return;
+  if (!cl) { delete srcBefore; delete dstBefore; return; }
 
   // Compute target vsf: frame under cursor minus the grab offset inside the segment
   QPoint localPos = target->mapFromGlobal(globalPos);
@@ -4683,25 +4911,29 @@ void ZtoryAnimaticPanel::onSegmentDroppedOutside(int srcCol, int origR0,
   int targetVsf = qMax(0, cursorFrame - dragOffset);
 
   // Clamp against existing segments on destination track to avoid overlap.
-  // Use targetVsf (not origR0 from source) to find left/right neighbors.
   int segLen = origR1 - origR0;
   auto dstSegs = target->findSegments();
   for (auto &s : dstSegs) {
-    // Neighbor on the left: push targetVsf past s.r1
     if (s.r1 < targetVsf && targetVsf <= s.r1 + 1)
       targetVsf = s.r1 + 1;
-    // Neighbor on the right: push targetVsf so we don't overlap s.r0
     if (s.r0 >= targetVsf && targetVsf + segLen >= s.r0)
       targetVsf = s.r0 - segLen - 1;
   }
   if (targetVsf < 0) targetVsf = 0;
 
   // Adopt into target track
-  int dstCol = target->columnIndex();
-  TXshColumn *dstColumn = xsh->getColumn(dstCol);
-  TXshSoundColumn *dstSc = dstColumn ? dstColumn->getSoundColumn() : nullptr;
-  if (!dstSc) { delete cl; return; }
   dstSc->adoptLevel(cl, targetVsf);
+
+  // Push undo for both columns as a single grouped operation.
+  {
+    TUndoScopedBlock undoBlock;
+    TXshSoundColumn *srcAfter = dynamic_cast<TXshSoundColumn *>(srcSc->clone());
+    TXshSoundColumn *dstAfter = dynamic_cast<TXshSoundColumn *>(dstSc->clone());
+    TUndoManager::manager()->add(
+        new UndoAudioEdit(srcCol, srcBefore, srcAfter, tr("Move Audio")));
+    TUndoManager::manager()->add(
+        new UndoAudioEdit(dstCol, dstBefore, dstAfter, tr("Move Audio")));
+  }
 
   // Refresh — invalidate waveform via a queued call so it fires AFTER
   // all pending Qt paint events from refreshAudioTracks() have settled.
@@ -5070,6 +5302,7 @@ void ZtoryAnimaticPanel::contextMenuEvent(QContextMenuEvent *e) {
     if (!xsh) return;
     int insertCol = xsh->getColumnCount();
     xsh->insertColumn(insertCol, TXshColumn::eSoundType);
+    TUndoManager::manager()->add(new UndoAddAudioTrack(insertCol));
     TApp::instance()->getCurrentXsheet()->notifyXsheetChanged();
     refreshAudioTracks();
     updateTrackWidths();

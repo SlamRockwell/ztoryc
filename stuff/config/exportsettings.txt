@@ -1,0 +1,14 @@
+<ExportDir>
+  "+outputs"
+</ExportDir>
+<ExportFormat>
+  apng 
+</ExportFormat>
+<FormatSettings>
+  <property max="100" min="1" name="Scale" type="int" value="100"/>
+  <property name="Looping" type="bool" value="true"/>
+  <property name="ExtPng" type="bool" value="false"/>
+  </FormatSettings>
+<UseMarkers>
+  1 
+</UseMarkers>

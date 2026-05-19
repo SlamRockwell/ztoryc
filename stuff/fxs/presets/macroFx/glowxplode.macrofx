@@ -1,0 +1,325 @@
+<macroFx id='1'>
+  
+  <root>
+    <STD_rgbmFadeFx id='2'>
+      
+      <params>
+        <color>
+          <red>
+            <default>
+              0 
+            </default>
+            <keyframes>
+              <L>
+                59 0 
+              </L>
+              <L>
+                <prev>
+                  0 
+                </prev>
+                67 0 
+              </L>
+              </keyframes>
+            </red>
+          <green>
+            <default>
+              0 
+            </default>
+            <keyframes>
+              <L>
+                59 0 
+              </L>
+              <L>
+                <prev>
+                  0 
+                </prev>
+                67 0 
+              </L>
+              </keyframes>
+            </green>
+          <blue>
+            <default>
+              0 
+            </default>
+            <keyframes>
+              <L>
+                59 0 
+              </L>
+              <L>
+                <prev>
+                  0 
+                </prev>
+                67 0 
+              </L>
+              </keyframes>
+            </blue>
+          <matte>
+            <default>
+              255 
+            </default>
+            <keyframes>
+              <L>
+                59 1 
+              </L>
+              <L>
+                <prev>
+                  1 
+                </prev>
+                67 1 
+              </L>
+              </keyframes>
+            </matte>
+          </color>
+        <intensity>
+          <default>
+            50 
+          </default>
+          <keyframes>
+            <L>
+              59 0 
+            </L>
+            <L>
+              <prev>
+                55.923 
+              </prev>
+              67 55.923 
+            </L>
+            </keyframes>
+          </intensity>
+        </params>
+      <ports>
+        <Source>
+          <STD_glowFx id='3'>
+            
+            <params>
+              <value>
+                <default>
+                  10 
+                </default>
+                <keyframes>
+                  <L>
+                    14 10 
+                  </L>
+                  <L>
+                    <prev>
+                      10 
+                    </prev>
+                    59 10 
+                  </L>
+                  <L>
+                    <prev>
+                      0 
+                    </prev>
+                    67 0 
+                  </L>
+                  </keyframes>
+                </value>
+              <brightness>
+                <default>
+                  100 
+                </default>
+                <keyframes>
+                  <L>
+                    14 80 
+                  </L>
+                  <L>
+                    <prev>
+                      300 
+                    </prev>
+                    59 300 
+                  </L>
+                  <L>
+                    <prev>
+                      0 
+                    </prev>
+                    67 0 
+                  </L>
+                  </keyframes>
+                </brightness>
+              <color>
+                <red>
+                  <default>
+                    1 
+                  </default>
+                  <keyframes>
+                    <L>
+                      14 0.933333 
+                    </L>
+                    <L>
+                      <prev>
+                        0.941176 
+                      </prev>
+                      59 0.941176 
+                    </L>
+                    <L>
+                      <prev>
+                        0.941176 
+                      </prev>
+                      67 0.941176 
+                    </L>
+                    </keyframes>
+                  </red>
+                <green>
+                  <default>
+                    1 
+                  </default>
+                  <keyframes>
+                    <L>
+                      14 0.941176 
+                    </L>
+                    <L>
+                      <prev>
+                        0 
+                      </prev>
+                      59 0 
+                    </L>
+                    <L>
+                      <prev>
+                        0 
+                      </prev>
+                      67 0 
+                    </L>
+                    </keyframes>
+                  </green>
+                <blue>
+                  <default>
+                    1 
+                  </default>
+                  <keyframes>
+                    <L>
+                      14 0.584314 
+                    </L>
+                    <L>
+                      <prev>
+                        0 
+                      </prev>
+                      59 0 
+                    </L>
+                    <L>
+                      <prev>
+                        0 
+                      </prev>
+                      67 0 
+                    </L>
+                    </keyframes>
+                  </blue>
+                <matte>
+                  <default>
+                    1 
+                  </default>
+                  <keyframes>
+                    <L>
+                      14 1 
+                    </L>
+                    <L>
+                      <prev>
+                        1 
+                      </prev>
+                      59 1 
+                    </L>
+                    <L>
+                      <prev>
+                        1 
+                      </prev>
+                      67 1 
+                    </L>
+                    </keyframes>
+                  </matte>
+                </color>
+              <fade>
+                <default>
+                  0 
+                </default>
+                <keyframes>
+                  <L>
+                    14 56.474 
+                  </L>
+                  <L>
+                    <prev>
+                      56.474 
+                    </prev>
+                    59 56.474 
+                  </L>
+                  <L>
+                    <prev>
+                      0 
+                    </prev>
+                    67 0 
+                  </L>
+                  </keyframes>
+                </fade>
+              </params>
+            <ports>
+              <Light>
+                </Light>
+              <Source>
+                </Source>
+              </ports>
+            <dagNodePos>
+              25064.9 24384 
+            </dagNodePos>
+            <numberId>
+              2 
+            </numberId>
+            <name>
+              glowgloves 
+            </name>
+            <fxId>
+              Glow02 
+            </fxId>
+            <opened>
+              0 
+            </opened>
+            
+          </STD_glowFx>
+          
+        </Source>
+        </ports>
+      <dagNodePos>
+        25204.9 24384 
+      </dagNodePos>
+      <numberId>
+        1 
+      </numberId>
+      <name>
+        RGBFade01 
+      </name>
+      <fxId>
+        RGBFade01 
+      </fxId>
+      <opened>
+        0 
+      </opened>
+      
+    </STD_rgbmFadeFx>
+    
+  </root>
+  <nodes>
+    <STD_glowFx id='3'/><STD_rgbmFadeFx id='2'/>
+  </nodes>
+  <ports>
+    <port name_inFx="Light_0_Glow02"/>
+    <port name_inFx="Source_1_Glow02"/>
+    </ports>
+  <super>
+    <ports>
+      <Light_0_Glow02>
+        </Light_0_Glow02>
+      <Source_1_Glow02>
+        </Source_1_Glow02>
+      </ports>
+    <numberId>
+      0 
+    </numberId>
+    <name>
+      macroFx01 
+    </name>
+    <fxId>
+      macroFx01 
+    </fxId>
+    <opened>
+      0 
+    </opened>
+    </super>
+  
+</macroFx>
