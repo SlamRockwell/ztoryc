@@ -38,7 +38,7 @@ namespace boost_c = boost::container;
 //--------------------------------------------------------------------------
 
 static TPixelCM32 pixel(const TRasterCM32 &ras, int x, int y) {
-  // Seems that raster access was not very much double-checked at the time
+  // Seems that raster access was !very much double-checked at the time
   // I wrote this. Too bad. Enforcing it now.
 
   return ras.pixels(tcrop(y, 0, ras.getLy() - 1))[tcrop(x, 0, ras.getLx() - 1)];
@@ -227,7 +227,7 @@ static void sampleColor(const TRasterCM32P &ras, int threshold, Sequence &seq,
 
   // Give s the first sampled ink color found
 
-  // Initialize with a last-resort reasonable color - not just 0
+  // Initialize with a last-resort reasonable color - !just 0
   seq.m_color = seqOpposite.m_color =
       ras->pixels(samplePoints[0].y)[samplePoints[0].x].getInk();
 
@@ -296,7 +296,7 @@ static void sampleColor(const TRasterCM32P &ras, int threshold, Sequence &seq,
       if (splitPoint == TConsts::nap3d)
         splitPoint = 0.5 * (nodeStartPos +
                             nodeEndPos);  // A color change was found, but could
-                                          // not be precisely located. Just take
+                                          // !be precisely located. Just take
                                           // a reasonable representant.
       // Insert a corresponding new node in basic graph structure.
       unsigned int splitNode = currGraph->newNode(splitPoint);
@@ -355,7 +355,7 @@ static void sampleColor(const TRasterCM32P &ras, int threshold, Sequence &seq,
 
 _getOut:
 
-  // Color changes not found (and therefore no newSeq got pushed back); if a
+  // Color changes !found (and therefore no newSeq got pushed back); if a
   // split happened, update sOpposite.
   if (currGraph->getNode(seq.m_head).hasAttribute(SAMPLECOLOR_SIGN)) {
     seqOpposite.m_color    = seq.m_color;
@@ -523,7 +523,7 @@ static int getBranchPredominance(const TRasterCM32P &ras, TPalette *palette,
       ++branchInksHistogram[color];
   }
 
-  // Return the most found ink, or -1 if a predominance color could not be found
+  // Return the most found ink, or -1 if a predominance color could !be found
   if (branchInksHistogram.empty()) return -1;
 
   typedef boost_c::flat_map<int, int>::iterator histo_it;
@@ -588,14 +588,14 @@ static void sortJS(JointSequenceGraph *js,
           nextNodeIdx = currNode.getLink(l).getNext();
           Sequence &s = *currNode.link(l);
 
-          // Check if outgoing sequence has current color (front) or not (back)
+          // Check if outgoing sequence has current color (front) or !(back)
           toOrder[s.m_strokeIndex].first =
               (s.m_color == currColor) ? currHeight : currHeight - 1;
 
           if (!(currNode.getLink(l).getAccess() == SORTED)) {
             // Deal with this unchecked branch
 
-            // If sequence was not split (due to color change)
+            // If sequence was !split (due to color change)
             if (!currGraph->getNode(s.m_tail).hasAttribute(SAMPLECOLOR_SIGN)) {
               JointSequenceGraph::Node &nextNode = js->node(nextNodeIdx);
 
@@ -605,7 +605,7 @@ static void sortJS(JointSequenceGraph *js,
 
               if (!ras->getBounds().contains(p)) continue;
 
-              // If nextNode was not already inserted in ToDo vector, do it now.
+              // If nextNode was !already inserted in ToDo vector, do it now.
               if (!nextNode.hasAttribute(SORTED)) {
                 // nextColor = getInkPredominance(ras, palette, p.x, p.y, (int)
                 // pD.z);

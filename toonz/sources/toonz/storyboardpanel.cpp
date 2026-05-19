@@ -985,30 +985,30 @@ void StoryboardPanel::updatePreview(int shotIdx, int panelIdx) {
   ToonzScene *scene = app->getCurrentScene()->getScene();
   if (!scene) return;
   TXsheet *xsh = scene->getChildStack()->getTopXsheet();
-  if (not xsh) return;
+  if (!xsh) return;
   int col = shot.data.xsheetColumn;
   TXshChildLevel *cl = nullptr;
   for (int r = 0; r <= xsh->getFrameCount(); r++) {
     TXshCell cell = xsh->getCell(r, col);
-    if (not cell.isEmpty() && cell.m_level && cell.m_level->getChildLevel()) {
+    if (!cell.isEmpty() && cell.m_level && cell.m_level->getChildLevel()) {
       cl = cell.m_level->getChildLevel();
       break;
     }
   }
-  if (not cl) return;
+  if (!cl) return;
   TXsheet *subXsh = cl->getXsheet();
-  if (not subXsh) return;
+  if (!subXsh) return;
 
   int frame = shot.data.panels[panelIdx].startFrame;
   QPixmap px = IconGenerator::renderXsheetFrame(subXsh, frame, TDimension(320, 180));
-  if (not px.isNull())
+  if (!px.isNull())
     shot.panels[panelIdx]->setPreviewPixmap(px);
 }
 
 QString StoryboardPanel::ztoryPath() const {
   TApp *app = TApp::instance();
   ToonzScene *scene = app->getCurrentScene()->getScene();
-  if (not scene) return QString();
+  if (!scene) return QString();
   TFilePath sp = scene->getScenePath();
   if (sp.isEmpty()) return QString();
   QString path = QString::fromStdWString(sp.getWideString());
@@ -1050,7 +1050,7 @@ void StoryboardPanel::saveZtoryc() {
   QString path = ztoryPath();
   if (path.isEmpty()) return;
   QFile file(path);
-  if (not file.open(QIODevice::WriteOnly | QIODevice::Text)) return;
+  if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) return;
   QXmlStreamWriter xml(&file);
   xml.setAutoFormatting(true);
   xml.writeStartDocument();
@@ -1085,10 +1085,10 @@ void StoryboardPanel::loadZtoryc() {
   QString path = ztoryPath();
   if (path.isEmpty()) return;
   QFile file(path);
-  if (not file.open(QIODevice::ReadOnly | QIODevice::Text)) return;
+  if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return;
   QXmlStreamReader xml(&file);
   int si = -1, pi = -1;
-  while (not xml.atEnd()) {
+  while (!xml.atEnd()) {
     xml.readNext();
     if (xml.isStartElement()) {
       if (xml.name() == QLatin1String("shot")) {
@@ -1156,13 +1156,13 @@ void StoryboardPanel::loadZtoryc() {
 int StoryboardPanel::currentShotIndex() const {
   TApp *app = TApp::instance();
   ToonzScene *scene = app->getCurrentScene()->getScene();
-  if (not scene) return -1;
+  if (!scene) return -1;
   ChildStack *cs = scene->getChildStack();
-  if (not cs) return -1;
+  if (!cs) return -1;
   int depth = cs->getAncestorCount();
   if (depth == 0) return -1;
   AncestorNode *node = cs->getAncestorInfo(depth - 1);
-  if (not node) return -1;
+  if (!node) return -1;
   return node->m_col;
 }
 
@@ -1170,7 +1170,7 @@ void StoryboardPanel::detectAndUpdatePanels(int shotIdx) {
   if (shotIdx < 0 || shotIdx >= (int)m_shots.size()) return;
   TApp *app = TApp::instance();
   TXsheet *xsh = app->getCurrentXsheet()->getXsheet();
-  if (not xsh) return;
+  if (!xsh) return;
   int numCols = xsh->getColumnCount();
   int numFrames = xsh->getFrameCount();
   if (numFrames <= 0 || numCols <= 0) return;
@@ -1199,17 +1199,17 @@ void StoryboardPanel::detectAndUpdatePanels(int shotIdx) {
   allPanelFrames.push_back(0);
   for (int r = 1; r < numFrames; r++) {
     bool changed = false;
-    for (int c = 0; c < numCols && not changed; c++) {
+    for (int c = 0; c < numCols && !changed; c++) {
       TXshCell prev = xsh->getCell(r - 1, c);
       TXshCell curr = xsh->getCell(r, c);
       if (prev.m_frameId != curr.m_frameId || prev.isEmpty() != curr.isEmpty())
         changed = true;
     }
-    for (int c = 0; c < numCols && not changed; c++) {
+    for (int c = 0; c < numCols && !changed; c++) {
       TStageObject *obj = xsh->getStageObject(TStageObjectId::ColumnId(c));
       if (obj && obj->isKeyframe(r)) changed = true;
     }
-    if (not changed) {
+    if (!changed) {
       TStageObject *cam = xsh->getStageObject(TStageObjectId::CameraId(0));
       if (cam && cam->isKeyframe(r)) changed = true;
     }
@@ -1535,7 +1535,7 @@ void StoryboardPanel::onShotRemovedAt(int col) {
     if (m_shots[i].data.xsheetColumn == col) { si = i; break; }
   }
   if (si < 0) {
-    // Shot not found — Board xsheetColumn tracking is desynced (e.g. after
+    // Shot !found — Board xsheetColumn tracking is desynced (e.g. after
     // a previous cut/merge left counts off by one). Rebuild from xsheet.
     refreshFromScene();
     return;
@@ -1560,7 +1560,7 @@ void StoryboardPanel::onShotRemovedAt(int col) {
 void StoryboardPanel::onXsheetChanged() {
   // Update T: (timeline duration) for all shots from main xsheet column range.
   // D: (partial) is only updated for single-panel shots; multi-panel partials
-  // are owned by detectAndUpdatePanels and must not be overwritten here.
+  // are owned by detectAndUpdatePanels and must !be overwritten here.
   ToonzScene *scene = TApp::instance()->getCurrentScene()->getScene();
   if (!scene || scene->getChildStack()->getAncestorCount() != 0) return;
   TXsheet *xsh = scene->getChildStack()->getTopXsheet();
@@ -1596,22 +1596,22 @@ void StoryboardPanel::showEvent(QShowEvent *e) {
 void StoryboardPanel::refreshFromScene() {
   TApp *app = TApp::instance();
   ToonzScene *scene = app->getCurrentScene()->getScene();
-  if (not scene) return;
+  if (!scene) return;
   clearShots();
   TXsheet *xsh = scene->getChildStack()->getTopXsheet();
-  if (not xsh) return;
+  if (!xsh) return;
   int numCols = xsh->getColumnCount();
   for (int col = 0; col < numCols; col++) {
     TXshChildLevel *cl = nullptr;
     int duration = 0;
     for (int r = 0; r < xsh->getFrameCount(); r++) {
       TXshCell cell = xsh->getCell(r, col);
-      if (not cell.isEmpty() && cell.m_level && cell.m_level->getChildLevel()) {
-        if (not cl) cl = cell.m_level->getChildLevel();
+      if (!cell.isEmpty() && cell.m_level && cell.m_level->getChildLevel()) {
+        if (!cl) cl = cell.m_level->getChildLevel();
         duration++;
       } else if (duration > 0) break;
     }
-    if (not cl) continue;
+    if (!cl) continue;
     Shot shot;
     shot.data.xsheetColumn = col;
     shot.data.shotNumber = QString("%1").arg((int)m_shots.size()+1, 2, 10, QChar(48));
@@ -1720,7 +1720,7 @@ void StoryboardPanel::keyPressEvent(QKeyEvent *e) {
 }
 
 void StoryboardPanel::mouseDoubleClickEvent(QMouseEvent *e) {
-  // Double-click on the background (not on a shot card) closes the sub-scene.
+  // Double-click on the background (!on a shot card) closes the sub-scene.
   ToonzScene *scene = TApp::instance()->getCurrentScene()->getScene();
   if (!scene) return;
   if (scene->getChildStack()->getAncestorCount() > 0) {
@@ -2072,7 +2072,7 @@ void StoryboardPanel::onPasteShot() {
     // Notify other Board instances (and Animatic)
     emit ZtoryModel::instance()->shotAdded(pos);
   }
-  if (not m_autoRenumber) {
+  if (!m_autoRenumber) {
     for (int ci = 0; ci < (int)m_clipboard.size(); ci++)
       assignKeepNumbers(insertAt + ci);
   }
@@ -2344,7 +2344,7 @@ void StoryboardPanel::onAddShot() {
   shot.data.panels.push_back(pd);
   m_shots.insert(m_shots.begin() + insertAt, shot);
   addPanelWidget(insertAt, 0);
-  if (not m_autoRenumber) assignKeepNumbers(insertAt);
+  if (!m_autoRenumber) assignKeepNumbers(insertAt);
   renumberAll();
   resequenceXsheet();
   rebuildGrid();
@@ -2366,16 +2366,16 @@ void StoryboardPanel::onEditShot(int shotIdx) {
 
   TApp *app = TApp::instance();
   ToonzScene *scene = app->getCurrentScene()->getScene();
-  if (not scene) return;
+  if (!scene) return;
   while (scene->getChildStack()->getAncestorCount() > 0)
     CommandManager::instance()->execute("MI_CloseChild");
   TXsheet *xsh = app->getCurrentXsheet()->getXsheet();
-  if (not xsh) return;
+  if (!xsh) return;
   int col = m_shots[shotIdx].data.xsheetColumn;
   int row = 0;
   for (int r = 0; r < xsh->getFrameCount(); r++) {
     TXshCell cell = xsh->getCell(r, col);
-    if (not cell.isEmpty() && cell.m_level && cell.m_level->getChildLevel()) {
+    if (!cell.isEmpty() && cell.m_level && cell.m_level->getChildLevel()) {
       row = r; break;
     }
   }
@@ -2569,7 +2569,7 @@ void StoryboardPanel::onMoveShot(int fromShot, int toShot) {
       for (int c = 0; c < numCols; c++) {
         for (int r = 0; r <= maxFrames; r++) xsh->clearCells(r, c);
         for (int r = 0; r < (int)cols[c].size(); r++)
-          if (not cols[c][r].isEmpty()) xsh->setCell(r, c, cols[c][r]);
+          if (!cols[c][r].isEmpty()) xsh->setCell(r, c, cols[c][r]);
       }
       xsh->updateFrameCount();
       app->getCurrentXsheet()->notifyXsheetChanged();
@@ -2785,7 +2785,7 @@ static QList<int> injectAudioForShot(TXsheet *mainXsh, TXsheet *childXsh,
       // Passing cl->getVisibleStartFrame() keeps the position we set in the constructor.
       dstSc->adoptLevel(cl, cl->getVisibleStartFrame());
 
-    // Mark column as reserved audio (visible in xsheet but not a drawing col)
+    // Mark column as reserved audio (visible in xsheet but !a drawing col)
     TStageObject *obj = childXsh->getStageObjectTree()
                           ->getStageObject(TStageObjectId::ColumnId(newCol), false);
     if (obj) obj->setName("_audio_main_");

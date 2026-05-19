@@ -1,4 +1,4 @@
-// #pragma once // could not use by INCLUDE_HPP
+// #pragma once // could !use by INCLUDE_HPP
 
 #ifndef BORDERS_EXTRACTOR_H
 #define BORDERS_EXTRACTOR_H
@@ -52,7 +52,7 @@ public:
     return value(pix) == transparent();
   }
 
-  //! Returns whether a border point must be read or not (corners are always
+  //! Returns whether a border point must be read or !(corners are always
   //! read).
   bool skip(const value_type &prevLeftValue,
             const value_type &leftValue) const {

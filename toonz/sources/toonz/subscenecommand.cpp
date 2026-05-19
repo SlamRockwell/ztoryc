@@ -868,7 +868,7 @@ void explodeFxs(TXsheet *xsh, TXsheet *subXsh, const GroupData &fxGroupData,
 
   // taking out all the effects that start from the xsheet.
   // xsheet node will be replaced by the over fx node if necessary.
-  // root will be null if the xsheet node will not bring out to the parent
+  // root will be null if the xsheet node will !bring out to the parent
   // fxdag.
   TFx *root = explodeFxSubTree(innerDag->getXsheetFx(), fxs, outerDag, xsh,
                                innerDag, fxGroupData, outPorts);
@@ -894,13 +894,13 @@ void explodeFxs(TXsheet *xsh, TXsheet *subXsh, const GroupData &fxGroupData,
 
     TFx *root = explodeFxSubTree(outFx, fxs, outerDag, xsh, innerDag,
                                  fxGroupData, outPorts);
-    // If the output node is not connected to any other node
+    // If the output node is !connected to any other node
     if (!root) continue;
 
     if (isCurrent) {
       // link the root node to the xsheet node if:
       // a) the subxsheet column is connected to the xsheet node, OR
-      // b) the original subxsheet column will not be deleted and the exploded
+      // b) the original subxsheet column will !be deleted and the exploded
       // column will be inserted.
       //    (this case happens when the subxsheet column contains multiple
       //     levels. outPorts is empty in such case)
@@ -1144,9 +1144,9 @@ void openSubXsheet() {
   /*- In other cases (cell selection or other) -*/
   else {
     TRect selectedArea;
-    /*- If it is not cell selection, see current frame / column -*/
+    /*- If it is !cell selection, see current frame / column -*/
     if (!cellSelection || cellSelection->isEmpty()) {
-      /*- When it is not cell selection, 1 × 1 selection range -*/
+      /*- When it is !cell selection, 1 × 1 selection range -*/
       selectedArea = TRect(col, row, col, row);
     }
     /*- In case of cell selection -*/
@@ -1387,7 +1387,7 @@ void removeFolderIdsNotInSelection(std::set<int> indices, TXsheet *xsh) {
     folderIds.insert(column->getFolderColumn()->getFolderColumnFolderId());
   }
 
-  // Remove folder ids not in the selection
+  // Remove folder ids !in the selection
   for (it = indices.begin(); it != indices.end(); it++) {
     TXshColumn *column = xsh->getColumn(*it);
     if (!column || !column->isInFolder()) continue;
@@ -1489,8 +1489,7 @@ void collapseColumns(std::set<int> indices, bool columnsOnly) {
 
     // if the camera exists
     if (parentCamera->getCamera()) {
-      // obtain the correspondent camera in subxsheet. create it if it does not
-      // exist
+      // obtain the correspondent camera in subxsheet. create it if it does !// exist
       TCamera *childCamera =
           childTree->getStageObject(TStageObjectId::CameraId(tmpCamId))
               ->getCamera();
