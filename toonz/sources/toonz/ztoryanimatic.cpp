@@ -270,22 +270,38 @@ TSoundTrackP ZtoryAnimaticController::requireColumnSoundTrack(int col) {
   return track;
 }
 
+// Collect all non-empty sound columns from |xsh| into |out|.
+static void collectSoundColumns(TXsheet *xsh,
+                                std::vector<TXshSoundColumn *> &out) {
+  for (int col = 0; col < xsh->getColumnCount(); col++) {
+    TXshColumn *c = xsh ? xsh->getColumn(col) : nullptr;
+    TXshSoundColumn *sc = c ? c->getSoundColumn() : nullptr;
+    if (sc && !sc->isEmpty()) out.push_back(sc);
+  }
+}
+
 TSoundTrackP ZtoryAnimaticController::requireSoundTrack() {
   if (m_soundTrack) return m_soundTrack;
   TXsheet *xsh = mainXsheet();
   if (!xsh) return TSoundTrackP();
   try {
-    TXsheet::SoundProperties *prop = new TXsheet::SoundProperties();
-    prop->m_isPreview = true;
-    // CRITICAL: set explicit frame range using video columns only.
-    // Default fromFrame/toFrame = -1,-1 cause mixingTogether() to use
-    // xsh->getFrameCount() as toFrame.  After an audio razor cut the trailing
-    // ColumnLevel keeps endOffset=0 (raw file length), inflating getFrameCount()
-    // to millions of frames.  mixingTogether() then allocates a massive buffer
-    // (hundreds of MB) → heap corruption → crash.
-    prop->m_fromFrame = 0;
-    prop->m_toFrame   = videoFrameCount(xsh) - 1;
-    m_soundTrack = TSoundTrackP(xsh->makeSound(prop));
+    // CRITICAL: call mixingTogether() directly instead of xsh->makeSound().
+    // makeSound() writes to xsh->m_imp->m_mixedSound — a shared non-atomic
+    // pointer that preBuildSoundTrackAsync() also writes from a background
+    // thread.  Concurrent writes cause reference-count corruption → unbounded
+    // memory leak (observed: 40 GB+ on long scenes).
+    // mixingTogether() is read-only on the ColumnLevel list and returns a
+    // fresh TSoundTrackP that we own privately — no shared state touched.
+    std::vector<TXshSoundColumn *> sounds;
+    collectSoundColumns(xsh, sounds);
+    if (sounds.empty()) return TSoundTrackP();
+    ToonzScene *scene = TApp::instance()->getCurrentScene()->getScene();
+    double fps = scene
+        ? scene->getProperties()->getOutputProperties()->getFrameRate()
+        : 24.0;
+    int toFrame = videoFrameCount(xsh) - 1;
+    if (toFrame < 0) return TSoundTrackP();
+    m_soundTrack = sounds[0]->mixingTogether(sounds, 0, toFrame, fps);
   } catch (...) {
     m_soundTrack = TSoundTrackP();
   }
@@ -305,18 +321,31 @@ void ZtoryAnimaticController::preBuildSoundTrackAsync() {
   if (!xsh) return;
   int toFrame = videoFrameCount(xsh) - 1;
   if (toFrame < 0) return;
+
+  // Collect sound columns on the main thread before spawning (safe, xsh stable).
+  std::vector<TXshSoundColumn *> sounds;
+  collectSoundColumns(xsh, sounds);
+  if (sounds.empty()) return;
+
+  ToonzScene *scene = TApp::instance()->getCurrentScene()->getScene();
+  double fps = scene
+      ? scene->getProperties()->getOutputProperties()->getFrameRate()
+      : 24.0;
+
   m_soundBuildPending = true;
 
-  // Capture ctrl as a raw pointer — it is a singleton that outlives the thread.
+  // CRITICAL: call mixingTogether() directly — never call xsh->makeSound()
+  // from a background thread.  makeSound() writes to xsh->m_imp->m_mixedSound
+  // which the main thread also writes; concurrent non-atomic writes on the
+  // TSoundTrackP reference count → memory leak → 40 GB+ RAM on long scenes.
+  // mixingTogether() only reads the ColumnLevel list and audio sample data —
+  // safe to call concurrently as long as the main thread isn't editing the
+  // same columns simultaneously (invariant: this thread is spawned at rest).
   ZtoryAnimaticController *ctrl = this;
-  std::thread([ctrl, xsh, toFrame]() {
+  std::thread([ctrl, sounds, toFrame, fps]() {
     TSoundTrackP st;
     try {
-      TXsheet::SoundProperties *prop = new TXsheet::SoundProperties();
-      prop->m_isPreview = true;
-      prop->m_fromFrame = 0;
-      prop->m_toFrame   = toFrame;
-      st = TSoundTrackP(xsh->makeSound(prop));
+      st = sounds[0]->mixingTogether(sounds, 0, toFrame, fps);
     } catch (...) {}
     // Post result to main thread via QueuedConnection (thread-safe).
     QMetaObject::invokeMethod(ctrl, [ctrl, st]() {

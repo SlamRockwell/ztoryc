@@ -6,6 +6,31 @@
 > Voci più vecchie di ~2 settimane → spostarle in `CHANGELOG_ARCHIVE.md`.
 
 ---
+## [2026-05-19] — Audio track: undo completo, fix RAM su scene lunghe
+
+### Fixed
+- Linked razor (video+audio): l'undo ora annulla sia il taglio video che quello audio
+  (prima annullava solo il video). Usa `TUndoScopedBlock` + `UndoAudioEdit` per gruppo.
+- Linked razor: fix index shift — dopo `cloneChild(col)` le colonne audio sono spostate
+  di +1; ora l'indice viene corretto prima di `splitAudioColumn`.
+- Waveform cache RAM: `QPixmap(trackW, trackH)` allocava l'intera larghezza (es. 80.000px
+  su scene da 10.000 frame → 16 MB per traccia). Sostituito con cache viewport-aware:
+  solo la zona visibile + 600px di overscan, indipendente dalla lunghezza della scena.
+- Add Audio Track: ora supporta undo/redo (`UndoAddAudioTrack` con `insertColumn`/`removeColumn`).
+- Delete segmento audio: ora funziona correttamente (focus esplicito con `setFocus()` in
+  `mousePressEvent` garantisce che il widget riceva l'evento tastiera).
+- Selezione audio cross-track: il click su un segmento di un'altra traccia (o sulla
+  traccia video) deseleziona le altre tracce. Nuovo segnale `selectionCleared`.
+- Undo drag/trim audio: `mouseReleaseEvent` ora fa snapshot prima/dopo con `UndoAudioEdit`
+  per `SegmentDrag`, `TrimLeft`, `TrimRight`.
+- Focus indicator traccia audio: bordo blu (#50A0FF) 2px intorno alla traccia attiva,
+  così è chiaro quale traccia riceverà il Ctrl+V.
+
+### Notes
+- La waveform cache usa un "sliding window" da ~1200px. Al primo scroll fuori banda
+  la cache si rigenera (solo la banda visibile). CPU e RAM costanti indipendentemente
+  dalla lunghezza della scena.
+
 ## [2026-05-10] — Early Beta v0.2: overlay buttons shot viewer + symmetry guide fix
 
 ### Fixed
