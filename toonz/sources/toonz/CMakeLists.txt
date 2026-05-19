@@ -657,8 +657,11 @@ if(BUILD_ENV_APPLE)
         set(ZTORY_STUFF_TREE "${CMAKE_SOURCE_DIR}/../../stuff")
         add_custom_command(
             TARGET Ztoryc POST_BUILD
-            COMMAND bash -c "rm -rf \"$<TARGET_FILE_DIR:Ztoryc>/../../tahomastuff\""
-            COMMAND ${CMAKE_COMMAND} -E copy_directory "${ZTORY_STUFF_TREE}" $<TARGET_FILE_DIR:Ztoryc>/../../tahomastuff
+            # Use rsync -a (preserves symlinks as symlinks) instead of cmake -E
+            # copy_directory (which dereferences symlinks and copies target content).
+            # Exclude profiles/users/ — user-specific data (favorites, layouts…)
+            # can contain symlinks to large external folders (24+ GB observed).
+            COMMAND bash -c "rsync -a --delete --exclude='profiles/users/' \"${ZTORY_STUFF_TREE}/\" \"$<TARGET_FILE_DIR:Ztoryc>/../../tahomastuff/\""
             COMMENT "Bundling stuff → Ztoryc.app/tahomastuff (ZTORYC_BUNDLE_STUFF=ON)"
         )
     endif()
