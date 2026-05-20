@@ -1,5 +1,5 @@
 // Icon
 #if defined(APSTUDIO_INVOKED)
-ICON "Tahoma2D.ico"
+ICON "Ztoryc.ico"
 #endif
-IDI_ICON1 ICON "Tahoma2D.ico"
+IDI_ICON1 ICON "Ztoryc.ico"
