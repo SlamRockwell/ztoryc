@@ -1753,8 +1753,17 @@ void MainWindow::onActiveViewerChanged() {
   // sync the command state to the button state of the activated viewer
   SceneViewer *activeViewer = TApp::instance()->getActiveViewer();
   if (!activeViewer) return;
-  BaseViewerPanel *bvp = qobject_cast<BaseViewerPanel *>(
-      activeViewer->parentWidget()->parentWidget());
+  // Guard every step of the parent chain: this slot fires from
+  // SceneViewer::showEvent, which can run while the viewer is mid-reparenting
+  // (e.g. ZtoryAnimaticViewerPanel::enterShotMode swapping panels inside a
+  // QStackedLayout).  At that instant parentWidget() may be null — chaining
+  // ->parentWidget() on null crashed with EXCEPTION_ACCESS_VIOLATION on
+  // Windows.
+  QWidget *parent1 = activeViewer->parentWidget();
+  if (!parent1) return;
+  QWidget *parent2 = parent1->parentWidget();
+  if (!parent2) return;
+  BaseViewerPanel *bvp = qobject_cast<BaseViewerPanel *>(parent2);
   if (!bvp) return;
   bool prev, subCamPrev;
   bvp->getPreviewButtonStates(prev, subCamPrev);
