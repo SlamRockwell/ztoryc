@@ -1194,8 +1194,9 @@ bool ZtoryAudioTrack::event(QEvent *e) {
   if (e->type() == QEvent::HoverMove && m_dragMode == NoDrag && !m_razorActive) {
     auto *he = static_cast<QHoverEvent *>(e);
     int mx = he->pos().x();
-    bool near = nearSegmentEdge(mx, m_ppf, findSegments(), width());
-    setCursor(near ? Qt::SizeHorCursor : Qt::ArrowCursor);
+    // Avoid identifier name 'near' — it's a macro in Windows windef.h.
+    bool nearEdge = nearSegmentEdge(mx, m_ppf, findSegments(), width());
+    setCursor(nearEdge ? Qt::SizeHorCursor : Qt::ArrowCursor);
     return true;
   }
   if (e->type() == QEvent::HoverLeave) {
