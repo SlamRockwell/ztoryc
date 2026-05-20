@@ -103,6 +103,15 @@ BaseViewerPanel::BaseViewerPanel(QWidget *parent, Qt::WindowFlags flags)
 
   m_symmetryButton    = nullptr;
   m_perspectiveButton = nullptr;
+  // Initialize the preview buttons too: they are created later in the title-bar
+  // setup, but getPreviewButtonStates() (called from MainWindow::onActive
+  // ViewerChanged via SceneViewer::showEvent) can run BEFORE that setup —
+  // e.g. when ZtoryAnimaticViewerPanel::enterShotMode shows a freshly-created
+  // ComboViewerPanel.  Left uninitialized these were garbage non-null pointers
+  // on Windows → m_previewButton->isChecked() crashed (EXCEPTION_ACCESS_
+  // VIOLATION).  On macOS the memory happened to be zero so the null guard held.
+  m_previewButton          = nullptr;
+  m_subcameraPreviewButton = nullptr;
 
   setFrameStyle(QFrame::StyledPanel);
 
