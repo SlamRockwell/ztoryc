@@ -197,8 +197,12 @@ public:
     m_moduleName  = m_version.getAppName();
     m_rootVarName = toUpper(m_version.getAppName()) + "ROOT";
 #ifdef _WIN32
-    // from v1.3, registry root is moved to SOFTWARE\\Tahoma\\Tahoma
-    m_registryRoot = TFilePath("SOFTWARE\\Tahoma2D\\") + m_version.getAppName();
+    // Registry root: SOFTWARE\Ztoryc\Ztoryc — must match the [Registry]
+    // section in toonz/installer/windows/setup.iss, which writes ZTORYCROOT
+    // etc. under Software\Ztoryc\Ztoryc.  It previously used Tahoma2D as the
+    // parent key, so the installed app read an empty ZTORYCROOT and aborted
+    // with "undefined or empty SOFTWARE/Tahoma2D/Ztoryc/ZTORYCROOT".
+    m_registryRoot = TFilePath("SOFTWARE\\Ztoryc\\") + m_version.getAppName();
 #endif
     m_systemVarPrefix = toUpper(m_version.getAppName());
     updateEnvFile();
