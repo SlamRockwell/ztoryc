@@ -1816,7 +1816,16 @@ void TXsheet::scrub(int frame, bool isPreview) {
 
     double samplePerFrame = st->getSampleRate() / fps;
 
-    double s0 = frame * samplePerFrame, s1 = s0 + samplePerFrame;
+    // Scrub window: a single frame (~41 ms at 24 fps) is too short to be
+    // clearly audible.  Play a fixed ~150 ms chunk from the frame so each
+    // frame can be "read" while scrubbing.  Clamp to the track length so
+    // play() never reads past the sample buffer.
+    double scrubLen = std::max(samplePerFrame, st->getSampleRate() * 0.15);
+    double s0 = frame * samplePerFrame;
+    double s1 = s0 + scrubLen;
+    double total = (double)st->getSampleCount();
+    if (s0 >= total) return;
+    if (s1 > total) s1 = total;
     // if (m_player && m_player->isPlaying()) {
     //    try {
     //        m_player->stop();

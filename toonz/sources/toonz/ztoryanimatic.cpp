@@ -476,7 +476,13 @@ void ZtoryAnimaticController::onNativeFrameSwitched() {
   double spf = st->getSampleRate() / fps;
 
   TINT32 s0 = (TINT32)(mainFrame * spf);
-  TINT32 s1 = (TINT32)(s0 + spf);
+  // Scrub window: one frame of audio (~41 ms at 24 fps) is too short to be
+  // clearly audible — single-frame stepping produced a barely-there blip.
+  // Play a fixed ~150 ms chunk starting at the frame so each frame can be
+  // "read" during lipsync scrubbing.  (Only used for the scrub branch below;
+  // the play branch computes its own per-column window.)
+  double scrubLen = std::max(spf, st->getSampleRate() * 0.15);
+  TINT32 s1 = (TINT32)(s0 + scrubLen);
   TINT32 totalSamples = (TINT32)st->getSampleCount();
   if (s0 >= totalSamples) return;
   if (s1 >= totalSamples) s1 = totalSamples - 1;
