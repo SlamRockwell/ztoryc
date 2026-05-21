@@ -696,6 +696,13 @@ StoryboardPanel::StoryboardPanel(QWidget *parent)
   // Sync durations when ZtoryModel resequences (works even inside sub-scenes)
   connect(ZtoryModel::instance(), &ZtoryModel::modelReset,
           this, &StoryboardPanel::onModelResequenced);
+  // Persist the imported screenplay: setScriptFile() (called by the Script
+  // panel on import) emits scriptFileChanged → write it into the .ztoryc.
+  // A plain File>Save does not call saveZtoryc(); the .ztoryc is kept in sync
+  // by each edit action instead, so the import must trigger its own save.
+  // m_loadingZtoryc guards the redundant save while loadZtoryc() itself runs.
+  connect(ZtoryModel::instance(), &ZtoryModel::scriptFileChanged, this,
+          [this]() { if (!m_loadingZtoryc) saveZtoryc(); });
   connect(ZtoryModel::instance(), &ZtoryModel::shotAdded,
           this, &StoryboardPanel::onShotInserted);
   connect(ZtoryModel::instance(), &ZtoryModel::shotRemovedAt,
@@ -1091,14 +1098,17 @@ void StoryboardPanel::loadZtoryc() {
   // the scene has none — so opening a scene without a screenplay (or a brand
   // new scene) clears the Script panel instead of leaving a stale one loaded.
   QString scriptFromFile;
+  m_loadingZtoryc = true;  // suppress scriptFileChanged→saveZtoryc during load
   QString path = ztoryPath();
   if (path.isEmpty()) {
     ZtoryModel::instance()->setScriptFile(scriptFromFile);
+    m_loadingZtoryc = false;
     return;
   }
   QFile file(path);
   if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
     ZtoryModel::instance()->setScriptFile(scriptFromFile);
+    m_loadingZtoryc = false;
     return;
   }
   QXmlStreamReader xml(&file);
@@ -1172,6 +1182,7 @@ void StoryboardPanel::loadZtoryc() {
   // Publish the screenplay for this scene — emits scriptFileChanged() so the
   // Script panel reloads it (or clears, when scriptFromFile is empty).
   ZtoryModel::instance()->setScriptFile(scriptFromFile);
+  m_loadingZtoryc = false;
 }
 
 int StoryboardPanel::currentShotIndex() const {

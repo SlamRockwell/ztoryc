@@ -148,6 +148,10 @@ struct Shot {
   std::vector<ClipboardEntry> m_clipboard;
   int  m_fps;
   bool m_autoRenumber;
+  // True while loadZtoryc() runs — suppresses the scriptFileChanged→saveZtoryc
+  // re-save that would otherwise fire when loadZtoryc() publishes the
+  // screenplay path it just read.
+  bool m_loadingZtoryc = false;
   // Coalescing undo for duration spin changes: captures "before" on first change,
   // then commits one UndoBoardState after 600ms of inactivity.
   std::vector<ZtoryShotSnap> m_pendingDurationBefore;

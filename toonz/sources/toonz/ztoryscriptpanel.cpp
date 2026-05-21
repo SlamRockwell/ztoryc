@@ -10,6 +10,7 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFile>
+#include <QDir>
 #include <QTextStream>
 #include <QTextCodec>
 #include <QDragEnterEvent>
@@ -122,30 +123,38 @@ void ZtoryScriptView::importScreenplay(const QString &srcPath) {
     loadFile(srcPath);
     return;
   }
-  TFilePath src(srcPath.toStdWString());
-  // Destination: the project's +extras/script folder.
-  TFilePath destDir = scene->decodeFilePath(TFilePath("+extras")) + "script";
-  TFilePath dest    = destDir + src.withoutParentDir();
-  if (src != dest) {
-    try {
-      TSystem::touchParentDir(dest);
-      TSystem::copyFileOrLevel_throw(dest, src);
-    } catch (...) {
-      // Copy failed (permissions, missing source…): fall back to the original
-      // path so the user at least sees the screenplay this session.
-      m_currentFilePath = srcPath;
-      loadFile(srcPath);
-      return;
-    }
+  // Destination: the project's extras/script folder.
+  QString destDir =
+      scene->decodeFilePath(TFilePath("+extras")).getQString() + "/script";
+  QString fileName = QFileInfo(srcPath).fileName();
+  QString destPath = destDir + "/" + fileName;
+
+  bool persisted = false;
+  if (QFileInfo(srcPath).absoluteFilePath() !=
+      QFileInfo(destPath).absoluteFilePath()) {
+    QDir().mkpath(destDir);
+    QFile::remove(destPath);  // overwrite any previous import of the same name
+    persisted = QFile::copy(srcPath, destPath);
+  } else {
+    persisted = true;  // already inside extras/script
   }
+
+  if (!persisted) {
+    // Copy failed (permissions, bad path…) — show the original this session.
+    m_currentFilePath = srcPath;
+    loadFile(srcPath);
+    return;
+  }
+
   // Display first, then persist.  Setting m_currentFilePath before
   // setScriptFile() means the scriptFileChanged() → reloadFromModel() that
   // fires synchronously sees the file is already shown and skips a redundant
   // reload.  setScriptFile() records the project-relative path
-  // ("+extras/script/<file>") that StoryboardPanel::saveZtoryc() persists.
-  m_currentFilePath = dest.getQString();
-  loadFile(m_currentFilePath);
-  ZtoryModel::instance()->setScriptFile(scene->codeFilePath(dest).getQString());
+  // ("+extras/script/<file>"); StoryboardPanel writes it into the .ztoryc.
+  m_currentFilePath = destPath;
+  loadFile(destPath);
+  TFilePath coded = scene->codeFilePath(TFilePath(destPath.toStdWString()));
+  ZtoryModel::instance()->setScriptFile(coded.getQString());
 }
 
 //-----------------------------------------------------------------------------
