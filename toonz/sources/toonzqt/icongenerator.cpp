@@ -1158,7 +1158,12 @@ QPixmap IconGenerator::renderXsheetFrame(TXsheet *xsheet, int row, const TDimens
   QImage img((const uchar*)ras->getRawData(), w, h, w*4, QImage::Format_ARGB32);
   QImage copy = img.copy();
   ras->unlock();
-  return QPixmap::fromImage(copy.rgbSwapped().mirrored(false, true));
+  // TRaster32P raw data maps directly onto QImage::Format_ARGB32 — the
+  // canonical rasterToQImage() (stagevisitor.cpp, trasterimageutils.cpp) does
+  // NO channel swap.  The previous rgbSwapped() here swapped R<->B, so e.g.
+  // pink rendered as light blue in the Board thumbnails.  Only the vertical
+  // flip is needed (TRaster is bottom-up, QImage is top-down).
+  return QPixmap::fromImage(copy.mirrored(false, true));
 }
 
 TRaster32P IconGenerator::generateSceneFileIcon(const TFilePath &path,
