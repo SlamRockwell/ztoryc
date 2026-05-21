@@ -298,14 +298,6 @@ static void collectSoundColumns(TXsheet *xsh,
   }
 }
 
-// Enable/disable the Main Audio toggle action.  The toggle overlays the
-// main-xsheet soundtrack onto a shot for lipsync — meaningful only inside a
-// sub-scene.  At main level the soundtrack plays natively, so disable it.
-static void updateMainAudioActionEnabled(bool enabled) {
-  QAction *a = CommandManager::instance()->getAction(MI_ToggleMainAudio);
-  if (a) a->setEnabled(enabled);
-}
-
 // Cheap fingerprint of the sound columns: order + pointer + length.  Changes
 // whenever a track is added, removed, reordered or edited.
 static size_t soundColumnsFingerprint(TXsheet *xsh) {
@@ -3629,21 +3621,10 @@ ZtoryAnimaticPanel::ZtoryAnimaticPanel(QWidget *parent) : TPanel(parent) {
     if (!scene) return;
     // Invalidate regardless of level — a new scene always needs fresh audio.
     ZtoryAnimaticController::instance()->invalidateSoundTrack();
-    bool inSubScene = scene->getChildStack()->getAncestorCount() != 0;
-    // Main Audio toggle is meaningful only inside a shot (sub-scene): there it
-    // overlays the main-xsheet soundtrack for lipsync.  At main level the main
-    // audio plays natively anyway — disable the action so it can't be toggled.
-    updateMainAudioActionEnabled(inSubScene);
-    if (inSubScene) return;
+    if (scene->getChildStack()->getAncestorCount() != 0) return;
     refreshFromScene();
     m_ruler->resetPlayRangeToFull();
   });
-  // Initial state — at panel creation the app is normally at main level.
-  {
-    ToonzScene *sc0 = TApp::instance()->getCurrentScene()->getScene();
-    updateMainAudioActionEnabled(
-        sc0 && sc0->getChildStack()->getAncestorCount() != 0);
-  }
   // Animatic panel listens to the controller's dedicated frame handle,
   // NOT the global TApp frame.  This decouples the animatic playhead from
   // the native timeline cursor (BUG-03 fix).
