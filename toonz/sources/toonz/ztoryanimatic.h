@@ -170,6 +170,10 @@ private:
   // Dedicated device for per-frame scrub audio — separate from mainXsh->m_player
   // so that reset() for precision scrub never disrupts continuous playback.
   TSoundOutputDevice   *m_scrubDevice = nullptr;
+  // Main-xsheet frame up to which scrub audio has been played.  The next scrub
+  // segment continues from here so the whole scrubbed range is heard without
+  // gaps.  -1 = uninitialized (next scrub event resyncs).
+  int                   m_scrubAudioFrame = -1;
   // Per-column un-mixed sound tracks built on demand, keyed by the sound
   // column POINTER (not the column index).  Index keying aliased after a
   // column delete/reorder — index 2 would still return the track of the

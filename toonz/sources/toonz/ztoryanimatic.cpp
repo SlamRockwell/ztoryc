@@ -476,16 +476,10 @@ void ZtoryAnimaticController::onNativeFrameSwitched() {
   double spf = st->getSampleRate() / fps;
 
   TINT32 s0 = (TINT32)(mainFrame * spf);
-  // Scrub window: one frame of audio (~41 ms at 24 fps) is too short to be
-  // clearly audible — single-frame stepping produced a barely-there blip.
-  // Play a fixed ~150 ms chunk starting at the frame so each frame can be
-  // "read" during lipsync scrubbing.  (Only used for the scrub branch below;
-  // the play branch computes its own per-column window.)
+  // Minimum audible scrub chunk — one frame (~41 ms at 24 fps) is too short.
   double scrubLen = std::max(spf, st->getSampleRate() * 0.15);
-  TINT32 s1 = (TINT32)(s0 + scrubLen);
   TINT32 totalSamples = (TINT32)st->getSampleCount();
   if (s0 >= totalSamples) return;
-  if (s1 >= totalSamples) s1 = totalSamples - 1;
 
   if (!TXsheet::isMainAudioEnabled()) return;
   if (!TSoundOutputDevice::installed()) return;
@@ -517,9 +511,25 @@ void ZtoryAnimaticController::onNativeFrameSwitched() {
     }
     m_nativeAudioPlaying = true;
   } else {
-    // Scrub uses the merged sound track on the dedicated scrub device —
-    // user wants to hear the whole mix at the playhead position.
-    scrubDevice()->play(st, s0, s1, false);
+    // Scrub on the dedicated scrub device, merged track.
+    //
+    // Never interrupt a segment that is still playing: interrupting drops the
+    // middle of the audio, so slow scrubbing "esatto articolo tre" came out
+    // "esatto art--olo tre".  Let the current segment finish; the next idle
+    // event then plays from where the audio ended up to the new playhead
+    // position — the whole scrubbed range is heard, gaplessly, just slightly
+    // lagging the cursor.
+    if (scrubDevice()->isPlaying()) return;
+    const int kMaxScrubGap = 48;  // frames; bigger jump → resync, don't sweep
+    int from = m_scrubAudioFrame;
+    if (from < 0 || mainFrame < from || mainFrame - from > kMaxScrubGap)
+      from = mainFrame;  // first scrub / backward / big jump → resync
+    double a0 = from * spf;
+    double a1 = std::max((double)mainFrame * spf, a0 + scrubLen);
+    if (a0 >= (double)totalSamples) return;
+    if (a1 > (double)totalSamples) a1 = (double)totalSamples;
+    scrubDevice()->play(st, (TINT32)a0, (TINT32)a1, false);
+    m_scrubAudioFrame = (int)(a1 / spf);  // audio content end → next segment start
   }
 }
 
