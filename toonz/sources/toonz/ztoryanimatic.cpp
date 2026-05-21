@@ -140,6 +140,11 @@ bool ZtoryAnimaticController::ownsAudioAtMainLevel() const {
 // native code reads from the current — sub — xsheet at frame 0, plus the
 // controller's main-xsheet stream from mainFrame*spf).
 bool ZtoryAnimaticController::ownsSubSceneAudio() const {
+  // Toggle OFF → the controller does NOT stream main-xsheet audio, so the
+  // native ComboViewer must play the sub-scene's OWN audio normally.  Without
+  // this check ownsSubSceneAudio() stayed true regardless of the toggle and
+  // the native viewer kept yielding → no sub-scene audio at all.
+  if (!TXsheet::isMainAudioEnabled()) return false;
   ToonzScene *scene = TApp::instance()->getCurrentScene()->getScene();
   if (!scene) return false;
   if (scene->getChildStack()->getAncestorCount() != 1) return false;
@@ -194,6 +199,7 @@ int ZtoryAnimaticController::currentFrame() const {
 }
 
 void ZtoryAnimaticController::startPerColumnAudio(int startMainFrame) {
+  validateSoundCache();  // drop stale per-column cache if tracks changed
   TXsheet *xsh = mainXsheet();
   if (!xsh) return;
   ToonzScene *scene = TApp::instance()->getCurrentScene()->getScene();
@@ -244,14 +250,17 @@ qint64 ZtoryAnimaticController::getMasterAudioUsecs() const {
 }
 
 TSoundTrackP ZtoryAnimaticController::requireColumnSoundTrack(int col) {
-  auto it = m_columnSoundTracks.find(col);
-  if (it != m_columnSoundTracks.end() && it->second) return it->second;
   TXsheet *xsh = mainXsheet();
   if (!xsh) return TSoundTrackP();
   TXshColumn *column = xsh->getColumn(col);
   if (!column) return TSoundTrackP();
   TXshSoundColumn *sc = column->getSoundColumn();
   if (!sc || sc->isEmpty()) return TSoundTrackP();
+  // Cache is keyed by the sound-column pointer, resolved AFTER we have a
+  // valid column — index keying aliased to the wrong column after a
+  // delete/reorder.
+  auto it = m_columnSoundTracks.find(sc);
+  if (it != m_columnSoundTracks.end() && it->second) return it->second;
   TSoundTrackP track;
   try {
     // Pass fromFrame=0 explicitly so the resulting track is indexed by
@@ -275,7 +284,7 @@ TSoundTrackP ZtoryAnimaticController::requireColumnSoundTrack(int col) {
   } catch (...) {
     track = TSoundTrackP();
   }
-  m_columnSoundTracks[col] = track;
+  m_columnSoundTracks[sc] = track;
   return track;
 }
 
@@ -289,7 +298,42 @@ static void collectSoundColumns(TXsheet *xsh,
   }
 }
 
+// Enable/disable the Main Audio toggle action.  The toggle overlays the
+// main-xsheet soundtrack onto a shot for lipsync — meaningful only inside a
+// sub-scene.  At main level the soundtrack plays natively, so disable it.
+static void updateMainAudioActionEnabled(bool enabled) {
+  QAction *a = CommandManager::instance()->getAction(MI_ToggleMainAudio);
+  if (a) a->setEnabled(enabled);
+}
+
+// Cheap fingerprint of the sound columns: order + pointer + length.  Changes
+// whenever a track is added, removed, reordered or edited.
+static size_t soundColumnsFingerprint(TXsheet *xsh) {
+  size_t h = 1469598103934665603ULL;  // FNV-ish seed
+  if (!xsh) return h;
+  for (int col = 0; col < xsh->getColumnCount(); col++) {
+    TXshColumn *c = xsh->getColumn(col);
+    TXshSoundColumn *sc = c ? c->getSoundColumn() : nullptr;
+    if (!sc || sc->isEmpty()) continue;
+    h = (h ^ reinterpret_cast<size_t>(sc)) * 1099511628211ULL;
+    h = (h ^ (size_t)std::max(sc->getMaxFrame(), 0)) * 1099511628211ULL;
+  }
+  return h;
+}
+
+// Self-invalidate the audio caches if the live sound columns no longer match
+// what was cached.  Catch-all: any add/remove/reorder/edit path is covered
+// without having to hook each call site.
+void ZtoryAnimaticController::validateSoundCache() {
+  size_t fp = soundColumnsFingerprint(mainXsheet());
+  if (fp != m_soundFingerprint) {
+    invalidateSoundTrack();
+    m_soundFingerprint = fp;
+  }
+}
+
 TSoundTrackP ZtoryAnimaticController::requireSoundTrack() {
+  validateSoundCache();  // drop stale cache if tracks changed
   if (m_soundTrack) return m_soundTrack;
   TXsheet *xsh = mainXsheet();
   if (!xsh) return TSoundTrackP();
@@ -325,6 +369,7 @@ TSoundTrackP ZtoryAnimaticController::requireSoundTrack() {
 // We accept the small race window; a stale or null result is harmless because
 // requireSoundTrack() will rebuild synchronously on first play if needed.
 void ZtoryAnimaticController::preBuildSoundTrackAsync() {
+  validateSoundCache();  // drop stale cache before deciding to skip
   if (m_soundTrack || m_soundBuildPending) return;
   TXsheet *xsh = mainXsheet();
   if (!xsh) return;
@@ -343,6 +388,12 @@ void ZtoryAnimaticController::preBuildSoundTrackAsync() {
 
   m_soundBuildPending = true;
 
+  // Capture the current generation.  invalidateSoundTrack() bumps it; if it
+  // changes before this build finishes (scene switched, track deleted, …) the
+  // result belongs to a stale scene and must be discarded — otherwise audio
+  // from a previously open scene leaks into the current one.
+  unsigned gen = m_soundGen;
+
   // CRITICAL: call mixingTogether() directly — never call xsh->makeSound()
   // from a background thread.  makeSound() writes to xsh->m_imp->m_mixedSound
   // which the main thread also writes; concurrent non-atomic writes on the
@@ -351,16 +402,17 @@ void ZtoryAnimaticController::preBuildSoundTrackAsync() {
   // safe to call concurrently as long as the main thread isn't editing the
   // same columns simultaneously (invariant: this thread is spawned at rest).
   ZtoryAnimaticController *ctrl = this;
-  std::thread([ctrl, sounds, toFrame, fps]() {
+  std::thread([ctrl, sounds, toFrame, fps, gen]() {
     TSoundTrackP st;
     try {
       st = sounds[0]->mixingTogether(sounds, 0, toFrame, fps);
     } catch (...) {}
     // Post result to main thread via QueuedConnection (thread-safe).
-    QMetaObject::invokeMethod(ctrl, [ctrl, st]() {
+    QMetaObject::invokeMethod(ctrl, [ctrl, st, gen]() {
       ctrl->m_soundBuildPending = false;
-      if (!ctrl->m_soundTrack)   // Don't overwrite if already built/invalidated
-        ctrl->m_soundTrack = st;
+      // Discard if a newer invalidation happened while we were building.
+      if (gen != ctrl->m_soundGen) return;
+      if (!ctrl->m_soundTrack) ctrl->m_soundTrack = st;
     }, Qt::QueuedConnection);
   }).detach();
 }
@@ -3577,10 +3629,21 @@ ZtoryAnimaticPanel::ZtoryAnimaticPanel(QWidget *parent) : TPanel(parent) {
     if (!scene) return;
     // Invalidate regardless of level — a new scene always needs fresh audio.
     ZtoryAnimaticController::instance()->invalidateSoundTrack();
-    if (scene->getChildStack()->getAncestorCount() != 0) return;
+    bool inSubScene = scene->getChildStack()->getAncestorCount() != 0;
+    // Main Audio toggle is meaningful only inside a shot (sub-scene): there it
+    // overlays the main-xsheet soundtrack for lipsync.  At main level the main
+    // audio plays natively anyway — disable the action so it can't be toggled.
+    updateMainAudioActionEnabled(inSubScene);
+    if (inSubScene) return;
     refreshFromScene();
     m_ruler->resetPlayRangeToFull();
   });
+  // Initial state — at panel creation the app is normally at main level.
+  {
+    ToonzScene *sc0 = TApp::instance()->getCurrentScene()->getScene();
+    updateMainAudioActionEnabled(
+        sc0 && sc0->getChildStack()->getAncestorCount() != 0);
+  }
   // Animatic panel listens to the controller's dedicated frame handle,
   // NOT the global TApp frame.  This decouples the animatic playhead from
   // the native timeline cursor (BUG-03 fix).

@@ -44,12 +44,21 @@ public:
     m_soundTrack        = TSoundTrackP();
     m_soundBuildPending = false;  // Allow a fresh async build
     m_columnSoundTracks.clear();  // Per-column caches must rebuild too
+    // Bump the generation: any in-flight async pre-build started for the
+    // PREVIOUS scene/track must discard its result on delivery instead of
+    // writing it into m_soundTrack — otherwise audio from a previously open
+    // scene (or a deleted track) leaks into the current one.
+    ++m_soundGen;
   }
 
   // Per-column un-mixed sound track, cached.  Used during play so each audio
   // column can be played on its own TSoundOutputDevice (column->m_player) for
   // real-time per-track volume control via QAudioOutput::setVolume().
   TSoundTrackP requireColumnSoundTrack(int col);
+
+  // Self-invalidate the audio caches if the main xsheet's sound columns no
+  // longer match what was cached.  Call before any cache read.
+  void validateSoundCache();
 
   // Start per-column audio playback from |startMainFrame| on each audio
   // column's own m_player.  Each player runs at the column's m_volume,
@@ -149,14 +158,25 @@ private:
   int m_lastNativePlayFrame  = -1;
   // Guards against launching a second async build while one is already running.
   bool m_soundBuildPending   = false;
+  // Incremented by invalidateSoundTrack().  An async pre-build captures the
+  // value at launch and discards its result if the generation changed by the
+  // time it finishes — prevents stale cross-scene audio.
+  unsigned m_soundGen        = 0;
+  // Fingerprint of the main xsheet's sound columns (pointers + lengths) at the
+  // time the cache was built.  validateSoundCache() compares it against the
+  // live xsheet and self-invalidates if a track was added/removed/reordered/
+  // edited — a catch-all so no mutation path can leave stale audio cached.
+  size_t   m_soundFingerprint = 0;
   // Dedicated device for per-frame scrub audio — separate from mainXsh->m_player
   // so that reset() for precision scrub never disrupts continuous playback.
   TSoundOutputDevice   *m_scrubDevice = nullptr;
-  // Per-column un-mixed sound tracks built on demand, keyed by column index.
-  // Used during play so each TXshSoundColumn plays on its own m_player with
-  // its own volume — enables real-time multi-track volume changes via
-  // QAudioOutput::setVolume() on each column's device.
-  std::map<int, TSoundTrackP> m_columnSoundTracks;
+  // Per-column un-mixed sound tracks built on demand, keyed by the sound
+  // column POINTER (not the column index).  Index keying aliased after a
+  // column delete/reorder — index 2 would still return the track of the
+  // column that used to be there, so a deleted/wrong audio file played.
+  // The cache is fully cleared by invalidateSoundTrack() on every scene or
+  // column-structure change, so a reused pointer cannot survive across them.
+  std::map<TXshSoundColumn *, TSoundTrackP> m_columnSoundTracks;
 };
 
 class ZtoryAnimaticRuler : public QWidget {
