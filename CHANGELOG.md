@@ -6,6 +6,91 @@
 > Voci più vecchie di ~2 settimane → spostarle in `CHANGELOG_ARCHIVE.md`.
 
 ---
+## [2026-05-21] — Build Windows funzionante + pacchetti macOS/Windows
+
+### Contesto
+La build Windows era rotta da mesi (silenziosamente: lo script non propagava
+gli errori msbuild e impacchettava uno zip senza `Ztoryc.exe`). Sono servite
+10 iterazioni CI per arrivare a una build Windows funzionante e testata.
+
+### Come riprodurre la build (per Vincenzo / chi fa le release)
+
+**Windows** — GitHub Actions, workflow `Ztoryc Windows Build`
+(`.github/workflows/windows_build.yml`), trigger manuale:
+```
+gh workflow run "Ztoryc Windows Build" --ref master
+```
+Il workflow (runner `windows-2022`) esegue in sequenza:
+1. `ci-scripts/windows/tahoma-install.bat` — deps (Qt 5.15.2_wintab, Boost, OpenCV)
+2. `ci-scripts/windows/tahoma-get3rdpartyapps.bat` — ffmpeg, rhubarb
+3. `ci-scripts/windows/tahoma-build.bat` — `cmake` + `msbuild RelWithDebInfo ALL_BUILD.vcxproj`
+4. `ci-scripts/windows/tahoma-buildpkg.bat` — assembla `Ztoryc\`, `windeployqt`,
+   zip portable + installer Inno Setup
+Output: artifact `Ztoryc-portable-win.zip` + `Ztoryc-install-win.exe`.
+Build #10 funzionante = run CI `26226282757`, commit `8324c58ca`.
+
+**macOS** — build locale (non CI):
+1. CMake + `ninja` standard
+2. `SKIP_PKG=1 SKIP_DSYM_IN_PACKAGE=1 bash ci-scripts/osx/tahoma-buildpkg.sh`
+Output: `Ztoryc-portable-osx.dmg`. Il workflow `macOS_build.yml` fa lo stesso
+su CI e può creare direttamente una GitHub Release (`workflow_dispatch` con
+input `publish_release: true`).
+
+### Fixed — compilazione Windows (MSVC)
+- `TXsheet::setMasterVolume` chiamava `TSoundOutputDevice::setVolume`, che su
+  Windows non esiste (dichiarato `#ifndef _WIN32` in tsound.h — il backend
+  `tsound_nt.cpp` non ha API di volume per-device). Aggiunto guard `#ifndef _WIN32`.
+- 48 occorrenze dell'operatore `not` → `!` (MSVC non accetta i token
+  alternativi C++ senza `/permissive-`): storyboardpanel.cpp, subscenecommand.cpp,
+  tcenterlinecolors.cpp, borders_extractor.h.
+- Variabile locale `near` in ztoryanimatic.cpp rinominata `nearEdge` — `near`
+  è una macro retaggio 16-bit in `windef.h`.
+- Cherry-pick "Windows port: MSVC compatibility fixes" dal branch `windows-build`
+  (DVAPI exports, altri `not`→`!`). Il branch `windows-build` è ora obsoleto.
+- `tahoma-build.bat` ora propaga l'exit code di msbuild (`|| exit /b 1`) e
+  verifica che `RelWithDebInfo\Ztoryc.exe` esista — prima impacchettava
+  silenziosamente uno zip senza l'eseguibile principale.
+
+### Fixed — crash runtime Windows
+- Crash `EXCEPTION_ACCESS_VIOLATION` al doppio click su uno shot
+  (`onShotDoubleClicked → enterShotMode → ... → getPreviewButtonStates`).
+  Causa: il costruttore `BaseViewerPanel` inizializzava `m_symmetryButton` e
+  `m_perspectiveButton` a nullptr ma NON `m_previewButton` /
+  `m_subcameraPreviewButton`. Quelli vengono creati in `initializeTitleBar()`,
+  invocato dal *container* del pannello (tpanels.cpp), non dal costruttore.
+  `ZtoryAnimaticViewerPanel::enterShotMode` crea un `ComboViewerPanel` nudo
+  che non passa mai da quel container → `m_previewButton` restava memoria
+  garbage → su Windows non-null → `->isChecked()` crashava. Su macOS la
+  memoria capitava a zero (guard regge) → bug Windows-only. Fix: init a
+  nullptr nel costruttore.
+- `MainWindow::onActiveViewerChanged`: catena `parentWidget()->parentWidget()`
+  senza null-check — guard difensivo aggiunto.
+
+### Fixed — installer / packaging Windows
+- Registry root: l'app leggeva da `SOFTWARE\Tahoma2D\Ztoryc\ZTORYCROOT`
+  (residuo pre-rebranding in tenv.cpp) ma l'installer scrive su
+  `Software\Ztoryc\Ztoryc`. L'app installata trovava ZTORYCROOT vuoto e
+  abortiva. Registry root → `SOFTWARE\Ztoryc\Ztoryc`.
+- Icona: l'exe Windows aveva ancora `Tahoma2D.ico`. Aggiunto `Ztoryc.ico`
+  (6 risoluzioni 16–256, generato da Ztoryc.icns) + `toonz.rc` aggiornato.
+- Versione installer: `setup.iss` aveva `MyAppVersion "1.6"` hardcoded
+  (versione base Tahoma2D). Ora `tahoma-buildpkg.bat` legge la semver da
+  `ZtorycVersion.cmake` e la passa a ISCC via `/DMyAppVersion`.
+
+### Modified
+- Cartella stuff del bundle portable rinominata `tahomastuff` → `ztorycstuff`
+  (tenv.cpp, CMakeLists.txt, build script mac/win/linux, preferencespopup.cpp).
+  `tenv.cpp` prova prima `ztorycstuff`, poi fallback legacy `tahomastuff`.
+- Window title: rimosso il suffisso "Tahoma2D <versione>".
+
+### Notes
+- I pacchetti delle build sono artifact CI temporanei (scadono 90 giorni,
+  richiedono login). Per condividerli con tester serve una GitHub Pre-release
+  (tag tipo `v0.3.2-beta1`, link pubblico permanente).
+- `master` HEAD `9b804d8e0` ha il fix versione installer non incluso nella
+  build #10 — per la pre-release serve una build #11 fresca.
+
+---
 ## [2026-05-19] — Audio track: undo completo, fix RAM su scene lunghe
 
 ### Fixed
