@@ -201,7 +201,11 @@ public:
 
   // Imported screenplay path (project-relative, e.g. "+extras/script/x.fdx").
   QString scriptFile() const { return m_scriptFile; }
-  void setScriptFile(const QString &path) { m_scriptFile = path; }
+  void setScriptFile(const QString &path) {
+    if (m_scriptFile == path) return;
+    m_scriptFile = path;
+    emit scriptFileChanged();
+  }
 
   // ── Shared clipboard (Board ↔ Animatic) ──────────────────────────────────
   const std::vector<ZtoryClipEntry>& sharedClip() const { return m_sharedClip; }
@@ -254,6 +258,7 @@ signals:
   void shotMoved(int fromIdx, int toIdx);
   void shotDataChanged(int shotIdx);
   void previewUpdated(int shotIdx, int panelIdx);
+  void scriptFileChanged();  // imported screenplay changed (or cleared)
   // Viewer-switch signals: emitted by activateShotForViewing / requestReturnToViewer.
   // ZtoryAnimaticViewerPanel connects to these to switch stack pages.
   void shotActivatedForViewing(int col);

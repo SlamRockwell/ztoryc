@@ -102,13 +102,12 @@ ZtoryScriptView::ZtoryScriptView(QWidget *parent)
   connect(m_searchPrevBtn, &QToolButton::clicked,
           this, &ZtoryScriptView::onSearchPrev);
 
-  // Keep the screenplay in sync with the current scene: ZtoryModel::load()
-  // emits modelReset() after reading the .ztoryc, and the scene handle emits
-  // sceneSwitched on every scene change.  Either way reloadFromModel() shows
-  // the new scene's screenplay (or clears the panel when there is none).
-  connect(ZtoryModel::instance(), &ZtoryModel::modelReset,
-          this, &ZtoryScriptView::reloadFromModel);
-  connect(TApp::instance()->getCurrentScene(), &TSceneHandle::sceneSwitched,
+  // Keep the screenplay in sync with the current scene.  StoryboardPanel::
+  // loadZtoryc() calls ZtoryModel::setScriptFile() for every scene it opens
+  // (with an empty path when the scene has no screenplay), which emits
+  // scriptFileChanged() — reloadFromModel() then shows the new scene's
+  // screenplay or clears the panel.
+  connect(ZtoryModel::instance(), &ZtoryModel::scriptFileChanged,
           this, &ZtoryScriptView::reloadFromModel);
 }
 
@@ -139,10 +138,14 @@ void ZtoryScriptView::importScreenplay(const QString &srcPath) {
       return;
     }
   }
-  // Persist a project-relative path ("+extras/script/<file>") in the .ztoryc.
-  ZtoryModel::instance()->setScriptFile(scene->codeFilePath(dest).getQString());
+  // Display first, then persist.  Setting m_currentFilePath before
+  // setScriptFile() means the scriptFileChanged() → reloadFromModel() that
+  // fires synchronously sees the file is already shown and skips a redundant
+  // reload.  setScriptFile() records the project-relative path
+  // ("+extras/script/<file>") that StoryboardPanel::saveZtoryc() persists.
   m_currentFilePath = dest.getQString();
   loadFile(m_currentFilePath);
+  ZtoryModel::instance()->setScriptFile(scene->codeFilePath(dest).getQString());
 }
 
 //-----------------------------------------------------------------------------

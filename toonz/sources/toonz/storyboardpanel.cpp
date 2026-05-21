@@ -1056,6 +1056,11 @@ void StoryboardPanel::saveZtoryc() {
   xml.writeStartDocument();
   xml.writeStartElement("ztoryc");
   xml.writeAttribute("version", "2");
+  // Imported screenplay (Script panel) — project-relative path.
+  {
+    QString sf = ZtoryModel::instance()->scriptFile();
+    if (!sf.isEmpty()) xml.writeTextElement("scriptFile", sf);
+  }
   for (int si = 0; si < (int)m_shots.size(); si++) {
     const Shot &shot = m_shots[si];
     xml.writeStartElement("shot");
@@ -1082,16 +1087,29 @@ void StoryboardPanel::saveZtoryc() {
 }
 
 void StoryboardPanel::loadZtoryc() {
+  // Imported screenplay path read from this scene's .ztoryc.  Stays empty when
+  // the scene has none — so opening a scene without a screenplay (or a brand
+  // new scene) clears the Script panel instead of leaving a stale one loaded.
+  QString scriptFromFile;
   QString path = ztoryPath();
-  if (path.isEmpty()) return;
+  if (path.isEmpty()) {
+    ZtoryModel::instance()->setScriptFile(scriptFromFile);
+    return;
+  }
   QFile file(path);
-  if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return;
+  if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+    ZtoryModel::instance()->setScriptFile(scriptFromFile);
+    return;
+  }
   QXmlStreamReader xml(&file);
   int si = -1, pi = -1;
   while (!xml.atEnd()) {
     xml.readNext();
     if (xml.isStartElement()) {
-      if (xml.name() == QLatin1String("shot")) {
+      if (xml.name() == QLatin1String("scriptFile")) {
+        scriptFromFile = xml.readElementText();
+      }
+      else if (xml.name() == QLatin1String("shot")) {
         si = xml.attributes().value("index").toInt();
         if (si < (int)m_shots.size()) {
           m_shots[si].data.shotNumber = xml.attributes().value("number").toString();
@@ -1151,6 +1169,9 @@ void StoryboardPanel::loadZtoryc() {
       shot.panels[j]->setNotes(shot.data.panels[j].notes);
     }
   }
+  // Publish the screenplay for this scene — emits scriptFileChanged() so the
+  // Script panel reloads it (or clears, when scriptFromFile is empty).
+  ZtoryModel::instance()->setScriptFile(scriptFromFile);
 }
 
 int StoryboardPanel::currentShotIndex() const {
