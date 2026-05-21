@@ -2,7 +2,13 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 #define MyAppName "Ztoryc"
-#define MyAppVersion "1.6"
+; MyAppVersion is normally passed by tahoma-buildpkg.bat via
+;   ISCC.exe /DMyAppVersion=<x.y.z>
+; reading toonz/cmake/ZtorycVersion.cmake.  The fallback below is only used
+; when setup.iss is compiled standalone — keep it in sync with that file.
+#ifndef MyAppVersion
+#define MyAppVersion "0.3.1"
+#endif
 #define MyAppPublisher "Ztoryc"
 #define MyAppURL "https://github.com/matitanimata/ztoryc"
 #define MyAppExeName "Ztoryc.exe"

@@ -107,7 +107,18 @@ IF EXIST stuff rmdir /S /Q stuff
 xcopy /Y /E /I ..\..\..\stuff stuff
 
 python ..\..\installer\windows\filelist_python3.py %cd%
-ISCC.exe /I. /O.. ..\..\installer\windows\setup.iss
+
+REM Read the Ztoryc semver from the single source of truth and pass it to the
+REM Inno Setup compiler so the installer version matches the app — otherwise
+REM setup.iss falls back to its hardcoded default (the old Tahoma2D 1.6).
+set ZVER_FILE=..\..\cmake\ZtorycVersion.cmake
+for /f "tokens=3 delims=() " %%a in ('findstr /C:"ZTORYC_VERSION_MAJOR " "%ZVER_FILE%"') do set ZVMAJ=%%a
+for /f "tokens=3 delims=() " %%a in ('findstr /C:"ZTORYC_VERSION_MINOR " "%ZVER_FILE%"') do set ZVMIN=%%a
+for /f "tokens=3 delims=() " %%a in ('findstr /C:"ZTORYC_VERSION_PATCH " "%ZVER_FILE%"') do set ZVPAT=%%a
+set ZTORYC_VERSION=%ZVMAJ%.%ZVMIN%.%ZVPAT%
+echo "Installer version: %ZTORYC_VERSION%"
+
+ISCC.exe /DMyAppVersion=%ZTORYC_VERSION% /I. /O.. ..\..\installer\windows\setup.iss
 
 cd ..
 
