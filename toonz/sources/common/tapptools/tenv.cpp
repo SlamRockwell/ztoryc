@@ -54,6 +54,10 @@ class EnvGlobals {  // singleton
   TFilePath *m_stuffDir;
   TFilePath *m_dllRelativeDir;
   bool m_isPortable = false;
+  // Name of the bundled stuff folder used in portable mode.  New builds use
+  // "ztorycstuff"; "tahomastuff" is kept as a legacy fallback for older
+  // portable bundles.  setWorkingDirectory() records whichever it found.
+  std::string m_stuffDirName = "ztorycstuff";
 
   // path values specified with command line arguments
   std::map<std::string, std::string> m_argPathValues;
@@ -164,7 +168,7 @@ public:
   TFilePath getStuffDir() {
     if (m_stuffDir) return *m_stuffDir;
     if (m_isPortable)
-      return TFilePath(getWorkingDirectory()) + "tahomastuff";
+      return TFilePath(getWorkingDirectory()) + m_stuffDirName;
 
     return TFilePath(getSystemVarValue(m_rootVarName));
   }
@@ -250,29 +254,44 @@ public:
 
   void setWorkingDirectory() {
     m_workingDirectory = QDir::currentPath();
-    // check if portable
-    TFilePath portableCheck = TFilePath(m_workingDirectory) + "tahomastuff";
-    TFileStatus portableStatus(portableCheck);
-    m_isPortable = portableStatus.doesExist();
+    // Portable stuff folder: prefer "ztorycstuff", fall back to the legacy
+    // "tahomastuff" so older portable bundles keep working.
+    const char *stuffNames[] = {"ztorycstuff", "tahomastuff"};
+
+    m_isPortable = false;
+    TFilePath portableCheck;
+    for (const char *name : stuffNames) {
+      portableCheck = TFilePath(m_workingDirectory) + name;
+      if (TFileStatus(portableCheck).doesExist()) {
+        m_isPortable   = true;
+        m_stuffDirName = name;
+        break;
+      }
+    }
 
 #ifdef MACOSX
     // On macOS the CWD at launch is often "/" (not the app dir), so the check
-    // above fails. Also, Sierra+ translocates apps. Look for tahomastuff next to
-    // the executable: applicationDirPath() = .../Ztoryc.app/Contents/MacOS
-    //
-    // Prefer Contents/Resources/tahomastuff (only Contents at .app root — needed
-    // for codesign --deep). Legacy portable builds used .../Ztoryc.app/tahomastuff
-    // (../../tahomastuff from MacOS).
+    // above fails. Also, Sierra+ translocates apps. Look for the stuff folder
+    // next to the executable: applicationDirPath() = .../Ztoryc.app/Contents/
+    // MacOS.  Prefer Contents/Resources/<stuff> (only Contents at .app root —
+    // needed for codesign --deep); legacy portable builds used
+    // .../Ztoryc.app/<stuff> (../../<stuff> from MacOS).
     if (!m_isPortable) {
       QString appDir = QCoreApplication::applicationDirPath();
       if (!appDir.isEmpty()) {
-        portableCheck  = TFilePath(appDir) + "../Resources/tahomastuff";
-        portableStatus = TFileStatus(portableCheck);
-        m_isPortable   = portableStatus.doesExist();
-        if (!m_isPortable) {
-          portableCheck  = TFilePath(appDir) + "../../tahomastuff";
-          portableStatus = TFileStatus(portableCheck);
-          m_isPortable   = portableStatus.doesExist();
+        for (const char *name : stuffNames) {
+          portableCheck =
+              TFilePath(appDir) + (std::string("../Resources/") + name);
+          if (TFileStatus(portableCheck).doesExist()) {
+            m_isPortable = true;
+          } else {
+            portableCheck = TFilePath(appDir) + (std::string("../../") + name);
+            m_isPortable  = TFileStatus(portableCheck).doesExist();
+          }
+          if (m_isPortable) {
+            m_stuffDirName = name;
+            break;
+          }
         }
         if (m_isPortable)
           m_workingDirectory = portableCheck.getParentDir().getQString();

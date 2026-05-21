@@ -651,8 +651,8 @@ if(BUILD_ENV_APPLE)
     add_custom_command(TARGET Ztoryc POST_BUILD COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/qss)
 
     # Linux \"make install\" ships stuff/share; macOS ninja builds do not unless we copy.
-    # Themes live under stuff/config/qss — sync into Ztoryc.app/tahomastuff so portable mode finds them.
-    option(ZTORYC_BUNDLE_STUFF "Copy repo stuff/ into Ztoryc.app/tahomastuff after link (local dev themes)" ON)
+    # Themes live under stuff/config/qss — sync into Ztoryc.app/ztorycstuff so portable mode finds them.
+    option(ZTORYC_BUNDLE_STUFF "Copy repo stuff/ into Ztoryc.app/ztorycstuff after link (local dev themes)" ON)
     if(ZTORYC_BUNDLE_STUFF)
         set(ZTORY_STUFF_TREE "${CMAKE_SOURCE_DIR}/../../stuff")
         add_custom_command(
@@ -661,8 +661,8 @@ if(BUILD_ENV_APPLE)
             # copy_directory (which dereferences symlinks and copies target content).
             # Exclude profiles/users/ — user-specific data (favorites, layouts…)
             # can contain symlinks to large external folders (24+ GB observed).
-            COMMAND bash -c "rsync -a --delete --exclude='profiles/users/' \"${ZTORY_STUFF_TREE}/\" \"$<TARGET_FILE_DIR:Ztoryc>/../../tahomastuff/\""
-            COMMENT "Bundling stuff → Ztoryc.app/tahomastuff (ZTORYC_BUNDLE_STUFF=ON)"
+            COMMAND bash -c "rsync -a --delete --exclude='profiles/users/' \"${ZTORY_STUFF_TREE}/\" \"$<TARGET_FILE_DIR:Ztoryc>/../../ztorycstuff/\""
+            COMMENT "Bundling stuff → Ztoryc.app/ztorycstuff (ZTORYC_BUNDLE_STUFF=ON)"
         )
     endif()
 

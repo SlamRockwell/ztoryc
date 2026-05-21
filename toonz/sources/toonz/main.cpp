@@ -437,7 +437,7 @@ int main(int argc, char *argv[]) {
   ZtoryApplication a(argc, argv);
 
 #ifdef MACOSX
-  // Portable layout uses Contents/Resources/tahomastuff (or legacy .../Ztoryc.app/
+  // Portable layout uses Contents/Resources/ztorycstuff (or legacy .../Ztoryc.app/
   // tahomastuff). Detection in setWorkingDirectory() needs applicationDirPath(),
   // which is only valid after QApplication — repeat so bundled stuff is found.
   TEnv::setApplicationFileName(argv[0]);

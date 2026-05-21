@@ -100,7 +100,7 @@ QString autodetectFFmpeg() {
   folderList.append("./ffmpeg/bin");  // CI bundle: <appDir>/ffmpeg/bin/ffmpeg
 
   // On macOS portable, getWorkingDirectory() resolves to
-  // Ztoryc.app/Contents/Resources (parent of tahomastuff).  CI script
+  // Ztoryc.app/Contents/Resources (parent of ztorycstuff).  CI script
   // ci-scripts/osx/tahoma-buildpkg.sh installs FFmpeg under
   // Contents/Resources/ffmpeg/bin/ffmpeg — search that path too.
   folderList.append(TEnv::getWorkingDirectory().getQString() + "/ffmpeg");

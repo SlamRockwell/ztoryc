@@ -57,9 +57,9 @@ if [ -d "$TOONZDIR/Release" ]; then
    export TOONZDIR="$TOONZDIR/Release"
 fi
 
-if [ -d "$TOONZDIR/Ztoryc.app/Contents/Resources/tahomastuff" ]
+if [ -d "$TOONZDIR/Ztoryc.app/Contents/Resources/ztorycstuff" ]
 then
-   rm -rf "$TOONZDIR/Ztoryc.app/Contents/Resources/tahomastuff"
+   rm -rf "$TOONZDIR/Ztoryc.app/Contents/Resources/ztorycstuff"
 fi
 
 if [ -d thirdparty/apps/ffmpeg/bin ]
@@ -98,8 +98,8 @@ then
    mkdir $TOONZDIR/Ztoryc.app/Contents/Frameworks
 fi
 mkdir -p "$TOONZDIR/Ztoryc.app/Contents/Resources"
-# Legacy portable layout put tahomastuff/ffmpeg/rhubarb next to Contents; remove leftovers.
-rm -rf "$TOONZDIR/Ztoryc.app/tahomastuff" "$TOONZDIR/Ztoryc.app/ffmpeg" \
+# Legacy portable layout put ztorycstuff/ffmpeg/rhubarb next to Contents; remove leftovers.
+rm -rf "$TOONZDIR/Ztoryc.app/ztorycstuff" "$TOONZDIR/Ztoryc.app/ffmpeg" \
        "$TOONZDIR/Ztoryc.app/rhubarb" "$TOONZDIR/Ztoryc.app/DSYM" 2>/dev/null || true
 
 if [ -d thirdparty/canon/Framework ]
@@ -391,14 +391,14 @@ echo ">>> Creating portable DMG: $FINAL_DMG_NAME (dmgbuild — no Finder during 
 # The CMake POST_BUILD step already uses this rsync for ZTORYC_BUNDLE_STUFF;
 # mirror the same exclusion here in the CI packager.
 rsync -a --delete --exclude='profiles/users/***' \
-  "$STUFF_SRC/" "$TOONZDIR/Ztoryc.app/Contents/Resources/tahomastuff/"
+  "$STUFF_SRC/" "$TOONZDIR/Ztoryc.app/Contents/Resources/ztorycstuff/"
 # Recreate an empty profiles/users with .gitkeep so the app does not need to
 # mkdir at runtime (and so it is visible inside the read-only DMG).
-mkdir -p "$TOONZDIR/Ztoryc.app/Contents/Resources/tahomastuff/profiles/users"
-touch "$TOONZDIR/Ztoryc.app/Contents/Resources/tahomastuff/profiles/users/.gitkeep"
-chmod -R u+rwX,go+rX "$TOONZDIR/Ztoryc.app/Contents/Resources/tahomastuff"
+mkdir -p "$TOONZDIR/Ztoryc.app/Contents/Resources/ztorycstuff/profiles/users"
+touch "$TOONZDIR/Ztoryc.app/Contents/Resources/ztorycstuff/profiles/users/.gitkeep"
+chmod -R u+rwX,go+rX "$TOONZDIR/Ztoryc.app/Contents/Resources/ztorycstuff"
 
-find "$TOONZDIR/Ztoryc.app/Contents/Resources/tahomastuff" -name .gitkeep -not -path '*/profiles/users/*' -exec rm -f {} \;
+find "$TOONZDIR/Ztoryc.app/Contents/Resources/ztorycstuff" -name .gitkeep -not -path '*/profiles/users/*' -exec rm -f {} \;
 
 # Remove SystemVar.ini from portable bundle: toonz/install/SystemVar.ini holds
 # absolute /Applications/Ztoryc/Ztoryc_stuff/... paths intended for non-portable
@@ -406,7 +406,7 @@ find "$TOONZDIR/Ztoryc.app/Contents/Resources/tahomastuff" -name .gitkeep -not -
 # but in a portable bundle those absolute paths override the portable layout
 # (PROFILES, LAYOUTS, ...) and cause the Storyboard workflow to fail to load
 # rooms — symptom: clicking Storyboard makes the workflow "disappear" or
-# crashes on workflow switch.  Portable detection (tahomastuff next to MacOS)
+# crashes on workflow switch.  Portable detection (ztorycstuff next to MacOS)
 # is sufficient — no SystemVar.ini needed.
 rm -f "$TOONZDIR/Ztoryc.app/Contents/Resources/SystemVar.ini"
 
@@ -435,8 +435,8 @@ if [ -f "$LIBIMAGE" ]; then
   fi
 fi
 
-if [[ ! -f "$TOONZDIR/Ztoryc.app/Contents/Resources/tahomastuff/config/qss/Dark/Dark.qss" ]]; then
-  echo "ERROR: After copy, portable bundle missing $TOONZDIR/Ztoryc.app/Contents/Resources/tahomastuff/config/qss/Dark/Dark.qss"
+if [[ ! -f "$TOONZDIR/Ztoryc.app/Contents/Resources/ztorycstuff/config/qss/Dark/Dark.qss" ]]; then
+  echo "ERROR: After copy, portable bundle missing $TOONZDIR/Ztoryc.app/Contents/Resources/ztorycstuff/config/qss/Dark/Dark.qss"
   exit 1
 fi
 

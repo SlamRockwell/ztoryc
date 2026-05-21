@@ -2631,10 +2631,15 @@ void PreferencesPopup::onImport() {
     return;
   }
 
+  // New portable builds bundle the stuff folder as 'ztorycstuff'; older ones
+  // (and Tahoma2D installs) used 'tahomastuff'.  Accept either.
   TFilePath oldStuffPath =
-      TFilePath(m_importPrefpath->getPath() + "/tahomastuff");
+      TFilePath(m_importPrefpath->getPath() + "/ztorycstuff");
+  if (!TFileStatus(oldStuffPath).doesExist())
+    oldStuffPath = TFilePath(m_importPrefpath->getPath() + "/tahomastuff");
   if (!TFileStatus(oldStuffPath).doesExist()) {
-    DVGui::error("Unable to find the 'tahomastuff' folder in " +
+    DVGui::error("Unable to find the 'ztorycstuff' (or 'tahomastuff') folder "
+                 "in " +
                  m_importPrefpath->getPath() +
                  ".\nPlease check path and try again.");
     return;

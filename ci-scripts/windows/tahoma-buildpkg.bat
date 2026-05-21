@@ -113,7 +113,7 @@ cd ..
 
 echo ">>> Creating Ztoryc Windows Portable package"
 
-xcopy /Y /E /I ..\..\stuff Ztoryc\tahomastuff
+xcopy /Y /E /I ..\..\stuff Ztoryc\ztorycstuff
 
 IF EXIST Ztoryc-portable-win.zip del Ztoryc-portable-win.zip
 7z a Ztoryc-portable-win.zip Ztoryc

@@ -33,13 +33,13 @@ then
 fi
 mkdir Ztoryc
 
-echo ">>> Copying stuff to Ztoryc/tahomastuff"
+echo ">>> Copying stuff to Ztoryc/ztorycstuff"
 
-mv appdir/usr/share/tahoma2d/stuff Ztoryc/tahomastuff
-chmod -R 777 Ztoryc/tahomastuff
+mv appdir/usr/share/tahoma2d/stuff Ztoryc/ztorycstuff
+chmod -R 777 Ztoryc/ztorycstuff
 rmdir appdir/usr/share/tahoma2d
 
-find Ztoryc/tahomastuff -name .gitkeep -exec rm -f {} \;
+find Ztoryc/ztorycstuff -name .gitkeep -exec rm -f {} \;
 
 if [ -d ../../thirdparty/apps/ffmpeg/bin ]
 then
