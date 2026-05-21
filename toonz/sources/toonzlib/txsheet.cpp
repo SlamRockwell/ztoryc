@@ -24,6 +24,7 @@
 #include "toonz/txshsoundcolumn.h"
 #include "toonz/sceneproperties.h"
 #include "toonz/toonzscene.h"
+#include "toonz/childstack.h"
 #include "toonz/columnfan.h"
 #include "toonz/txshleveltypes.h"
 #include "toonz/txshnoteset.h"
@@ -1793,7 +1794,16 @@ TSoundTrack *TXsheet::makeSound(SoundProperties *properties, int col) {
 //-----------------------------------------------------------------------------
 
 void TXsheet::scrub(int frame, bool isPreview) {
-  if (!TXsheet::isMainAudioEnabled()) return;
+  // Native per-frame scrub audio.  Plays THIS xsheet's own soundtrack.
+  // Yield only when the ZtoryAnimaticController owns the audio: that is when
+  // the Main Audio toggle is ON *and* we are inside a sub-scene — there the
+  // controller streams the MAIN soundtrack instead, and playing here too
+  // would double the audio.  In every other case (toggle OFF, or at main
+  // level) the native scrub must play, otherwise the sub-scene's own audio
+  // (toggle OFF) goes silent while scrubbing.
+  if (TXsheet::isMainAudioEnabled() && getScene() &&
+      getScene()->getChildStack()->getAncestorCount() > 0)
+    return;
   try {
     double fps =
         getScene()->getProperties()->getOutputProperties()->getFrameRate();
