@@ -1793,6 +1793,10 @@ TSoundTrack *TXsheet::makeSound(SoundProperties *properties, int col) {
 
 //-----------------------------------------------------------------------------
 
+// Frame up to which native scrub audio has been played — lets consecutive
+// scrub events sweep the range gaplessly instead of restarting each frame.
+static int s_scrubAudioFrame = -1;
+
 void TXsheet::scrub(int frame, bool isPreview) {
   // Native per-frame scrub audio.  Plays THIS xsheet's own soundtrack.
   // Yield only when the ZtoryAnimaticController owns the audio: that is when
@@ -1804,6 +1808,12 @@ void TXsheet::scrub(int frame, bool isPreview) {
   if (TXsheet::isMainAudioEnabled() && getScene() &&
       getScene()->getChildStack()->getAncestorCount() > 0)
     return;
+  // Gapless scrub: never interrupt a segment that is still playing —
+  // interrupting drops the middle of the audio, so slow scrubbing
+  // "esatto articolo tre" came out "esatto art--olo tre".  Let the current
+  // segment finish; the next idle event sweeps from where the audio ended up
+  // to the new frame, so the whole scrubbed range is heard.
+  if (m_player && m_player->isPlaying()) return;
   try {
     double fps =
         getScene()->getProperties()->getOutputProperties()->getFrameRate();
@@ -1815,32 +1825,20 @@ void TXsheet::scrub(int frame, bool isPreview) {
     if (!st) return;
 
     double samplePerFrame = st->getSampleRate() / fps;
-
-    // Scrub window: a single frame (~41 ms at 24 fps) is too short to be
-    // clearly audible.  Play a fixed ~150 ms chunk from the frame so each
-    // frame can be "read" while scrubbing.  Clamp to the track length so
-    // play() never reads past the sample buffer.
+    // ~150 ms minimum window — one frame (~41 ms) is too short to be audible.
     double scrubLen = std::max(samplePerFrame, st->getSampleRate() * 0.15);
-    double s0 = frame * samplePerFrame;
-    double s1 = s0 + scrubLen;
+    const int kMaxScrubGap = 48;  // frames; bigger jump → resync, don't sweep
+
+    int from = s_scrubAudioFrame;
+    if (from < 0 || frame < from || frame - from > kMaxScrubGap)
+      from = frame;  // first scrub / backward / big jump → resync
+    double s0 = from * samplePerFrame;
+    double s1 = std::max((double)frame * samplePerFrame, s0 + scrubLen);
     double total = (double)st->getSampleCount();
     if (s0 >= total) return;
     if (s1 > total) s1 = total;
-    // if (m_player && m_player->isPlaying()) {
-    //    try {
-    //        m_player->stop();
-    //    }
-    //    catch (const std::runtime_error& e) {
-    //        int i = 0;
-    //    }
-    //    catch (const std::exception& e) {
-    //        int i = 0;
-    //    }
-    //    catch (...) {
-    //        int i = 0;
-    //    }
-    //}
     play(st, s0, s1, false);
+    s_scrubAudioFrame = (int)(s1 / samplePerFrame);  // audio content end
   } catch (TSoundDeviceException &e) {
     if (e.getType() == TSoundDeviceException::NoDevice) {
       std::cout << ::to_string(e.getMessage()) << std::endl;

@@ -1,6 +1,14 @@
 #include "ztoryscriptpanel.h"
 
+#include "ztorymodel.h"
+#include "tapp.h"
+#include "toonz/tscenehandle.h"
+#include "toonz/toonzscene.h"
+#include "tsystem.h"
+#include "tfilepath.h"
+
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QFile>
 #include <QTextStream>
 #include <QTextCodec>
@@ -93,6 +101,74 @@ ZtoryScriptView::ZtoryScriptView(QWidget *parent)
           this, &ZtoryScriptView::onSearchNext);
   connect(m_searchPrevBtn, &QToolButton::clicked,
           this, &ZtoryScriptView::onSearchPrev);
+
+  // Keep the screenplay in sync with the current scene: ZtoryModel::load()
+  // emits modelReset() after reading the .ztoryc, and the scene handle emits
+  // sceneSwitched on every scene change.  Either way reloadFromModel() shows
+  // the new scene's screenplay (or clears the panel when there is none).
+  connect(ZtoryModel::instance(), &ZtoryModel::modelReset,
+          this, &ZtoryScriptView::reloadFromModel);
+  connect(TApp::instance()->getCurrentScene(), &TSceneHandle::sceneSwitched,
+          this, &ZtoryScriptView::reloadFromModel);
+}
+
+//-----------------------------------------------------------------------------
+
+void ZtoryScriptView::importScreenplay(const QString &srcPath) {
+  if (srcPath.isEmpty()) return;
+  ToonzScene *scene = TApp::instance()->getCurrentScene()->getScene();
+  if (!scene) {
+    // No scene yet — just display it without persisting.
+    m_currentFilePath = srcPath;
+    loadFile(srcPath);
+    return;
+  }
+  TFilePath src(srcPath.toStdWString());
+  // Destination: the project's +extras/script folder.
+  TFilePath destDir = scene->decodeFilePath(TFilePath("+extras")) + "script";
+  TFilePath dest    = destDir + src.withoutParentDir();
+  if (src != dest) {
+    try {
+      TSystem::touchParentDir(dest);
+      TSystem::copyFileOrLevel_throw(dest, src);
+    } catch (...) {
+      // Copy failed (permissions, missing source…): fall back to the original
+      // path so the user at least sees the screenplay this session.
+      m_currentFilePath = srcPath;
+      loadFile(srcPath);
+      return;
+    }
+  }
+  // Persist a project-relative path ("+extras/script/<file>") in the .ztoryc.
+  ZtoryModel::instance()->setScriptFile(scene->codeFilePath(dest).getQString());
+  m_currentFilePath = dest.getQString();
+  loadFile(m_currentFilePath);
+}
+
+//-----------------------------------------------------------------------------
+
+void ZtoryScriptView::reloadFromModel() {
+  QString rel = ZtoryModel::instance()->scriptFile();
+  if (rel.isEmpty()) {
+    // Current scene has no screenplay — clear any leftover from a prior scene.
+    if (!m_currentFilePath.isEmpty()) {
+      clear();
+      m_currentFilePath.clear();
+    }
+    return;
+  }
+  ToonzScene *scene = TApp::instance()->getCurrentScene()->getScene();
+  if (!scene) return;
+  TFilePath abs = scene->decodeFilePath(TFilePath(rel.toStdWString()));
+  QString absStr = abs.getQString();
+  if (absStr == m_currentFilePath) return;  // already showing this screenplay
+  if (TFileStatus(abs).doesExist()) {
+    m_currentFilePath = absStr;
+    loadFile(absStr);
+  } else {
+    clear();
+    m_currentFilePath.clear();
+  }
 }
 
 //-----------------------------------------------------------------------------
@@ -114,7 +190,7 @@ void ZtoryScriptView::dropEvent(QDropEvent *e) {
     QString path = url.toLocalFile();
     if (path.endsWith(".fdx", Qt::CaseInsensitive) ||
         path.endsWith(".txt", Qt::CaseInsensitive)) {
-      loadFile(path);
+      importScreenplay(path);
       e->acceptProposedAction();
       return;
     }
@@ -131,7 +207,7 @@ void ZtoryScriptView::onImportClicked() {
       tr("Screenplay files (*.fdx *.txt);;Final Draft (*.fdx);;Text (*.txt)"));
 
   if (filePath.isEmpty()) return;
-  loadFile(filePath);
+  importScreenplay(filePath);
 }
 
 //-----------------------------------------------------------------------------

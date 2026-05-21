@@ -24,6 +24,12 @@ public:
 
   void loadFile(const QString &filePath);
   void clear();
+  // Import a screenplay: copy it into the project's +extras/script folder,
+  // record the path in ZtoryModel (persisted in .ztoryc), then display it.
+  void importScreenplay(const QString &srcPath);
+  // Reload (or clear) the screenplay to match ZtoryModel::scriptFile() — call
+  // on scene switch / model reset so the panel never keeps a stale screenplay.
+  void reloadFromModel();
 
 protected:
   void dragEnterEvent(QDragEnterEvent *e) override;
@@ -56,6 +62,10 @@ private:
   QList<int>    m_matchPositions;
   int           m_currentMatch = -1;
   QString       m_lastSearch;
+
+  // Absolute path of the screenplay currently displayed ("" = none).  Used by
+  // reloadFromModel() to avoid reloading the same file repeatedly.
+  QString       m_currentFilePath;
 };
 
 //=============================================================================

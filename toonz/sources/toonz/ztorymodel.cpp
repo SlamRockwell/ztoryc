@@ -614,6 +614,9 @@ void ZtoryModel::save() {
   xml.writeAttribute("startNumber", QString::number(m_numberingConfig.startNumber));
   xml.writeAttribute("seqNumber",   QString::number(m_numberingConfig.seqNumber));
   xml.writeEndElement();
+  // ── Imported screenplay (Script panel) ──
+  if (!m_scriptFile.isEmpty())
+    xml.writeTextElement("scriptFile", m_scriptFile);
   // ── Sequences ──
   if (!m_sequences.empty()) {
     xml.writeStartElement("sequences");
@@ -663,6 +666,7 @@ void ZtoryModel::load() {
   m_shots.clear();
   m_previews.clear();
   m_sequences.clear();
+  m_scriptFile.clear();  // a scene with no <scriptFile> tag has no screenplay
 
   QXmlStreamReader xml(&file);
   int si = -1, pi = -1;
@@ -689,6 +693,9 @@ void ZtoryModel::load() {
       if (m_numberingConfig.padding <= 0) m_numberingConfig.padding = 3;
       if (m_numberingConfig.shotPrefix.isEmpty())  m_numberingConfig.shotPrefix  = "SH";
       if (m_numberingConfig.panelPrefix.isEmpty()) m_numberingConfig.panelPrefix = "P";
+
+    } else if (name == QLatin1String("scriptFile")) {
+      m_scriptFile = xml.readElementText();
 
     } else if (name == QLatin1String("sequence")) {
       SequenceData seq;

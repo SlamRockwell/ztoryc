@@ -104,6 +104,10 @@ class ZtoryModel : public QObject {
   std::vector<std::vector<QPixmap>> m_previews; // [shotIdx][panelIdx]
   int                               m_fps;
   QString                           m_ztoryPath;
+  // Imported screenplay, stored as a path relative to the project ("+extras/
+  // script/<file>").  Persisted in the .ztoryc so the Script panel can reload
+  // it when the scene is reopened.  Empty = no screenplay imported.
+  QString                           m_scriptFile;
   ZtoryWorkflow                     m_workflow = ZtoryWorkflow::Tradigital;
   std::vector<ZtoryClipEntry>       m_sharedClip;
   std::set<int>                     m_sharedSelection;
@@ -194,6 +198,10 @@ public:
   void save();
   void load();
   void setZtoryPath(const QString &path) { m_ztoryPath = path; }
+
+  // Imported screenplay path (project-relative, e.g. "+extras/script/x.fdx").
+  QString scriptFile() const { return m_scriptFile; }
+  void setScriptFile(const QString &path) { m_scriptFile = path; }
 
   // ── Shared clipboard (Board ↔ Animatic) ──────────────────────────────────
   const std::vector<ZtoryClipEntry>& sharedClip() const { return m_sharedClip; }
