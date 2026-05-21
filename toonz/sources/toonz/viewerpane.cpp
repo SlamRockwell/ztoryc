@@ -890,9 +890,14 @@ void BaseViewerPanel::onFrameSwitched() {
   if (m_keyFrameButton->getCurrentFrame() != frameIndex)
     m_keyFrameButton->setCurrentFrame(frameIndex);
 
-  // Respect the main-audio toggle (MI_ToggleMainAudio)
-  bool mainAudioEnabled = mainAudioToggle.getStatus();
-  if (m_playing && m_playSound && mainAudioEnabled) {
+  // Audio during play.  Do NOT gate this on the Main Audio toggle: the native
+  // viewer must always play the audio of its CURRENT xsheet (the sub-scene's
+  // own soundtrack when editing a shot).  The toggle only decides the SOURCE:
+  // hasSoundtrack() returns false when the ZtoryAnimaticController owns the
+  // audio (toggle ON → it streams the main soundtrack instead), so the native
+  // viewer naturally yields.  Gating here made the sub-scene go silent
+  // whenever the toggle was off.
+  if (m_playing && m_playSound) {
     if (m_first == true && hasSoundtrack()) {
       playAudioFrame(frameIndex);
     } else if (m_hasSoundtrack) {

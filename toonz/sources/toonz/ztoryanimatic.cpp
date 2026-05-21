@@ -140,22 +140,20 @@ bool ZtoryAnimaticController::ownsAudioAtMainLevel() const {
 // native code reads from the current — sub — xsheet at frame 0, plus the
 // controller's main-xsheet stream from mainFrame*spf).
 bool ZtoryAnimaticController::ownsSubSceneAudio() const {
-  // Toggle OFF → the controller does NOT stream main-xsheet audio, so the
-  // native ComboViewer must play the sub-scene's OWN audio normally.  Without
-  // this check ownsSubSceneAudio() stayed true regardless of the toggle and
-  // the native viewer kept yielding → no sub-scene audio at all.
+  // Desired behaviour (mirrors the video toggle):
+  //   toggle ON  → hear the MAIN xsheet soundtrack only
+  //   toggle OFF → hear the CURRENT sub-scene's own soundtrack
+  //
+  // OFF → the controller does NOT stream main audio; the native ComboViewer
+  // plays the sub-scene's own audio.
   if (!TXsheet::isMainAudioEnabled()) return false;
+  // ON, inside a sub-scene at ANY nesting depth → the controller overlays the
+  // main soundtrack; the native viewer must yield so the two don't overlap.
+  // Returns true even when the main xsheet has no audio — ON means "main
+  // only", a silent main included.
   ToonzScene *scene = TApp::instance()->getCurrentScene()->getScene();
   if (!scene) return false;
-  if (scene->getChildStack()->getAncestorCount() != 1) return false;
-  TXsheet *main = scene->getChildStack()->getTopXsheet();
-  if (!main) return false;
-  for (int c = 0; c < main->getColumnCount(); c++) {
-    TXshColumn *col = main->getColumn(c);
-    if (col && col->getSoundColumn() && !col->getSoundColumn()->isEmpty())
-      return true;
-  }
-  return false;
+  return scene->getChildStack()->getAncestorCount() > 0;
 }
 
 // ---- ZtoryAnimaticController::setAnimaticPlayRangeAndSync ----
@@ -456,16 +454,18 @@ void ZtoryAnimaticController::onNativeFrameSwitched() {
   ToonzScene *scene = TApp::instance()->getCurrentScene()->getScene();
   if (!scene) return;
   ChildStack *cs = scene->getChildStack();
-  // Only when inside a sub-scene (ancestorCount==1).  At main level the
-  // FlipConsole's normal audio path handles things.
-  if (!cs || cs->getAncestorCount() != 1) return;
+  // Inside a sub-scene at ANY nesting depth.  At main level the FlipConsole's
+  // normal audio path handles things.  ChildStack::getAncestor() already
+  // chains the row mapping through every stack level, so depth 2+ works.
+  if (!cs || cs->getAncestorCount() < 1) return;
 
   TSoundTrackP st = requireSoundTrack();
   TXsheet *mainXsh = mainXsheet();
   if (!st || !mainXsh) return;
 
-  // Map the current sub-frame to its main-xsheet row.  If the mapping is
-  // missing, the sub-frame has no audio source — silent.
+  // Map the current sub-frame all the way up to its main-xsheet row.  If the
+  // mapping does not reach the main xsheet, the sub-frame has no main audio
+  // source — silent.
   int subFrame = fh->getFrame();
   std::pair<TXsheet *, int> ancestor = cs->getAncestor(subFrame);
   if (ancestor.first != mainXsh) return;
