@@ -1,55 +1,87 @@
 # Ztoryc — Animatic Panel: Task List for Claude Code
 
-> Aggiornato 2026-03-29. Task completati ridotti a una riga.
-> Per le spec storiche dei task DONE vedere git history.
+> Aggiornato 2026-05-19. Task completati ridotti a una riga.
+> Per le spec storiche dei task DONE vedere ANIMATIC_TASKS_ARCHIVE_2026-05.md e git history.
+> NOTA: questo è il file canonico (puntato dal symlink ~/ZtorYc/ANIMATIC_TASKS.md);
+> sostituisce ANIMATIC_TASKS_2026-05-12.md e tutti i precedenti.
 
 ---
 
 ## LEGEND
 
-- **BUG** = existing code that is broken
-- **NEW** = feature that does not exist yet
-- **MOD** = existing code that needs modification
+- BUG = existing code that is broken
+- NEW = feature that does not exist yet
+- MOD = existing code that needs modification
 
 ---
 
-## DONE — Task completati (riepilogo)
+## DONE (riepilogo)
 
 | Task | Descrizione | Data |
 |------|-------------|------|
-| RAZOR-CRASH | SIGABRT razor + AV link (checkColumn assert su ColumnLevel overlap) | 2026-03-29 |
-| AUTOFILL | AutoFill flood-fill BFS (savebox-bounded, stile N+1, crash fix) | 2026-03-31 |
-| RAZOR-GAP | Audio gap visivo rimosso; splitAudioColumn reimplementata con splitLevelAtFrame | 2026-03-31 |
+| RAZOR-CRASH | SIGABRT razor + AV link | 2026-03-29 |
+| AUTOFILL | AutoFill flood-fill BFS | 2026-03-31 |
+| RAZOR-GAP | Audio gap visivo rimosso | 2026-03-31 |
 | RAZOR-HOVER | Linea preview hover gialla tratteggiata cross-track | 2026-03-31 |
-| BUILD-DEPLOY | libtnztools aggiunto, libimage/colorfx/stdfx rimossi, libtnzbase aggiunto, RelWithDebInfo | 2026-03-31 |
+| BUILD-DEPLOY | libtnztools aggiunto, RelWithDebInfo | 2026-03-31 |
 | 1 | Animatic Viewer visibile + ZtoryAnimaticController | 2026-03-19 |
-| 1b | assertMainXsheet guard su tutte le operazioni shot | 2026-03-21 |
+| 1b | assertMainXsheet guard | 2026-03-21 |
 | 2 | resequenceXsheet unificato in ZtoryModel | 2026-03-21 |
-| 3 | Fix Copy vs Clone nel Board (onPasteShot) | 2026-03-21 |
-| 4 | Rimosse dichiarazioni bottoni duplicate nel costruttore | 2026-03-21 |
+| 3 | Fix Copy vs Clone nel Board | 2026-03-21 |
+| 4 | Rimossi bottoni duplicati | 2026-03-21 |
 | 5 | Story-strip thumbnail orizzontale | 2026-03-25 |
 | 6a | Zoom slider toolbar animatic | 2026-03-24 |
-| 6c | Razor tool (SIGSEGV fix, trim child xsheet, audio linked) | 2026-03-26c |
-| 6d | Link/Unlink audio-video (shiftLevelFromFrame) | 2026-03-26c |
-| 6f | Merge shots con camera keyframe | 2026-03-26b |
+| 6c | Razor tool (SIGSEGV fix, trim child xsheet, audio linked) | 2026-03-26 |
+| 6d | Link/Unlink audio-video (shiftLevelFromFrame) | 2026-03-26 |
+| 6f | Merge shots con camera keyframe | 2026-03-26 |
 | 7 | Double-click entra in edit mode | 2026-03-25 |
 | 8 | Multi-selection in track | 2026-03-25 |
 | 12a | Audio waveform visibile | 2026-03-19 |
 | 12b | Audio scrubbing durante drag ruler | 2026-03-21 |
 | 12c | Sound preview bar in ZtoryAudioTrack | 2026-03-25 |
-| 13a | Onion skin markers sul ruler (FOS + MOS strip) | 2026-03-21 |
-| 13b | In/Out markers sempre visibili + context menu NLE | 2026-03-21 |
-| 13c | Playhead triangle style nativo | 2026-03-21 |
-| 14 | Startup dialog (ZtoryStartupDialog, 4 sezioni) | 2026-03-21 |
-| 15 | RecentFiles.ini cap a 50 entry | 2026-03-26b |
-| TOOLBAR-ICONS | QPushButton → QToolButton con icone SVG in storyboardpanel e ztoryanimatic | 2026-04-05 |
+| 13a-c | Onion skin markers, In/Out markers, Playhead style | 2026-03-21 |
+| 14 | Startup dialog (4 sezioni) | 2026-03-21 |
+| 15 | RecentFiles.ini cap a 50 entry | 2026-03-26 |
+| TOOLBAR-ICONS | QPushButton -> QToolButton con icone SVG | 2026-04-05 |
 | SVG-ICONS | 21 icone SVG Ztoryc in icons/dark/ztoryc/ + toonz.qrc | 2026-04-05 |
-| CAMERA-INIT | Camera init (res+size da main) in onAddShot() — fix inquadratura sottoscena | 2026-04-05 |
-| BUG-ONION | Ghost onion skin nel viewer animatic disabilitato | 2026-04-05 |
-| BUG-CAMRESIZE | Camera resize non scala più il disegno (Edit In Place spento) | 2026-04-05 |
-| WEBCAM-SELECT | Webcam: selectCamera() forzata prima di ogni switch — fix deadlock/feed perso | 2026-04-05 |
-| 16 | Audio sync: QAudioOutput::processedUSecs() come master clock in onDrawFrame | 2026-03-28 |
-| 19 | Cursore SizeHorCursor sul bordo destro blocchi video + bordi segmenti audio | 2026-05-02 |
+| CAMERA-INIT | Camera init fix inquadratura sottoscena | 2026-04-05 |
+| BUG-ONION | Ghost onion skin disabilitato | 2026-04-05 |
+| BUG-CAMRESIZE | Camera resize non scala piu il disegno | 2026-04-05 |
+| WEBCAM-SELECT | selectCamera() forzata prima di ogni switch | 2026-04-05 |
+| 16 | Audio sync: processedUSecs() master clock | 2026-03-28 |
+| BUG-BOARDSYNC | Board desync: RAII guard + modelReset() | 2026-04-06 |
+| BUG-TLV | Crash SIGSEGV TLV: libimage rpath patch | 2026-04-01 |
+| BUG-AUTOFILL | AutoFill: TEnumProperty m_autoFillStyle | 2026-04-08 |
+| PERF-AUDIO | Cache waveform in QImage | 2026-04-08 |
+| MERGE-BOARD | m_mergeButton + shared selection | 2026-04-06 |
+| SHORTCUTS | Cmd+C/X/V/Delete: two-phase eventFilter | 2026-04-19 |
+| LOCK-AUDIO | Lock tracce audio | 2026-04-19 |
+| NUMERAZIONE | Sistema SQ/SH/P: uuid, label, order_index | 2026-04-25 |
+| 9 | Audio export con shot | 2026-04-20 |
+| 11 | Viewer toggle: QStackedWidget | 2026-05-01 |
+| 12b | BUG testi persi al reload: syncWidgetsToData() | 2026-05-01 |
+| 12c | Export Animatic: label read-only | 2026-05-01 |
+| 12d | BUG Audio toggle in sub-scena | 2026-05-01 |
+| 13 | Undo/Redo: UndoBoardState snapshot-based | 2026-05-01 |
+| 14b | FIX Mark-out a fine timeline all'avvio | 2026-05-01 |
+| 15b | FIX Onion skin rimosso toolbar | 2026-05-01 |
+| 16b | NEW Workflow startup page | 2026-05-02 |
+| 17 | FIX Stop marker update immediato | 2026-05-02 |
+| 18 | FIX Zoom rotella solo sul ruler | 2026-05-02 |
+| 19 | FIX Cursore SizeHorCursor bordi blocchi | 2026-05-02 |
+| 23 | NEW Layout template per ogni workflow | 2026-05-02 |
+| MAIN-AUDIO-TOGGLE | Riscrittura completa: cache (no audio fantasma/tracce cancellate), ON=main/OFF=sub-scena a ogni profondità, scrub gapless ~150ms | 2026-05-22 |
+| BUG-PREVIEW-COLORS | Anteprime Board: rimosso rgbSwapped() — R/B non più scambiati (rosa→azzurro) | 2026-05-22 |
+| 29 | BUG Script Panel persistenza: import → +extras/script + tag scriptFile nel .ztoryc, reload su apertura, clear su scena nuova | 2026-05-22 |
+| AUDIO-TRACK-FIX | Delete key (setFocus), cross-track selection clear (selectionCleared signal), drag/trim undo (UndoAudioEdit), focus border indicator | 2026-05-19 |
+| ADD-AUDIO-UNDO | UndoAddAudioTrack: "Add Audio Track" è undoabile | 2026-05-19 |
+| RAZOR-LINKED-UNDO | Razor linkato video+audio: TUndoScopedBlock + fix indici colonne audio post-cloneChild | 2026-05-19 |
+| RAM-WAVEFORM | Cache waveform viewport-aware (~1200px sliding window) invece di full trackW (80k+px = 16MB/track su scene lunghe) | 2026-05-19 |
+| RAM-AUDIO-COL | requireColumnSoundTrack capped at videoFrameCount-1 invece di sc->getMaxFrame() (audio file 2h → 1.27GB/traccia × 18 tracce = 23GB) | 2026-05-19 |
+| RAM-THREADSAFETY | preBuildSoundTrackAsync usa mixingTogether() invece di xsh->makeSound(); elimina race condition su m_mixedSound condiviso | 2026-05-19 |
+| RAM-CACHE-RENDER | ImageManager::invalidateAllCached() chiamata in OnRenderCompleted::onDeliver(); libera 10GB+ retention post-render | 2026-05-19 |
+| BUNDLE-STUFF | CMake usa `rsync -a` (preserva symlink) invece di `cmake -E copy_directory` (li seguiva → 30GB di favorites copiati nel bundle) | 2026-05-19 |
+| ENTITLEMENTS | Aggiunto Ztoryc.entitlements (mancava, causava fallimento codesign al deploy) | 2026-05-19 |
 
 ---
 
@@ -57,461 +89,537 @@
 
 ---
 
-### BUG — Board non si aggiorna (timeline mostra 1 shot, Board ne mostra 4)
+### BUG — Script Panel non persiste il file importato al reload
 
-**Sintomo:** dopo operazioni (merge, razor, o altro), il panel Board mostra
-ancora i vecchi shot mentre la timeline animatic ne mostra uno solo (o un
-numero diverso). I due panel sono desynced.
+**Priorita: ALTA**
 
-**Causa probabile:** il flag `m_refreshing` introdotto in 2026-03-25 come
-guard di rientranza può rimanere `true` se `refreshFromScene()` esce
-prematuramente (eccezione, early return, o crash parziale). Tutti i refresh
-successivi vengono bloccati silenziosamente.
+Sintomo: il pannello Script (right panel room Animatic) permette di importare
+file .fdx e .txt, ma alla riapertura della scena il contenuto non viene
+ripristinato -- il panel risulta vuoto.
 
-**Cosa fare:**
-1. Verificare che `m_refreshing` venga sempre resettato a `false` anche nei
-   path di uscita anticipata (aggiungere RAII guard o `QScopeGuard`).
-2. Verificare che `ZtoryModel::modelReset()` venga emesso dopo merge/razor.
-3. Verificare che `StoryboardPanel` sia connesso a `ZtoryModel::modelReset`.
+Causa: il path del file importato non viene salvato nel .ztoryc.
 
-**File:** `ztoryanimatic.cpp` (`refreshFromScene`), `storyboardpanel.cpp`,
-`ztorymodel.cpp`.
+Soluzione: copia nella cartella extras + path relativo nel XML.
+Pattern identico a come Tahoma2D gestisce gli asset di scena.
 
----
+Flusso:
+1. Utente importa .fdx o .txt
+2. File copiato in <nome_scena>_extras/script/ (cartella creata se mancante)
+3. Path relativo salvato nel .ztoryc: <ScriptPanel file="extras/script/myscript.fdx"/>
+4. All'apertura: ZtoryScriptPanel legge il tag e ricarica automaticamente
 
----
-
-~~### BUG — Razor audio gap troppo largo~~ ✅ DONE 2026-03-31
-
----
-
-### BUG — Camera resize scala anche il disegno
-
-**Sintomo:** ridimensionando la camera dalla sotto-scena (o dall'animatic), il
-disegno contenuto viene scalato insieme alla camera invece di rimanere invariato.
-
-**Causa da investigare:** potrebbe essere `TXsheetHandle::notifyCameraChanged`
-o `TSceneHandle::notifyCameraChanged` che innesca un resize dei livelli.
-Oppure `TCamera::setRes` sta modificando il transform dei livelli.
-
-**Note:** la camera dovrebbe cambiare solo il viewport, non i contenuti.
-Verificare se il problema è nella visualizzazione o nei dati salvati.
-
-**File da investigare:** `camerasettingspopup.cpp`, `txsheet.cpp`, `tscenehandle`.
-
----
-
-### BUG — Ghost onion skin nel viewer animatic
-
-**Sintomo:** il viewer animatic mostra un onion skin non richiesto (nessun
-marker FOS/MOS attivato dall'utente), con frame ghost visibili.
-
-**Causa probabile:** `ZtoryAnimaticViewer` eredita da `BaseViewerPanel` e usa
-il frame handle globale. Quando si naviga nell'animatic, l'onion skin del viewer
-normale potrebbe "filtrare" sul viewer animatic perché condividono lo stesso
-`TOnionSkinMask` globale.
-
-**Soluzione:** disabilitare l'onion skin nel viewer animatic esplicitamente:
+Save -- in saveZtoryc():
 ```cpp
-// In ZtoryAnimaticViewer::initialize() o paintEvent
-m_sceneViewer->setOnionSkinEnabled(false);
-```
-Oppure creare un `TOnionSkinMaskHandle` separato per il viewer animatic con
-mask sempre vuota.
-
-**File:** `ztoryanimatic.h/.cpp`.
-
----
-
-### PERF — Rallentamento con file audio pesanti
-
-**Sintomo:** l'UI diventa lenta quando vengono caricati file audio di grandi
-dimensioni. Probabilmente dovuto al rendering del waveform su ogni resize/scroll.
-
-**Soluzione:** introdurre caching del waveform pre-renderizzato:
-- Calcolare il waveform in un `QImage` cache solo quando cambia la colonna audio
-  o le dimensioni del widget.
-- In `paintEvent` disegnare solo la `QImage` cache se le dimensioni non sono
-  cambiate.
-- Invalidare cache su: `audioChanged`, resize, zoom change.
-
-**File:** `ztoryanimatic.cpp` (`ZtoryAudioTrack::paintEvent`, `refreshAudioTracks`).
-
----
-
-### MOD — Board ↔ Animatic sincronizzazione bidirezionale completa
-
-**Obiettivo:** tutte le operazioni (razor, merge, reorder) devono riflettersi
-immediatamente sia nel Board che nell'Animatic, in entrambe le direzioni.
-
-**Regole di sincronizzazione:**
-- Durata totale shot: impostabile dal Board (primo panel) O dall'Animatic
-  (ripple / match subscene duration). Ogni cambio aggiorna l'altro.
-- Durate parziali dei panel: lette automaticamente dalla sotto-scena dello shot.
-- Ordine shot: reorder nell'Animatic aggiorna l'ordine nel Board e viceversa.
-- Aggiunte/rimozioni: creare/cancellare shot da un panel aggiorna l'altro.
-
-**Problema attuale:** il flag `m_refreshing` può bloccare i refresh successivi
-se `refreshFromScene()` esce prematuramente. Vedi anche "BUG Board desync".
-
-**Implementazione:**
-1. Assicurare che ogni operazione emetta `ZtoryModel::modelReset()` o signal
-   specifici (`shotAdded`, `shotRemoved`, `shotDurationChanged`, `shotReordered`).
-2. Sia `StoryboardPanel` che `ZtoryAnimaticPanel` devono ricevere questi signal
-   e aggiornarsi senza loop (guard `m_refreshing` con RAII).
-3. Le durate parziali dei panel si leggono da
-   `ZtoryModel::shotData(i).panelDurations` che a sua volta legge dal sub-xsheet.
-
-**File:** `ztorymodel.h/.cpp`, `storyboardpanel.cpp`, `ztoryanimatic.cpp`.
-
----
-
-### NEW — Sistema di numerazione Sequence / Shot / Panel
-
-**Gerarchia:** `SQ###_SH###_P###`
-**Esempio:** `SQ010_SH020_P003`
-
-#### Struttura dati
-Ogni elemento ha:
-- `uuid` — identificatore immutabile (non cambia mai)
-- `label` — stringa visibile (es. `SQ010`, `SH020A`, `P003`)
-- `order_index` — intero per l'ordinamento (non deve essere unico globalmente,
-  solo all'interno del livello padre)
-
-Shot e panel sono collegati alla sequenza via `sequence_uuid`, non via label.
-
-#### Numerazione
-- Sequenze e shot: step 10 (010, 020, 030…)
-- Panel: step 1 (001, 002, 003…)
-- Inserimento tra due elementi: calcolare la media degli `order_index`
-  - Se c'è spazio numerico: generare label intermedio (es. SH015)
-  - Se non c'è spazio: appendere suffisso alfabetico (SH010A, SH010B…)
-- Varianti: suffisso separato da `_` (es. `SH020_A`, `P003_B`)
-- Ordinamento: SEMPRE per `order_index`, mai per label
-
-#### Modalità numerazione
-- **AUTO:** ogni volta che si aggiunge, inserisce o riordina uno shot, tutto
-  viene rinumerato automaticamente con step 10.
-- **KEEP:** la numerazione non cambia automaticamente. Le label rimangono
-  stabili. Rinumerazione solo su richiesta esplicita dell'utente.
-
-#### Funzioni manuali
-- **"Renumber shots"**: rinumera tutti (o solo gli shot selezionati) in modo
-  pulito con step 10. Azione confermata dall'utente.
-- **"Renumber sequences"**: rinumera tutte le sequenze con step 10 e aggiorna
-  le label di shot e panel dipendenti. Richiede conferma + warning che i
-  riferimenti esterni (export, filenames) cambieranno.
-  - NON cambia `uuid` né `order_index`.
-
-#### Gestione sequenze
-- Creare una sequenza: nuovo UUID, `order_index` calcolato, label generata.
-- **Raggruppare shot in una nuova sequenza:**
-  - Creare nuova sequenza
-  - Aggiornare `sequence_uuid` degli shot selezionati
-  - Rinumerare gli shot nella nuova sequenza da SH010
-  - Gli `uuid` degli shot e la struttura dei panel rimangono invariati
-- **Spostare uno shot tra sequenze:**
-  - Aggiornare `sequence_uuid`
-  - Ricalcolare label basandosi sulla sequenza di destinazione
-  - Inserire alla posizione corretta (basata su `order_index`)
-- **Dividere una sequenza in due:**
-  - Creare una nuova sequenza dopo quella corrente
-  - Spostare tutti gli shot successivi al punto di split nella nuova sequenza
-  - Rinumerare gli shot spostati da SH010
-
-#### Reordering
-- Spostare uno shot aggiorna SOLO il suo `order_index`
-- La label NON cambia
-- L'UI mostra sempre gli elementi ordinati per `order_index`
-
-#### Salvataggio
-- Dati salvati nel file `.ztoryc` XML accanto al `.tnz`
-- Aggiungere campi: `<Shot uuid="..." label="..." order_index="..." sequence_uuid="..."/>`
-- Retrocompatibilità: se mancano i nuovi campi, generare UUID e label al caricamento
-
-**File:** `ztorymodel.h/.cpp` (struttura dati `ShotData`, `SequenceData`),
-`storyboardpanel.cpp` (UI numerazione, bottoni renumber), `ztorymodel.cpp`
-(save/load `.ztoryc`).
-
-**Nota:** implementazione in 3 fasi:
-1. Struttura dati + save/load `.ztoryc` (solo modello)
-2. UI Board: visualizza label, menu contestuale "renumber", modalità AUTO/KEEP
-3. Integrazione Animatic: label visibili sulle tracce
-
----
-
-### BUG — Crash SIGSEGV salvataggio TLV
-
-**Sintomo:** crash durante `Cmd+S` / Save All. Backtrace:
-`TLevelWriterTzl::TLevelWriterTzl` → `QString::QString(const&)` → SIGSEGV.
-Il crash è in `libimage.dylib` (bundle originale), non nel codice Ztoryc.
-
-**Causa sospetta:** incompatibilità ABI tra `libtnzcore` (nostro RelWithDebInfo)
-e `libimage` originale che usa layout diversi per alcune strutture Qt.
-Il `libimage` originale è patchato con `@executable_path/libtiff` ma potrebbe
-avere anche dipendenze da simboli Qt che il nostro `libtnzcore` espone
-diversamente in RelWithDebInfo vs Release.
-
-**Opzioni:**
-1. Build `libimage` in Release mode con rpath fixati (complesso, dipendenze system)
-2. Aggiungere `libimage` al deploy dopo aver fixato il rpath libtiff
-3. Investigare quali strutture Qt cambiano layout tra Debug/RelWithDebInfo
-
-**File:** `build_and_deploy.sh`, `image/tzl/tiio_tzl.cpp`, `libimage`
-
----
-
-### BUG — AutoFill fill colore: opzione picker dalla palette
-
-**Sintomo:** autofill usa sempre lo stile N+1 (hardcoded). Non c'è modo di
-scegliere un colore diverso per il fill dall'UI.
-
-**Cosa fare:** aggiungere `TEnumProperty m_autoFillStyle` (o `TIntProperty`)
-al brush tool, visibile nelle tool options accanto al checkbox AutoFill.
-Il combo si popola dinamicamente con gli stili della palette del livello corrente.
-Valore default: "next style" (N+1). Se la palette cambia, il combo si aggiorna.
-
-**File:** `toonzrasterbrushtool.h/.cpp`, `tooloptions.h/.cpp`
-
----
-
-### ~~Task 16 — Audio sync play~~ ✅ DONE 2026-03-28
-
-**Sintomo:** desync A/V residuo su animatici lunghi — "molto meglio" ma non
-perfetto. Causa: video timer (`PlaybackExecutor`) e `QAudioOutput` usano
-clock indipendenti → drift nel tempo.
-
-**Soluzione preferita (master clock audio):**
-Esporre `QAudioOutput::processedUSecs()` da `TSoundOutputDevice`, poi in
-`ZtoryAnimaticViewer::onDrawFrame` usarlo come master:
-```cpp
-qint64 audioUs = ctrl->mainXsheet()->getAudioPlayedUSecs();
-int audioFrame = m_playStartFrame + (int)(audioUs * fps / 1e6);
-if (audioFrame != currentFrame) ctrl->setAnimaticFrame(audioFrame);
-```
-**File da toccare:** `tsound.h`, `tsound_qt.cpp`, `txsheet.h/.cpp`,
-`ztoryanimatic.h/.cpp`.
-
-**Alternativa più semplice** (solo ztoryanimatic, nessuna modifica core):
-`QElapsedTimer` avviato al momento di `mainXsh->play()` come proxy del
-clock audio. Meno preciso ma non tocca file Tahoma2D core.
-
----
-
-### Task 9 — Audio export con lo shot
-
-**Cosa:** all'export di uno shot come `.tnz` autonomo, inserire
-automaticamente la porzione di audio corrispondente nella sub-scene.
-
-**Implementazione:**
-In `StoryboardPanel::onExportShots()`, prima di `IoCmd::saveScene(...)`:
-1. Trovare le colonne audio nel main xsheet.
-2. Estrarre le celle nel range `[shotStart, shotStart + duration - 1]`.
-3. Inserirle nella sub-scene a frame 0 come nuova sound column.
-4. Nome colonna: prefisso `_audio_main_` per indicarla come riservata.
-5. Dopo il save, rimuovere la colonna temporanea dalla sub-scene.
-
-**File:** `storyboardpanel.cpp` (`onExportShots`).
-**Pitfall:** usare `TXshSoundColumn` API specifiche, non `clearCells`/`setCell`.
-
----
-
-### Task 10 — X-Sheet guard: bloccare import audio nelle sub-scene
-
-**Cosa:** quando il workflow è Storyboard, impedire l'import di file audio
-nelle sub-scene (l'audio vive solo nel main xsheet).
-
-**Implementazione:**
-In `IoCmd::loadResources()` (o nel comando di import audio), aggiungere:
-```cpp
-if (TApp::instance()->getCurrentScene()->getScene()
-        ->getChildStack()->getAncestorCount() > 0
-    && ZtoryModel::isStoryboardWorkflow()) {
-    // mostra warning e return
+if (!m_scriptPanel->currentFilePath().isEmpty()) {
+    QString srcPath = m_scriptPanel->currentFilePath();
+    QString extrasDir = sceneDir + "/" + sceneName + "_extras/script/";
+    QDir().mkpath(extrasDir);
+    QString destPath = extrasDir + QFileInfo(srcPath).fileName();
+    if (srcPath != destPath) QFile::copy(srcPath, destPath);
+    QString relPath = QDir(sceneDir).relativeFilePath(destPath);
+    xml.writeAttribute("scriptFile", relPath);
 }
 ```
-**Nota:** `isStoryboardWorkflow()` attuale controlla il file `.ztoryc` —
-verificare che non dia falsi positivi quando si cambia workflow.
 
-**File:** `iocommand.cpp`, `ztorymodel.h/.cpp`.
-
----
-
-### Task 11 — Animatic Viewer toggle con ComboViewer
-
-**Cosa:** toggle button per condividere lo stesso spazio tra viewer animatic
-e viewer normale (risparmio schermo).
-
-**Implementazione:**
-- `QStackedWidget` con index 0 = `m_animViewer` (main xsheet), index 1 =
-  normale `SceneViewerPanel` (sub-scene).
-- Bottone "Animatic / Shot" in toolbar commuta tra i due.
-
-**Alternativa:** collapse button sul panel animatic viewer (più semplice).
-
-**File:** `ztoryanimatic.h/.cpp`.
-
----
-
-### NEW — Merge BOARD: collegare m_mergeButton a ZtoryModel
-
-**Stato:** bottone presente nella toolbar Board ma disabilitato (`setEnabled(false)`).
-Il merge esiste e funziona nell'ANIMATIC (`ZtoryAnimaticPanel::onMergeShots`) ma usa
-`m_track->selectedCols()` che dipende dalla selezione della track animatic.
-
-**Da implementare:** `StoryboardPanel::onMergeShots()` che:
-1. Legge le shot selezionate dal Board via `m_selectedIndices`
-2. Esegue la stessa logica di merge di `ZtoryAnimaticPanel::onMergeShots`
-3. Aggiorna ZtoryModel dopo il merge
-4. Propaga a tutti i panel (Board, Animatic) tramite segnali ZtoryModel
-
-**Importante:** merge è la stessa operazione in Board e Animatic — agisce sullo
-xsheet principale, unisce le sottoscene selezionate nella prima. Merge da Animatic
-deve aggiornare la griglia Board e viceversa.
-
-**File:** `storyboardpanel.h/.cpp`, `ztoryanimatic.cpp`, `ztorymodel.h/.cpp`.
-
----
-
-### NEW — Shortcut tastiera Cmd+C/X/V/Delete nel Board e Animatic
-
-**Cosa:** copy/cut/paste/delete da tastiera quando uno shot o segmento audio è
-selezionato, senza conflitti con le shortcut globali di Tahoma (CommandManager).
-
-- **Board:** intercettare su shot selezionati nella griglia (`m_selectedIndices`)
-- **Animatic:** intercettare su shot selezionati nella track + segmenti audio selezionati
-
-**Note:** usare `QKeyEvent` override nel panel, con guard che verifica che il focus
-sia dentro il panel prima di intercettare — evita conflitti con l'xsheet globale.
-
-**File:** `storyboardpanel.cpp` (`keyPressEvent`), `ztoryanimatic.cpp` (`keyPressEvent`).
-
----
-
-### NEW — Lock tracce audio: logica di blocco
-
-**Stato:** icone `ztoryc_lock.svg` / `ztoryc_lock_on.svg` pronte. Il bottone `L`
-è già disegnato via QPainter in `ZtoryAudioTrack::paintEvent` insieme a M e S.
-
-**Da implementare:** logica di lock che blocca la traccia audio impedendone la
-modifica accidentale (drag, cut, delete, edge trim disabilitati quando locked).
-
-**Implementazione:**
-- `ZtoryAudioTrack::m_locked` bool + toggle su click area `L`
-- In tutti i handler di modifica (drag, trim, delete): guard `if (m_locked) return;`
-- Feedback visivo: cursore `ForbiddenCursor` su hover quando locked
-
-**File:** `ztoryanimatic.h/.cpp` (`ZtoryAudioTrack`).
-
----
-
-### NEW — Undo/Redo via TUndoManager
-
-**Priorità:** implementare DOPO che ZtoryModel è consolidato come master unico.
-
-**Scope:** ogni operazione CRUD su shot (add, delete, merge, move, razor) deve
-registrare un comando undo via `TUndoManager`.
-
-**Pattern:**
+Load -- in loadZtoryc():
 ```cpp
-class UndoAddShot : public TUndo {
-  void undo() override { ZtoryModel::instance()->removeShot(m_idx); }
-  void redo() override { ZtoryModel::instance()->addShotAt(m_idx, m_data); }
-};
-TUndoManager::manager()->add(new UndoAddShot(...));
+QString relPath = xml.attributes().value("scriptFile").toString();
+if (!relPath.isEmpty()) {
+    QString absPath = QDir(sceneDir).absoluteFilePath(relPath);
+    if (QFile::exists(absPath)) m_scriptPanel->loadFile(absPath);
+}
 ```
 
-**File:** `ztorymodel.cpp` (ogni metodo CRUD), nuovo file `ztoryundo.h/.cpp`.
-**Stima:** 2-3h di lavoro dopo consolidamento ZtoryModel.
+Edge cases:
+- File gia in extras: nessuna copia, skip
+- File mancante al reload: warning non bloccante
+- Nessuno script importato: tag assente, nessun caricamento
+- File grande (>1MB): copia asincrona o progress bar
+- Reimportazione file diverso: sovrascrive il file in extras
+- Export shot: lo script NON viene incluso (appartiene alla scena)
+
+File: ztoryanimatic.h/.cpp (ZtoryScriptPanel: loadFile, currentFilePath),
+ztorymodel.cpp o storyboardpanel.cpp (saveZtoryc/loadZtoryc), .ztoryc XML.
 
 ---
 
-### Task 13d — Navigation tags sul ruler
+### PERF — Board thumbnail: rallentamento al switch Animatic <-> Board
 
-**Cosa:** tag colorati sul ruler (come nella timeline nativa) con label
-testuale. Solo visual + rename/drag per ora — nessuna logica sequence.
+**Priorita: ALTA | Tipo: PERF**
 
-**Implementazione:**
-- Copiare rendering da `RowArea::paintEvent` in `xsheetviewer.cpp`
-  (cerca `NavigationTag`, `navTag`).
-- Context menu: "Add tag", "Rename tag", "Delete tag".
-- Drag tag su nuovo frame.
-- Salvare sul main xsheet via `TXsheet::addNavigationTag(frame, name)`.
-- **NON** implementare sequence grouping — richiede design session separata.
+Sintomo: ogni switch Board/Animatic ricalcola tutte le anteprime da zero,
+causando rallentamento proporzionale al numero di shot.
 
-**File:** `ztoryanimatic.h/.cpp`.
-**Riferimento:** `xsheetviewer.cpp` `RowArea`.
+Step 1 -- Lazy loading + thread separato (impatto immediato):
+Generare solo le thumbnail visibili nel viewport; le altre in background
+via QThreadPool, risultato postato sul main thread con QMetaObject::invokeMethod.
 
-⚠️ **Design session necessaria prima** per definire come i tag si relazionano
-alle sequence del progetto (sq01, sq02…).
+```cpp
+void StoryboardPanel::requestThumb(int shotIndex, Priority p) {
+    QtConcurrent::run([this, shotIndex]() {
+        QImage thumb = renderThumb(shotIndex, QSize(240, 135));
+        QMetaObject::invokeMethod(this, [this, shotIndex, thumb]() {
+            m_thumbCache[shotIndex] = thumb;
+            updateCell(shotIndex);
+        }, Qt::QueuedConnection);
+    });
+}
+```
+
+Step 2 -- Cache su disco con invalidazione su mtime:
+Salva ogni thumbnail come PNG in <scena>_extras/thumbs/<uuid>.png.
+Chiave invalidazione: QFileInfo(subscenePath).lastModified().
+XML: <Shot uuid="..." thumbMtime="2026-05-10T14:32:00" .../>
+
+```cpp
+QString thumbPath = extrasDir + "thumbs/" + shot.uuid + ".png";
+QDateTime subMtime = QFileInfo(shot.subscenePath).lastModified();
+if (QFile::exists(thumbPath) && shot.thumbMtime == subMtime)
+    m_thumbCache[i] = QImage(thumbPath);
+else {
+    QImage thumb = renderThumb(i, QSize(240, 135));
+    thumb.save(thumbPath);
+    shot.thumbMtime = subMtime;
+    m_thumbCache[i] = thumb;
+}
+```
+
+Step 3 -- Flag dirty per invalidazione selettiva:
+ShotData.thumbDirty = true solo quando lo shot viene modificato.
+Al refresh Board: ricalcola solo i dirty, usa cache per gli altri.
+
+Step 4 -- Risoluzione fissa piccola:
+renderThumb() produce sempre 240x135 (16:9) o 160x120 (4:3).
+Mai passare frame full-res e scalare dopo.
+
+Edge cases:
+- Shot modificato mentre Board non visibile: flag dirty, ricalcolo al showEvent
+- Shot appena aggiunto: placeholder grigio, thumbnail in background
+- Shot cancellato: rimuovere PNG da extras e da cache in memoria
+- Piu di 100 shot: thread pool limitato a QThread::idealThreadCount()
+- Thumbnail corrotta: fallback, rigenera e sovrascrive
+
+Ordine: Step 1+4 prima (nessuna modifica al formato file), poi Step 3, poi Step 2.
+
+File: storyboardpanel.h/.cpp, ztorymodel.h/.cpp (thumbDirty, thumbMtime),
+.ztoryc save/load.
+
+---
+
+### PERF/BUG — Saturazione RAM su scene lunghe (>7000 ftg, 30+ shot)
+
+**Priorita: ALTA (era CRITICA) | Tipo: PERF + memory leak**
+**Stato al 2026-05-19: parzialmente risolto. Restano cause #1 e #4-5 da investigare.**
+
+#### Update 2026-05-19 — fix applicati
+
+| # | Causa | Stato | Commit |
+|---|-------|-------|--------|
+| 2 | TImageCache retention post-render | ✅ FIXED | be20f9512 (ImageManager::invalidateAllCached) |
+| 2b | Bundle CMake copiava 30GB seguendo symlink favorites | ✅ FIXED | bafa6a3b8 (rsync -a) |
+| 3 | Cache waveform senza cap (16MB/traccia su scene lunghe) | ✅ FIXED | e9b1912e6 (viewport sliding window 1200px) |
+| 3b | requireColumnSoundTrack allocava 1.27GB × traccia (audio file 2h × 18 tracce = 23GB) | ✅ FIXED | 69a8b9043 (cap at videoFrameCount) |
+| 3c | preBuildSoundTrackAsync race su m_mixedSound shared | ✅ FIXED | e5a927b53 (mixingTogether direct) |
+| 1 | Sub-scene mai scaricate (sospetto principale) | ❌ DA INVESTIGARE | — |
+| 4 | Thumbnail cache senza cap | ❌ DA VERIFICARE | — |
+| 5 | UndoBoardState snapshot accumulati | ❌ DA VERIFICARE | — |
+
+#### Sintomo originale
+
+Su scene lunghe (7000+ fotogrammi, 30+ shot) la RAM cresce progressivamente
+durante la sessione fino a saturare il sistema (>32GB). Il rallentamento
+e proporzionale alla durata della sessione, non solo alla dimensione della
+scena -- comportamento tipico di un memory leak.
+
+#### Osservazioni 2026-05-19
+
+- Bug RAM riprodotto anche in Tahoma2D vanilla (render MP4 e PNG sequence)
+  → conferma che le cause principali sono upstream, non Ztoryc-specific.
+- Su render PNG 350 frame: 10GB residui post-render → fixato con #2.
+- L'API `TImageCache::setMaxSize()` suggerita nel doc originale NON ESISTE:
+  TImageCache fa eviction solo su `TSystem::memoryShortage()` (troppo tardi
+  su Mac con RAM >= 32GB).
+
+#### Cause probabili (in ordine di sospetto)
+
+**1. Sub-scene mai scaricate dalla memoria (sospetto principale)**
+
+Quando si entra in uno shot (double-click), Tahoma carica la sub-scene
+completa in memoria: ToonzScene, TXsheet, tutti i livelli TLV, palette,
+cache di rendering. Se la sub-scene non viene deallocata correttamente
+all'uscita dallo shot, dopo N switch si hanno N scene caricate
+contemporaneamente. Con shot da centinaia di frame TLV, si arriva
+facilmente a decine di GB.
+
+Verifica: aprire Activity Monitor durante una sessione e misurare la RAM
+dopo ogni switch shot. Se cresce linearmente con il numero di switch,
+e quasi certamente questo.
+
+Fix: assicurarsi che ToonzScene / TXsheet della sub-scene vengano
+distrutti (non solo dereferenziati) all'uscita dallo shot. Verificare
+che non esistano shared_ptr o riferimenti circolari che impediscono
+la deallocazione. Usare weak_ptr dove appropriato.
+
+```cpp
+// In ZtoryAnimaticController::exitShot() o equivalente:
+void ZtoryAnimaticController::exitCurrentShot() {
+    if (m_currentSubScene) {
+        m_currentSubScene->clear(); // libera livelli e cache
+        m_currentSubScene.reset();  // distrugge ToonzScene
+    }
+    TImageCache::instance()->clear(); // svuota cache frame TLV
+}
+```
+
+**2. TImageCache di Tahoma senza limite (sospetto alto)**
+
+Tahoma mantiene una cache interna dei frame TLV renderizzati
+(TImageCache). Su una scena da 7000 fotogrammi con livelli TLV
+ad alta risoluzione, questa cache puo crescere senza limite se
+setMaxSize() non e impostato correttamente in ztoryc.
+
+Verifica: cercare TImageCache::instance()->setMaxSize() nel codice
+ztoryc. Se mancante o impostato a un valore troppo alto, e il problema.
+
+Fix: impostare un cap ragionevole all'avvio, proporzionale alla RAM
+disponibile del sistema (es. 25% della RAM fisica):
+
+```cpp
+// In ZtoryAnimaticController::initialize() o main ztoryc:
+qint64 physicalRam = /* QSysInfo o sysctl su macOS */;
+qint64 cacheMax = physicalRam / 4; // 25% della RAM fisica
+TImageCache::instance()->setMaxSize(cacheMax);
+
+// Svuotare esplicitamente la cache al cambio shot:
+void ZtoryAnimaticController::onShotChanged(int newCol) {
+    TImageCache::instance()->clear();
+    // poi caricare il nuovo shot
+}
+```
+
+**3. Cache waveform senza cap (sospetto medio)**
+
+Il task PERF-AUDIO implementa la cache waveform in QImage, ma se non
+c'e un limite alla dimensione totale della cache, su 7000 fotogrammi
+di audio la cache cresce indefinitamente.
+
+Fix: limite esplicito in MB sulla cache waveform totale, con LRU
+eviction per le tracce meno recenti:
+
+```cpp
+// In ZtoryAudioTrack o ZtoryModel:
+static constexpr qint64 MAX_WAVEFORM_CACHE_BYTES = 256 * 1024 * 1024; // 256MB
+// Se cache totale supera il limite, rimuovere le QImage piu vecchie
+```
+
+**4. Thumbnail cache senza cap (sospetto medio)**
+
+m_thumbCache e una QMap<int, QImage> senza limite. Con 100+ shot a
+240x135x4 bytes = ~130KB cadauna, 100 thumbnail = ~13MB (accettabile),
+ma se le QImage sono a risoluzione maggiore il problema si amplifica.
+Verificare la risoluzione effettiva delle QImage in cache.
+
+Fix: cap esplicito + LRU eviction (correlato al task PERF-BOARD):
+
+```cpp
+static constexpr int MAX_THUMB_CACHE_COUNT = 50;
+// Se m_thumbCache.size() > MAX: rimuovere la thumbnail con LRU timestamp
+```
+
+**5. UndoBoardState accumula snapshot non limitati (sospetto basso)**
+
+UndoBoardState salva snapshot dell'intero stato Board. Su sessioni
+lunghe con molte operazioni, la storia undo puo accumularsi.
+
+Fix: cap sulla storia undo (es. 50 operazioni max):
+
+```cpp
+// In ZtoryUndoManager o TUndoManager:
+TUndoManager::manager()->setHistorySize(50);
+```
+
+#### Piano di investigazione (da fare prima di fixare)
+
+Claude Code deve eseguire questi passi in ordine prima di implementare fix:
+
+1. Aggiungere logging temporaneo in exitCurrentShot() e enterShot():
+   ```cpp
+   qDebug() << "RAM before exit:" << getCurrentRamUsage() << "MB";
+   ```
+2. Aprire Activity Monitor, aprire la scena problematica, fare 5-6
+   switch tra shot diversi e misurare la crescita RAM tra un switch
+   e l'altro.
+3. Se la crescita e ~costante per switch: causa 1 (sub-scene leak).
+   Se cresce piu lentamente e poi accelera: causa 2 (TImageCache).
+   Se cresce solo durante playback: causa 3 (waveform cache).
+4. Identificata la causa principale, implementare il fix specifico.
+   Poi misurare di nuovo per verificare.
+
+#### Fix da implementare in ogni caso (indipendenti dalla causa)
+
+Questi fix sono sicuri da implementare subito senza investigazione:
+
+```cpp
+// 1. Cap TImageCache -- in initialize():
+TImageCache::instance()->setMaxSize(2LL * 1024 * 1024 * 1024); // 2GB max
+
+// 2. Clear TImageCache al cambio shot:
+connect(ZtoryModel::instance(), &ZtoryModel::currentShotChanged,
+        this, []() { TImageCache::instance()->clear(); });
+
+// 3. Cap storia undo:
+TUndoManager::manager()->setHistorySize(50);
+
+// 4. Cap thumbnail cache (vedi task PERF-BOARD):
+// Implementare LRU con MAX_THUMB_CACHE_COUNT = 50
+```
+
+#### Edge cases
+
+| Caso | Comportamento |
+|------|---------------|
+| Clear TImageCache troppo aggressivo | Rallentamento al primo frame dopo switch -- accettabile vs saturazione RAM |
+| Sub-scene con modifiche non salvate al clear | Chiedere conferma prima di scaricare, o salvare automaticamente |
+| RAM fisica < 8GB (sistemi modesti) | Cap TImageCache proporzionale: RAM/4 con minimo 512MB |
+| Playback lungo senza switch shot | TImageCache cresce durante il play -- clear periodico ogni N frame o su pausa |
+| Undo oltre il cap | Le operazioni piu vecchie vengono silenziosamente rimosse dalla storia |
+| Waveform cache invalidata da clear | Ricalcolo lazy al prossimo disegno del waveform -- nessun impatto visivo |
+
+**File:** ztoryanimatic.h/.cpp (exitCurrentShot, onShotChanged),
+ztorymodel.cpp (inizializzazione TImageCache cap),
+ztoryundo.h/.cpp (history size cap),
+storyboardpanel.cpp (thumb cache LRU).
+**Riferimento Tahoma:** timage_cache.h/.cpp, toonzscene.h/.cpp.
+
+---
+
+### NEW — Sistema In/Out Marker per shot (PREREQUISITO BLOCCANTE per Roll e Slide)
+
+**Priorita: ALTA**
+
+Motivazione: Roll e Slide sono non distruttivi solo con in/out marker separati
+dalla durata timeline. Senza di essi, accorciare uno shot cancella disegni.
+
+Modello (come DaVinci Resolve / Premiere):
+- Durata nella timeline = celle nel main xsheet
+- Contenuto reale = sub-scene sempre intatta
+- In/Out marker = porzione "attiva" della sub-scene
+
+Invariante fondamentale: duration_in_timeline == outPoint - inPoint
+
+Struttura dati -- aggiungere a ShotData in ztorymodel.h:
+```cpp
+int inPoint  = 0;   // frame sub-scene inizio porzione attiva
+int outPoint = -1;  // frame sub-scene fine (-1 = usa durata naturale)
+```
+
+Salvataggio XML: <Shot uuid="..." inPoint="0" outPoint="47" .../>
+Retrocompatibilita: se mancano i tag, inPoint=0, outPoint=durata-1.
+
+Rendering timeline:
+- Triangoli/tacche ai bordi del blocco per in/out
+- inPoint > 0: indicatore "contenuto nascosto a sinistra"
+- outPoint < durata_subscena-1: indicatore "contenuto nascosto a destra"
+- Tooltip: "In: 0 | Out: 47 | Sub-scene: 72 frames"
+
+matchSubsceneDuration: legge durata sub-scene, imposta outPoint=durata-1,
+aggiorna durata nel main xsheet.
+
+Export: se inPoint==0 && outPoint==durata-1: normale; altrimenti esporta
+solo [inPoint, outPoint].
+
+File: ztorymodel.h/.cpp, ztoryanimatic.cpp, storyboardpanel.cpp, .ztoryc.
+
+---
+
+### NEW — Roll Edit (RICHIEDE: In/Out Marker)
+
+**Priorita: MEDIA | Stima: 2-3h**
+
+Sposta il punto di taglio tra due shot adiacenti senza cambiare la durata
+totale della timeline. Shot A e B si scambiano frame via marker in/out.
+Contenuto interno intatto.
+
+UI: icona toolbar ztoryc_roll.svg, cursore doppia freccia, hit area +-8px
+sul bordo tra shot, overlay "+N/-N frames" durante drag, shortcut R.
+
+```cpp
+void ZtoryAnimaticPanel::onRollDrag(int colA, int colB, int delta) {
+    ShotData& a = ZtoryModel::instance()->shotData(colA);
+    ShotData& b = ZtoryModel::instance()->shotData(colB);
+    int newOutA = a.outPoint - delta;
+    int newInB  = b.inPoint  - delta;
+    if (newOutA < a.inPoint + 1) return;
+    if (newInB  > b.outPoint - 1) return;
+    if (newOutA > subsceneDuration(colA) - 1) return;
+    if (newInB  < 0) return;
+    a.outPoint = newOutA; b.inPoint = newInB;
+    updateMainXsheetDuration(colA, newOutA - a.inPoint + 1);
+    updateMainXsheetDuration(colB, b.outPoint - newInB + 1);
+    ZtoryModel::instance()->emitShotDurationChanged(colA);
+    ZtoryModel::instance()->emitShotDurationChanged(colB);
+}
+```
+Wrappare in UndoBoardState.
+
+Edge cases:
+- A o B collassa a 0: clamp + cursore rosso
+- A/B senza contenuto oltre i marker: clamp su subsceneDuration
+- Estremi timeline: funziona uguale
+- Audio linkato: spostare boundary sound column
+- Multi-selezione: agisce solo sui due shot adiacenti al click
+
+File: ztoryanimatic.h/.cpp, ztorymodel.h/.cpp, toonz.qrc.
+
+---
+
+### NEW — Slide Edit (RICHIEDE: In/Out Marker)
+
+**Priorita: MEDIA | Stima: 4-6h**
+
+Sposta lo shot selezionato nella timeline. Durata e contenuto di B invariati.
+Shot A e C adiacenti assorbono lo spostamento via marker in/out.
+
+UI: icona toolbar ztoryc_slide.svg, drag sul corpo centrale (non bordi),
+i vicini si ridisegnano live, shortcut U.
+
+```cpp
+void ZtoryAnimaticPanel::onSlideDrag(int colB, int delta) {
+    int colA = colB - 1; int colC = colB + 1;
+    if (colA < 0 || colC >= shotCount()) return;
+    ShotData& a = ZtoryModel::instance()->shotData(colA);
+    ShotData& c = ZtoryModel::instance()->shotData(colC);
+    int newOutA = a.outPoint + delta;
+    int newInC  = c.inPoint  + delta;
+    if (newOutA < a.inPoint + 1) return;
+    if (newOutA > subsceneDuration(colA) - 1) return;
+    if (newInC  > c.outPoint - 1) return;
+    if (newInC  < 0) return;
+    a.outPoint = newOutA; c.inPoint = newInC;
+    updateMainXsheetDuration(colA, newOutA - a.inPoint + 1);
+    updateMainXsheetDuration(colC, c.outPoint - newInC + 1);
+    ZtoryModel::instance()->emitShotDurationChanged(colA);
+    ZtoryModel::instance()->emitShotDurationChanged(colC);
+}
+```
+Wrappare in UndoBoardState.
+
+Edge cases:
+- B primo o ultimo: ForbiddenCursor, return immediato
+- A/C senza contenuto: clamp su subsceneDuration / 0
+- A/C collassa: durata minima 1 frame
+- Audio B linkato: shiftLevelFromFrame su sound column
+- Audio A/C: aggiornare boundary audio
+- Multi-selezione: agisce solo sullo shot sotto il cursore
+
+Nota: Slip non e tool separato -- gestito dai marker in/out dello shot.
+
+File: ztoryanimatic.h/.cpp, ztorymodel.h/.cpp, toonz.qrc.
+
+---
+
+### NEW — Doppio Viewer Contestuale (RICHIEDE: Roll e/o Slide)
+
+**Priorita: MEDIA**
+
+Layout automatico per modalita trim:
+  ROLL:  | OUT (fine shot A) | IN (inizio shot B) |
+  SLIDE: | PREV OUT          | NEXT IN            |
+  SLIP:  | PROGRAM           | SOURCE IN/OUT      |
+
+Attivazione automatica all'attivazione del tool, ritorno a singolo alla
+disattivazione. Scrub sincronizzato: mouse -> entrambi i viewer reagiscono.
+
+Bonus opzionale: filmstrip Slip con frame -2/-1/CURRENT/+1/+2.
+
+File: ztoryanimatic.h/.cpp (ZtorySplitViewer).
+
+---
+
+### NEW — Taglia/copia/incolla audio da tastiera
+
+Cmd+X/C/V/Delete per tracce audio. File: ztoryanimatic.cpp.
+
+---
+
+### NEW — Volume per traccia audio
+
+Slider/knob gain per-track. Campo float gain in ZtoryModel,
+letto in TXsheet::scrub. File: ztoryanimatic.h/.cpp, ztorymodel.h/.cpp, txsheet.cpp.
+
+---
+
+### NEW — Transizioni
+
+Dissolve tra shot, x/2 frame extra nella sub-scena.
+UI: handle di overlap sul bordo. File: ztoryanimatic.h/.cpp, ztorymodel.h/.cpp.
+
+---
+
+### NEW — Startup popup hub
+
+Riusare ZtoryStartup per New/Load/Load as Subscene.
+Cancel contestuale: "Quit Ztoryc?" se nessuna scena aperta.
+File: ztorystartup.h/.cpp, mainwindow.cpp.
+
+---
+
+### NEW — Navigation tags sul ruler
+
+Tag colorati con label. Riferimento: RowArea::paintEvent in xsheetviewer.cpp.
+Design session necessaria per relazione con sequenze.
+File: ztoryanimatic.h/.cpp.
+
+---
+
+## Ordine implementazione consigliato
+
+1. PERF/BUG RAM -- fix immediati (TImageCache cap + clear on shot change + undo cap)
+2. PERF/BUG RAM -- investigazione leak sub-scene (logging + Activity Monitor)
+3. BUG Script Panel -- fix rapido
+4. PERF Board thumbnail Step 1+4 -- lazy loading + thread + risoluzione fissa
+5. PERF Board thumbnail Step 3 -- flag dirty
+6. PERF Board thumbnail Step 2 -- cache su disco
+7. In/Out Marker -- prerequisito bloccante per Roll/Slide
+8. Roll
+9. Slide
+10. Doppio Viewer
 
 ---
 
 ## Priority Order
 
-### Bug immediati (nessun design necessario)
-0. ~~**BUG Crash salvataggio TLV**~~ ✅ DONE 2026-04-01 (libimage deploy con rpath patch)
-1. ~~**BUG Board desync**~~ ✅ DONE 2026-04-06 (da testare) — sincronizzazione bidirezionale; completamento con task #10 (numerazione)
-2. ~~**BUG Razor audio gap**~~ ✅ DONE 2026-03-31
-3. ~~**BUG Ghost onion skin**~~ ✅ DONE (data da confermare)
-4. ~~**BUG Camera resize**~~ ✅ DONE (data da confermare)
-5. ~~**PERF Audio pesante**~~ ✅ DONE — cache waveform pre-renderizzata
-6. ~~**BUG AutoFill fill color**~~ ✅ DONE 2026-04-08 — TEnumProperty m_autoFillStyle "Next Style (N+1)" | "Current Style" in toolbar brush
+31. PERF/BUG Saturazione RAM (CRITICA) -- fix immediati prima, poi investigazione leak
+29. ~~BUG Script Panel~~ ✅ DONE 2026-05-22
+30. PERF Board thumbnail cache (ALTA)
+20. NEW Audio cut/copy/paste tastiera
+21. NEW Volume traccia audio
+22. NEW Transizioni
+24. NEW Startup popup hub
+25. NEW In/Out Marker (PREREQUISITO Roll/Slide)
+26. NEW Roll Edit
+27. NEW Slide Edit
+28. NEW Doppio Viewer Contestuale
 
-### Feature immediate (prossime sessioni)
-7. ~~**NEW Merge Board**~~ ✅ DONE 2026-04-06 — m_mergeButton collegato a ZtoryModel
-8. ~~**NEW Shortcut Cmd+C/X/V/Delete**~~ ✅ DONE 2026-04-19 — Board e Animatic: two-phase eventFilter, shared clipboard, shared selection
-9. ~~**NEW Lock tracce audio**~~ ✅ DONE — lock già funzionante
-10. ~~**NEW Numerazione SQ/SH/P**~~ ✅ DONE 2026-04-25 — sistema completo Sequence/Simple: SQ default "01", SQ nascosto in Simple, resetOnSeqChange, config dialog
-11. ~~**Task 9**~~ ✅ DONE 2026-04-20 — Audio export con shot (fix compilazione + frame offset)
-12. ~~**Task 11**~~ ✅ DONE 2026-05-01 — Viewer toggle: ZtoryAnimaticViewerPanel QStackedWidget, ZtoryLeftPanel (Board/XSheet), ZtoryRightPanel (Script+Browser/Palette), doppio click in/out shot mode, setEmbedded() fix
-12b. ~~**BUG testi dialog/action/notes persi al reload**~~ ✅ DONE 2026-05-01 — `syncWidgetsToData()` chiamata in `saveZtoryc()` prima del write XML; il handler `dataChanged` non aggiornava `data.panels[pi].dialog/action/notes` prima del salvataggio
-12c. ~~**Export Animatic: rimosso pulsante Output Settings**~~ ✅ DONE 2026-05-01 — sostituito con label read-only formato/fps/res + nota "change via Render > Output Settings"
-12d. ~~**BUG Audio toggle in sub-scena**~~ ✅ DONE 2026-05-01 — `stopNativeAudio()` in `execute()` + `restartNativeAudioIfPlaying()` su re-enable
-13. ~~**NEW Undo/Redo**~~ ✅ DONE 2026-05-01 — UndoBoardState snapshot-based; Board+Animatic CRUD completo; fix column bug updatePreview; fix Board preview refresh su showEvent e xsheetChanged-in-sub-scene
-14. ~~**FIX Mark-out a fine timeline all'avvio**~~ ✅ DONE 2026-05-01 — `resetPlayRangeToFull()` chiamata su `sceneSwitched` in ZtoryAnimaticPanel
-15. ~~**FIX Onion skin rimosso dalla toolbar animatic**~~ ✅ DONE 2026-05-01 — rimosso onionBtn + connect da ZtoryAnimaticPanel
-
-### Task prossimi
-16. ~~**NEW Workflow startup page**~~ ✅ DONE 2026-05-02
-17. ~~**FIX Stop marker update immediato all'entrata nello shot**~~ ✅ DONE 2026-05-02
-18. ~~**FIX Zoom rotella solo sul ruler**~~ ✅ DONE 2026-05-02
-19. ~~**FIX Cursore resize sul margine traccia**~~ ✅ DONE 2026-05-02 — SizeHorCursor su video (mouseMoveEvent) e audio (WA_Hover + event())
-20. **NEW Taglia/copia/incolla audio da tastiera** — Cmd+X/C/V/Delete per le tracce audio (analoga logica Board/Animatic video)
-21. **NEW Volume per traccia audio** — slider o knob per il gain per-track (richiede aggiunta campo in ZtoryModel e lettura in TXsheet::scrub)
-22. **NEW Transizioni** — dissolve tra shot con aggiunta automatica di x/2 frame extra nella sub-scena; UI: handle di overlap sul bordo del blocco
-23. ~~**NEW Layout template per ogni workflow**~~ ✅ DONE 2026-05-02 (Storyboard) — template Storyboard aggiornato con layout produzione di francobianco (ztoryc.ini + browser.ini). StopMotion già aveva template DragonFrame-style. Tradigital/Cutout: room1-6.ini già in repo, nessun aggiornamento necessario ora. Il meccanismo getRoomsFile() con fallback da user dir a template dir è già in produzione.
-24. **NEW Startup popup come hub scene management** — Riusare ZtoryStartup per New/Load/Subscene:
-    - `New Scene` → apre popup tab "Create New" (comportamento attuale)
-    - `Load Scene` → apre popup tab "Open Scene" (lista .tnz senza browser classico)
-    - `Load Scene as Subscene` → stessa tab "Open Scene" ma carica come sub-scene della scena corrente
-    - Bottone **Cancel** contestuale: se nessuna scena aperta (avvio) → "Quit Ztoryc?"; se scena aperta → chiude popup
-    - `File > Import > Import Assets...` → browser classico (per import asset avanzato)
-    - Vantaggi: un solo widget, mostra solo .tnz, UX più pulita rispetto al file browser nativo
-
-### Milestone roadmap
-- **Early Beta (v0.2):** ~~Undo/Redo (task 13)~~ ✅ ~~audio toggle (12d)~~ ✅ → rilascio
-- **M2 Timeline/Animatic:** TFrameHandle dedicato per animatic viewer, Zoom ruler adattivo, Export Animatic → render
-- **M3 Shot Editor avanzato:** Quick-shot selector dropdown, Export PDF con preview reali
-- **M4 Room REFERENCE:** canvas PureRef-style (QGraphicsScene), drag&drop immagini/GIF/video,
-  salvataggio path nel `.ztoryc` — Qt nativo, no Electron/WebEngine
-- **M5 Kitsu Integration:** push shot come task, sync stato, note revisione
-  (server kitsu.ztoryc.org già attivo su Mac mini M4)
+Milestone:
+- M2: In/Out Marker, Roll, Slide, Doppio Viewer, Export render
+- M3: Quick-shot selector, Export PDF
+- M4: Room REFERENCE (canvas PureRef-style)
+- M5: Kitsu Integration (kitsu.ztoryc.org su Mac mini M4)
 
 ---
 
-## Reference: Current File Structure
+## File Structure
 
-```
-toonz/sources/toonz/storyboardpanel.h/.cpp   — Board room, shot grid UI
-toonz/sources/toonz/ztorymodel.h/.cpp        — Singleton data model
-toonz/sources/toonz/ztoryanimatic.h/.cpp     — Animatic panel + viewer
-toonz/sources/toonz/ztorystartup.h/.cpp      — Startup dialog (NEW 2026-03-21)
-toonz/sources/toonz/ztorybackpanel.h/.cpp    — Back to storyboard button
-toonz/sources/toonz/icons/dark/ztoryc/      — Icone SVG Ztoryc (21 file)
-toonz/sources/toonz/toonz.qrc               — Registrazione icone SVG
-toonz/sources/stopmotion/webcam.h/.cpp       — Webcam + AVCapture
-toonz/sources/toonzqt/txshsoundcolumn.h/.cpp — Audio column (shiftLevelFromFrame)
-toonz/sources/image/tzl/tiio_tzl.cpp         — TLV save (assert fixes)
-toonz/sources/toonz/mainwindow.cpp           — Workflow switch + RecentFiles cap
-```
+toonz/sources/toonz/storyboardpanel.h/.cpp   -- Board room
+toonz/sources/toonz/ztorymodel.h/.cpp        -- Singleton data model
+toonz/sources/toonz/ztoryanimatic.h/.cpp     -- Animatic panel + viewer
+toonz/sources/toonz/ztorystartup.h/.cpp      -- Startup dialog
+toonz/sources/toonz/icons/dark/ztoryc/       -- SVG icons (21 files)
+toonz/sources/toonz/toonz.qrc               -- Icon registration
+toonz/sources/stopmotion/webcam.h/.cpp       -- Webcam + AVCapture
+toonz/sources/toonzqt/txshsoundcolumn.h/.cpp -- Audio column
+toonz/sources/image/tzl/tiio_tzl.cpp        -- TLV save
+toonz/sources/toonz/mainwindow.cpp           -- Workflow switch
+toonz/sources/toonzlib/timage_cache.h/.cpp  -- TImageCache (riferimento per cap RAM)
+toonz/sources/toonzlib/toonzscene.h/.cpp    -- ToonzScene (riferimento per leak sub-scene)

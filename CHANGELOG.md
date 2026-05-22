@@ -6,7 +6,72 @@
 > Voci più vecchie di ~2 settimane → spostarle in `CHANGELOG_ARCHIVE.md`.
 
 ---
-## [2026-05-21] — Build Windows funzionante + pacchetti macOS/Windows
+## [2026-05-22] — Main Audio toggle: riscrittura completa + Script panel persistente
+
+### Contesto
+Il toggle Main Audio (sovrappone la colonna sonora del main a uno shot, serve
+per il lavoro di lipsync) aveva una serie di problemi: audio di scene
+precedenti, tracce cancellate ancora udibili, scrub diverso dal play, scrub
+impreciso. Riscrittura in 4 fasi A/B/C/D. In più, persistenza dello Script
+panel (sceneggiatura importata).
+
+### Fixed — audio cache (Fase A)
+- `m_columnSoundTracks` era indicizzata per numero di colonna: dopo delete/
+  riordino di una colonna audio l'indice puntava alla traccia sbagliata o
+  cancellata. Ora chiave = puntatore `TXshSoundColumn*`.
+- `preBuildSoundTrackAsync()` scriveva il risultato con `if (!m_soundTrack)`:
+  dopo `invalidateSoundTrack()` (cambio scena) `m_soundTrack` è null, quindi
+  una build della scena PRECEDENTE veniva scritta nella corrente — l'audio
+  fantasma. Aggiunto generation counter (`m_soundGen`): l'async scarta il
+  risultato se la generazione è cambiata.
+- Aggiunto `validateSoundCache()`: fingerprint delle colonne audio (puntatori
+  + lunghezze); `requireSoundTrack`/`startPerColumnAudio`/`preBuildSound
+  TrackAsync` lo chiamano e auto-invalidano la cache su qualsiasi modifica.
+
+### Fixed — comportamento toggle (Fasi B + C)
+- `onFrameSwitched` riproduceva l'audio SOLO con toggle ON (`&& mainAudio
+  Enabled`): con OFF lo shot era muto. Tolto il gate — il viewer nativo
+  riproduce sempre l'audio della sua xsheet; `hasSoundtrack()` decide la
+  sorgente.
+- `ownsSubSceneAudio()` valeva solo a profondità 1. Ora: OFF → false (audio
+  sub-scena), ON → true a qualsiasi profondità (audio main).
+- `onNativeFrameSwitched()` usciva se profondità ≠ 1. `ChildStack::getAncestor()`
+  chaina già tutti i livelli → limite rimosso, funziona a ogni profondità.
+- `TXsheet::scrub()` aveva il gate invertito (suonava solo con ON). Ora cede
+  solo quando il controller possiede l'audio (ON + sub-scena).
+- Logica finale = come il toggle video: ON = solo audio main, OFF = audio
+  della sotto-scena corrente.
+
+### Fixed — precisione scrub (Fase D)
+- Finestra di scrub estesa da 1 frame (~41 ms, impercettibile) a ~150 ms.
+- Scrub gapless: non si interrompe più il segmento in corso (interromperlo
+  tagliava la parte centrale — "articolo" → "art--olo"); il segmento
+  successivo riparte da dove l'audio era arrivato. Applicato a entrambi i
+  percorsi (toggle ON e OFF).
+
+### Fixed — colori anteprime Board
+- `IconGenerator::renderXsheetFrame` applicava `rgbSwapped()` → R/B scambiati,
+  un rosa diventava azzurro. Rimosso lo swap (le funzioni canoniche di Tahoma
+  non lo fanno).
+
+### Added — Script panel persistente
+- All'import, la sceneggiatura (.fdx/.txt) viene copiata in
+  `<progetto>/extras/script/`; il path relativo è salvato nel `.ztoryc`
+  (`<scriptFile>`).
+- `StoryboardPanel::saveZtoryc/loadZtoryc` (i veri reader/writer del `.ztoryc`)
+  gestiscono il tag; `loadZtoryc` chiama sempre `setScriptFile` → aprendo una
+  scena senza sceneggiatura (o una scena nuova) il panel si svuota.
+- `ZtoryModel::scriptFileChanged` pilota il reload del panel e il salvataggio
+  del `.ztoryc` (un File>Save semplice non chiama saveZtoryc).
+
+### Upstream candidates
+- `onActiveViewerChanged` parentWidget-chain null guard, `BaseViewerPanel`
+  preview button init — entrambi fixati per il crash Windows, validi upstream.
+
+### Notes
+- Build #11 Windows + DMG macOS rigenerati a fine sessione.
+
+
 
 ### Contesto
 La build Windows era rotta da mesi (silenziosamente: lo script non propagava
