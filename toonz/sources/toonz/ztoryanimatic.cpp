@@ -5115,6 +5115,14 @@ void ZtoryAnimaticPanel::onRollEdit(int colA, int newDurA, int colB, int newDurB
 
 
 void ZtoryAnimaticPanel::onShotDurationChanged(int col, int newF1) {
+  // Belt-and-suspenders: if newF1 somehow arrives < 0 the duration becomes
+  // 0 or negative and removeCells() would wipe the entire column — i.e.
+  // delete the shot's cells from the main xsheet.  The drag math already
+  // clamps to >= 1 frame but a defensive check here makes that impossible
+  // to bypass via any other code path or future regression.  A user reported
+  // "adjusted scene length and everything disappeared" on Windows.
+  if (newF1 < 0) return;
+
   StoryboardPanel *board = findBoardPanel();
   std::vector<ZtoryShotSnap> before;
   if (board) before = board->captureSnapshot();
