@@ -760,7 +760,15 @@ void ZtoryModel::resequenceXsheet() {
         break;
       }
     }
-    if (!cl) { startFrame += duration; continue; }
+    // Audio (or any non-child-level) columns are independent of the shot
+    // timeline — they stay where they are and must NOT contribute to
+    // startFrame.  The previous version bumped startFrame by the audio
+    // column's range, so a single sound column (e.g. a 1000-frame voice
+    // track) pushed every subsequent SHOT 1000 frames down the main xsheet:
+    // the shots survived but vanished from the visible range — exactly the
+    // tester's "timeline wiped itself" / "adjusted length and everything
+    // disappeared" reports.
+    if (!cl) continue;
     for (int r = 0; r <= maxFrames; r++) xsh->clearCells(r, col);
     for (int r = 0; r < duration; r++)
       xsh->setCell(startFrame + r, col, TXshCell(cl, TFrameId(r + 1)));
