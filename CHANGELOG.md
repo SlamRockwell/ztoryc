@@ -6,6 +6,25 @@
 > Voci più vecchie di ~2 settimane → spostarle in `CHANGELOG_ARCHIVE.md`.
 
 ---
+## [2026-05-24] — Sessione breve: sync task list da Drive
+
+### Notes
+- Sessione post-compact molto carica di contesto, nessuna modifica al codice.
+- Letta la nuova `ANIMATIC_TASKS (1).md` (2026-05-23) preparata da Claudio su
+  Drive. La nuova Priority Order mette in cima:
+  1. MOD UI Headers (viewer contestuale, left `BOARD/SHOT`, right `SCRIPT/PALETTE`)
+  2. NEW Single-instance guard (`QLockFile` in `main.cpp`)
+  3. NEW Room "Ztoryc T" + Panel Navigator + rinomina "Ztoryc X" +
+     rimozione Browser dal right panel di entrambe le room
+  4. PERF Board thumbnail cache (lazy + thread + dirty + disco)
+  5. PERF/BUG RAM causa 1 — sub-scene leak su scene lunghe
+- Task in sospeso dalla sessione precedente (rimozione Browser dal right
+  panel + zoom-out timeline illimitato) restano da fare: la rimozione
+  Browser ora è formalizzata dentro il task "Ztoryc T" e va applicata a
+  entrambe le room, non solo a quella corrente.
+- Chiusura sessione per ripartire pulito al prossimo turno.
+
+---
 ## [2026-05-22] — Main Audio toggle: riscrittura completa + Script panel persistente
 
 ### Contesto
