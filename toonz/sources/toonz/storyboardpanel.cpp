@@ -48,6 +48,7 @@
 #include <set>
 #include <QLabel>
 #include <QTextEdit>
+#include <QPlainTextEdit>
 #include <QPushButton>
 #include <QToolButton>
 #include <QSpinBox>
@@ -1716,6 +1717,16 @@ bool StoryboardPanel::eventFilter(QObject *obj, QEvent *e) {
   for (QWidget *w = fw; w; w = w->parentWidget())
     if (w == this) { inPanel = true; break; }
   if (!inPanel) return false;
+
+  // CRITICAL: if the focused widget is a text editor, let it handle every key
+  // itself.  Without this, typing Backspace while editing Dialogue/Action/
+  // Notes was intercepted as "delete shot" — the whole shot got wiped on a
+  // routine backspace.  Same protection for Cmd+C/X/V (native text copy/cut/
+  // paste should not become shot operations either).
+  if (qobject_cast<QTextEdit *>(fw)   ||
+      qobject_cast<QPlainTextEdit *>(fw) ||
+      qobject_cast<QLineEdit *>(fw))
+    return false;
 
   // Require at least one shot selected
   if (m_selectedShotIndex < 0 && m_selectedIndices.empty()) return false;
