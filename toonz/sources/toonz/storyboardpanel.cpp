@@ -2,6 +2,7 @@
 
 #include "tundo.h"
 #include "tapp.h"
+#include "tenv.h"
 #include "toonz/toonzscene.h"
 #include "toonz/txsheet.h"
 #include "toonz/tscenehandle.h"
@@ -75,6 +76,10 @@
 #include "toutputproperties.h"
 #include "toonz/sceneproperties.h"
 #include "menubarcommandids.h"
+
+// Persisted number of columns in the Board grid (the spin in the toolbar).
+// Stored in user env so the layout is remembered across sessions.
+TEnv::IntVar ZtoryBoardColumns("ZtoryBoardColumns", 3);
 
 // Strip leading alphabetic characters from a label; optionally capture the prefix.
 // E.g. "SH010" → "010" (prefix="SH"),  "010" → "010" (prefix=""),  "SQ001" → "001"
@@ -478,7 +483,9 @@ void PanelWidget::dropEvent(QDropEvent *e) {
 
 StoryboardPanel::StoryboardPanel(QWidget *parent)
     : TPanel(parent)
-    , m_columnsPerRow(3)
+    // Restore the user's column-count preference (default 3, clamped to the
+    // spin's [1, 8] range).  The spin is created later with this value.
+    , m_columnsPerRow(qBound(1, (int)ZtoryBoardColumns, 8))
     , m_selectedShotIndex(-1)
     , m_fps(24)
     , m_autoRenumber(true)
@@ -2623,6 +2630,7 @@ void StoryboardPanel::onMoveShot(int fromShot, int toShot) {
 
 void StoryboardPanel::onColumnsChanged(int value) {
   m_columnsPerRow = value;
+  ZtoryBoardColumns = value;  // persist across sessions
   rebuildGrid();
 }
 
