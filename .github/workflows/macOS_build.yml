@@ -483,12 +483,8 @@ jobs:
           artifacts: ${{ steps.release_dmgs.outputs.mactel }},${{ steps.release_dmgs.outputs.silicon }}
           artifactContentType: "raw"
           name: Ztoryc ${{ steps.release_version.outputs.tag }}
-          body: |
-            Ztoryc macOS **${{ steps.release_version.outputs.tag }}** — Intel (x86_64) and Apple Silicon (arm64) portable DMGs.
-
-            Filenames include app semver from `toonz/cmake/ZtorycVersion.cmake` (`Ztoryc-${{ steps.release_version.outputs.semver }}-portable-osx-*.dmg`).
-
-            Built from commit ${{ github.sha }}.
+          omitBodyDuringUpdate: true
+          omitNameDuringUpdate: true
           prerelease: false
           replacesArtifacts: true
           tag: ${{ steps.release_version.outputs.tag }}
