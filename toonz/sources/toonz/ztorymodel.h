@@ -158,6 +158,12 @@ public:
   void removeShot(int shotIdx);
   void moveShot(int fromIdx, int toIdx);
   void cloneShot(int shotIdx);
+  // Sync panel data (and optionally the shot label + xsheet column) from the
+  // Board into ZtoryModel.  Updates m_shots[si].panels and resizes
+  // m_previews[si].  Grows m_shots if needed.  When label is non-empty it is
+  // written to shotLabel/shotNumber.  xsheetCol = -1 means "don't update".
+  void syncShotPanels(int si, const std::vector<PanelData> &panels,
+                      const QString &label = {}, int xsheetCol = -1);
 
   // ── Numerazione / Labelling ───────────────────────────────────────────────
   void    renumberAll();                    // full renumber using m_numberingConfig

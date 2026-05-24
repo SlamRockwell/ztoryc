@@ -559,9 +559,61 @@ private:
   QMetaObject::Connection m_audioConn;
 };
 
+// ---- ZtoryPanelNavigator ----
+// Shot panel navigator for the ZTORYC T drawing room.
+// Shows the active panel of the current shot as a large preview with
+// prev/next navigation, editable Dialog/Action/Notes fields, and a
+// "Sync timeline" toggle that links panel selection to the native playhead.
+class QTextEdit;
+class QTimer;
+class ZtoryPanelNavigator : public TPanel {
+  Q_OBJECT
+public:
+  explicit ZtoryPanelNavigator(QWidget *parent = nullptr);
+
+protected:
+  void resizeEvent(QResizeEvent *e) override;
+  void showEvent(QShowEvent *e) override;
+
+public slots:
+  void onShotActivated(int col);
+  void onReturnToMain();
+  void onShotDataChanged(int shotIdx);
+  void onModelReset();
+  void onFrameSwitched();
+  void onXsheetChanged();
+
+private:
+  void setActivePanel(int panelIdx, bool updateFrame = false);
+  void refreshPreview();
+  void refreshTextFields();
+  void refreshActivePanelFromFrame();
+  void refreshInfoLabels();    // updates header + panel info + shot info
+  void syncFromScene();        // (re)bind m_shotIdx to whatever sub-scene we're in
+
+  int           m_shotIdx      = -1;
+  int           m_panelIdx     = 0;
+  bool          m_syncEnabled  = true;
+  bool          m_blockSignals = false;
+
+  QLabel       *m_headerLabel      = nullptr;
+  QLabel       *m_previewLabel     = nullptr;
+  QLabel       *m_panelCountLabel  = nullptr;
+  QLabel       *m_panelInfoLabel   = nullptr;  // "P001 - 24f / 1.0s"
+  QLabel       *m_shotInfoLabel    = nullptr;  // "Total: 48f / 2.0s - 2 panels"
+  QToolButton  *m_prevBtn          = nullptr;
+  QToolButton  *m_nextBtn          = nullptr;
+  QTextEdit    *m_dialogField      = nullptr;
+  QTextEdit    *m_actionField      = nullptr;
+  QTextEdit    *m_notesField       = nullptr;
+  QToolButton  *m_syncBtn          = nullptr;
+  QTimer       *m_refreshTimer     = nullptr;
+  QPixmap       m_cachedPreview;
+};
+
 // ---- ZtoryRightPanel ----
 // Single panel that shows the animatic-mode or shot-mode right column.
-//   Page 0 (animatic): Script viewer + File Browser + Record Audio button
+//   Page 0 (animatic): Script viewer + Record Audio button
 //   Page 1 (shot):     Studio Palette + Style Editor + Level Palette
 // Links to the viewer toggle via ZtoryModel::shotActivatedForViewing.
 class ZtoryScriptView;
@@ -594,6 +646,7 @@ private:
 // viewer toggle (ZtoryModel::shotActivatedForViewing / returnToViewerMainRequested).
 class StoryboardPanel;
 class XsheetViewerPanel;
+class TimelineViewerPanel;
 class ZtoryLeftPanel : public TPanel {
   Q_OBJECT
 public:
@@ -609,6 +662,31 @@ private:
   QStackedWidget    *m_stack       = nullptr;
   QToolButton       *m_toggleBtn   = nullptr;
   QToolButton       *m_linkBtn     = nullptr;
+};
+
+
+// ---- ZtoryDrawLeftPanel ----
+// Left panel for the ZTORYC T (drawing) room.
+// Toggles between Board (page 0) and the Photoshop-style Navigator (page 1).
+// There is no XSheet toggle here — drawing context does not need it.
+class ZtoryDrawLeftPanel : public TPanel {
+  Q_OBJECT
+public:
+  ZtoryDrawLeftPanel(QWidget *parent = nullptr);
+
+protected:
+  void showEvent(QShowEvent *e) override;
+
+public slots:
+  void showBoardMode();
+  void showNavigatorMode();
+
+private:
+  StoryboardPanel      *m_boardPanel  = nullptr;
+  ZtoryPanelNavigator  *m_navigator   = nullptr;
+  QStackedWidget       *m_stack       = nullptr;
+  QToolButton          *m_toggleBtn   = nullptr;
+  QToolButton          *m_linkBtn     = nullptr;
 };
 
 // ---- ZtoryAnimaticViewerPanel ----
@@ -637,6 +715,7 @@ protected:
 
 private:
   void restoreAnimaticButtons();
+  void updateTitle();   // "Animatic - <scene>" in animatic mode, "SQxx_SHxxx" in shot mode
   ZtoryAnimaticViewer *m_viewer     = nullptr;
   ComboViewerPanel    *m_shotViewer = nullptr;
   QStackedWidget      *m_stack      = nullptr;
@@ -653,7 +732,7 @@ private:
 class ZtoryAnimaticPanel : public TPanel {
   Q_OBJECT
 public:
-  ZtoryAnimaticPanel(QWidget *parent = nullptr);
+  ZtoryAnimaticPanel(QWidget *parent = nullptr, bool switchEnabled = false);
   void refreshFromScene();
 protected:
   void showEvent(QShowEvent *e) override;
@@ -682,6 +761,8 @@ private slots:
   void onFrameChanged(int frame);
   void onAudioRazorRequested(int col, int frame);
   void onSegmentDroppedOutside(int srcCol, int origR0, int origR1, int dragOffset, QPoint globalPos);
+  void showShotTimeline();
+  void showAnimaticTimeline();
 
 public:
   void refreshAudioTracks();
@@ -696,6 +777,8 @@ private:
   // ── Clipboard per Cmd+C/X/V ──────────────────────────────────────────────
   // Clipboard is now shared with StoryboardPanel via ZtoryModel::sharedClip().
 
+  QStackedWidget       *m_outerStack    = nullptr;
+  TimelineViewerPanel  *m_timelinePanel = nullptr;
   ZtoryAnimaticRuler *m_ruler;
   ZtoryAnimaticTrack *m_track;
   QWidget *m_scrollContent = nullptr;
@@ -710,6 +793,7 @@ private:
   bool   m_panning         = false;
   QPoint m_panAnchorGlobal;
   int    m_panAnchorScrollX = 0;
+  bool m_switchEnabled  = false;  // true in ZtoryAnimaticT (ZTORYC T room)
   bool m_refreshing = false;      // re-entrancy guard for refreshFromScene
   bool m_refreshingAudio = false; // re-entrancy guard for refreshAudioTracks
   // Per-column mute/solo/lock state — persists across refreshAudioTracks() rebuilds

@@ -715,6 +715,33 @@ StoryboardPanel::StoryboardPanel(QWidget *parent)
           this, &StoryboardPanel::onShotInserted);
   connect(ZtoryModel::instance(), &ZtoryModel::shotRemovedAt,
           this, &StoryboardPanel::onShotRemovedAt);
+  // Reflect ZtoryModel text-field changes (typed in the Shot Board) back into
+  // the Board's PanelWidgets so the two views stay in sync. m_updating guards
+  // against echoes when the change originated from this Board.
+  connect(ZtoryModel::instance(), &ZtoryModel::shotDataChanged, this,
+          [this](int si) {
+    if (m_updating) return;
+    if (si < 0 || si >= (int)m_shots.size()) return;
+    const auto &mPanels = ZtoryModel::instance()->shot(si).panels;
+    auto &shot = m_shots[si];
+    for (int pi = 0; pi < (int)shot.panels.size() && pi < (int)mPanels.size() &&
+                     pi < (int)shot.data.panels.size(); pi++) {
+      const PanelData &src = mPanels[pi];
+      PanelData       &dst = shot.data.panels[pi];
+      if (dst.dialog != src.dialog) {
+        dst.dialog = src.dialog;
+        shot.panels[pi]->setDialog(src.dialog);
+      }
+      if (dst.action != src.action) {
+        dst.action = src.action;
+        shot.panels[pi]->setAction(src.action);
+      }
+      if (dst.notes != src.notes) {
+        dst.notes = src.notes;
+        shot.panels[pi]->setNotes(src.notes);
+      }
+    }
+  });
   // Debounce timer per refresh thumbnail
   QTimer *refreshTimer = new QTimer(this);
   refreshTimer->setSingleShot(true);
@@ -825,6 +852,22 @@ void StoryboardPanel::connectPanelWidget(PanelWidget *pw) {
       for (PanelWidget *p : m_shots[si].panels)
         p->setShotNumber(m_shots[si].data.label());
       updateColumnName(si);
+      // Sync text fields (dialog/action/notes) from the PanelWidget to the
+      // data model, then push to ZtoryModel so the Shot Board (and any other
+      // listener) sees the change live.
+      if (pi >= 0 && pi < (int)m_shots[si].data.panels.size() &&
+          pi < (int)m_shots[si].panels.size()) {
+        PanelWidget *pw = m_shots[si].panels[pi];
+        PanelData   &pd = m_shots[si].data.panels[pi];
+        pd.dialog = pw->dialog();
+        pd.action = pw->action();
+        pd.notes  = pw->notes();
+      }
+      m_updating = true;  // guard against shotDataChanged echo
+      ZtoryModel::instance()->syncShotPanels(si, m_shots[si].data.panels,
+                                             m_shots[si].data.shotLabel,
+                                             m_shots[si].data.xsheetColumn);
+      m_updating = false;
     }
     saveZtoryc();
   });
@@ -1190,6 +1233,12 @@ void StoryboardPanel::loadZtoryc() {
   // Publish the screenplay for this scene — emits scriptFileChanged() so the
   // Script panel reloads it (or clears, when scriptFromFile is empty).
   ZtoryModel::instance()->setScriptFile(scriptFromFile);
+  // Sync all panel data (shot labels + xsheet columns) into ZtoryModel so
+  // the Shot Board thumbnail and other consumers see the correct shot.
+  for (int i = 0; i < (int)m_shots.size(); i++)
+    ZtoryModel::instance()->syncShotPanels(i, m_shots[i].data.panels,
+                                           m_shots[i].data.shotLabel,
+                                           m_shots[i].data.xsheetColumn);
   m_loadingZtoryc = false;
 }
 
@@ -1278,6 +1327,9 @@ void StoryboardPanel::detectAndUpdatePanels(int shotIdx) {
     }
     for (PanelWidget *pw : shot.panels)
       pw->setTotalDuration(timelineDuration);
+    ZtoryModel::instance()->syncShotPanels(shotIdx, shot.data.panels,
+                                           shot.data.shotLabel,
+                                           shot.data.xsheetColumn);
     saveZtoryc();
     return;
   }
@@ -1301,6 +1353,9 @@ void StoryboardPanel::detectAndUpdatePanels(int shotIdx) {
     addPanelWidget(shotIdx, pi);
   renumberAll();
   rebuildGrid();
+  ZtoryModel::instance()->syncShotPanels(shotIdx, shot.data.panels,
+                                         shot.data.shotLabel,
+                                         shot.data.xsheetColumn);
   saveZtoryc();
 }
 
@@ -1677,6 +1732,14 @@ void StoryboardPanel::refreshFromScene() {
   }
   renumberAll();
   rebuildGrid();
+  // Re-sync labels + xsheet columns AFTER renumberAll so ZtoryModel always
+  // has the final (post-renumber) shot labels and correct column indices.
+  // The earlier syncShotPanels in loadZtoryc may have had empty labels for
+  // scenes without a .ztoryc file; this call makes them authoritative.
+  for (int i = 0; i < (int)m_shots.size(); i++)
+    ZtoryModel::instance()->syncShotPanels(i, m_shots[i].data.panels,
+                                           m_shots[i].data.shotLabel,
+                                           m_shots[i].data.xsheetColumn);
   QTimer::singleShot(500, this, [this](){
     for (int si = 0; si < (int)m_shots.size(); si++)
       for (int pi = 0; pi < (int)m_shots[si].panels.size(); pi++)

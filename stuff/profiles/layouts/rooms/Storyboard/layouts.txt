@@ -1,2 +1,3 @@
 ztoryc.ini
+ztoryt.ini
 browser.ini

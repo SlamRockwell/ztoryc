@@ -418,6 +418,12 @@ OpenFloatingPanel openZtoryLeftPanelCommand("MI_OpenZtoryLeftPanel", "ZtoryLeftP
                                               QObject::tr("Ztoryc Board/XSheet"));
 OpenFloatingPanel openZtoryRightPanelCommand("MI_OpenZtoryRightPanel", "ZtoryRightPanel",
                                               QObject::tr("Ztoryc Script/Palette"));
+OpenFloatingPanel openZtoryDrawLeftPanelCommand("MI_OpenZtoryDrawLeftPanel", "ZtoryDrawLeftPanel",
+                                              QObject::tr("Ztoryc Board/Shot (T)"));
+OpenFloatingPanel openZtoryShotBoardCommand("MI_OpenZtoryShotBoard", "ZtoryPanelNavigator",
+                                              QObject::tr("Ztoryc Shot Board"));
+OpenFloatingPanel openZtoryAnimaticTCommand("MI_OpenZtoryAnimaticT", "ZtoryAnimaticT",
+                                              QObject::tr("Ztoryc Timeline (T)"));
 
 OpenFloatingPanel openSchematicSceneViewerCommand(MI_OpenSchematic, "Schematic",
                                                   QObject::tr("Schematic"));

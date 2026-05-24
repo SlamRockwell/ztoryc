@@ -697,6 +697,8 @@ void TopBar::loadMenubar() {
     addMenuItem(ztoryMenu, "MI_OpenZtoryLeftPanel");
     addMenuItem(ztoryMenu, "MI_OpenZtoryRightPanel");
     addMenuItem(ztoryMenu, "MI_OpenZtoryScript");
+    addMenuItem(ztoryMenu, "MI_OpenZtoryDrawLeftPanel");
+    addMenuItem(ztoryMenu, "MI_OpenZtoryShotBoard");
     windowsMenu->addMenu(ztoryMenu);
   }
   addMenuItem(windowsMenu, MI_OpenSchematic);

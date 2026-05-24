@@ -327,6 +327,10 @@ void Room::setName(QString name) {
     m_trName = tr("New Room");
   else if (m_name == "ZTORYC" || m_name == "Ztoryc")
     m_trName = tr("Ztoryc");
+  else if (m_name == "ZTORYC X")
+    m_trName = tr("Ztoryc X");
+  else if (m_name == "ZTORYC T")
+    m_trName = tr("Ztoryc T");
 }
 
 void Room::save() {
@@ -1435,13 +1439,13 @@ void MainWindow::onWorkflowStoryboard() {
   if (sm && sm->m_liveViewStatus > StopMotion::LiveViewClosed)
     sm->stopLiveView();
   switchRoomChoice("Storyboard");
-  if (!switchToFirstRoom(this, {"ZTORYC", "BOARD", "Storyboard", "ANIMATIC", "SHOTEDITOR", "Browser"})) {
+  if (!switchToFirstRoom(this, {"ZTORYC X", "ZTORYC T", "ZTORYC", "BOARD", "Storyboard", "ANIMATIC", "SHOTEDITOR", "Browser"})) {
     // If rooms are still missing, reset storyboard layouts to template once.
     if (ensureStoryboardRoomsTemplate("Storyboard")) {
       switchRoomChoice("Storyboard");
-      switchToFirstRoom(this, {"ZTORYC", "BOARD", "Storyboard", "ANIMATIC", "SHOTEDITOR", "Browser"});
+      switchToFirstRoom(this, {"ZTORYC X", "ZTORYC T", "ZTORYC", "BOARD", "Storyboard", "ANIMATIC", "SHOTEDITOR", "Browser"});
     } else {
-      DVGui::warning(tr("Storyboard rooms not found.\nPlease create a ZTORYC or BOARD/ANIMATIC room first."));
+      DVGui::warning(tr("Storyboard rooms not found.\nPlease create a ZTORYC X or BOARD/ANIMATIC room first."));
     }
   }
   updateWorkflowMenuChecks();
@@ -2818,6 +2822,8 @@ void MainWindow::defineActions() {
   createMenuWindowsAction("MI_OpenZtoryScript", QT_TR_NOOP("&Ztoryc Script"), "", "ZtoryScriptPanel");
   createMenuWindowsAction("MI_OpenZtoryLeftPanel", QT_TR_NOOP("&Ztoryc Board/XSheet"), "", "ZtoryLeftPanel");
   createMenuWindowsAction("MI_OpenZtoryRightPanel", QT_TR_NOOP("&Ztoryc Script/Palette"), "", "ZtoryRightPanel");
+  createMenuWindowsAction("MI_OpenZtoryDrawLeftPanel", QT_TR_NOOP("&Ztoryc Board/Shot (T)"), "", "ZtoryDrawLeftPanel");
+  createMenuWindowsAction("MI_OpenZtoryShotBoard", QT_TR_NOOP("&Ztoryc Shot Board"), "", "ZtoryPanelNavigator");
   // Workflow actions — checkable so the active mode shows a checkmark in the menu.
   // setCheckable must be called after createMenuWindowsAction (which creates the QAction).
   for (const char *id : {MI_WorkflowStoryboard, MI_Workflow2D,

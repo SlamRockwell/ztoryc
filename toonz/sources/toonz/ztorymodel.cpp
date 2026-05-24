@@ -340,6 +340,35 @@ bool ZtoryModel::assertMainXsheet(bool showWarning) {
   return false;
 }
 
+void ZtoryModel::syncShotPanels(int si, const std::vector<PanelData> &panels,
+                                const QString &label, int xsheetCol) {
+  if (si < 0) return;
+  // Grow m_shots so it mirrors the Board's shot count. The Board calls this
+  // for every shot it knows about after refreshFromScene, so once all calls
+  // complete ZtoryModel::m_shots has one entry per child-level column.
+  while ((int)m_shots.size() <= si) {
+    ShotData s;
+    PanelData pd;
+    s.panels.push_back(pd);
+    m_shots.push_back(s);
+    m_previews.push_back({QPixmap()});
+  }
+  m_shots[si].panels = panels;
+  // The Board is authoritative for shot labels. Sync it whenever provided so
+  // the Shot Board header always reflects the current label, even for scenes
+  // that were created before the .ztoryc labelling system was introduced.
+  if (!label.isEmpty()) {
+    m_shots[si].shotLabel  = label;
+    m_shots[si].shotNumber = label;  // keep legacy field in sync
+  }
+  // xsheetColumn is critical: refreshPreview() uses it to render the correct
+  // sub-scene thumbnail. Without it, all shots would render column 0 (SH010).
+  if (xsheetCol >= 0)
+    m_shots[si].xsheetColumn = xsheetCol;
+  m_previews[si].resize(panels.size(), QPixmap());
+  emit shotDataChanged(si);
+}
+
 void ZtoryModel::addShot(int insertAt) {
   if (!assertMainXsheet(true)) return;
   ShotData s;
@@ -732,8 +761,36 @@ void ZtoryModel::load() {
 }
 
 int ZtoryModel::shotIndexForCol(int col) const {
-  for (int i = 0; i < (int)m_shots.size(); i++)
-    if (m_shots[i].xsheetColumn == col) return i;
+  // Scan the actual main xsheet for child-level columns in order and return
+  // the ordinal of the column that matches `col`. Same algorithm the Board
+  // uses in refreshFromScene(), so the two stay consistent without relying
+  // on m_shots[i].xsheetColumn (which can be stale after Animatic-side ops
+  // that don't go through ZtoryModel::addShot/removeShot).
+  TApp *app = TApp::instance();
+  if (!app) return -1;
+  ToonzScene *scene = app->getCurrentScene() ? app->getCurrentScene()->getScene() : nullptr;
+  if (!scene) return -1;
+  TXsheet *xsh = scene->getChildStack()->getTopXsheet();
+  if (!xsh) return -1;
+  int childIdx = 0;
+  int numCols = xsh->getColumnCount();
+  for (int c = 0; c < numCols; c++) {
+    TXshColumn *column = xsh->getColumn(c);
+    if (!column || column->isEmpty()) continue;
+    int r0 = 0, r1 = 0;
+    column->getRange(r0, r1);
+    bool isChild = false;
+    for (int r = r0; r <= r1; r++) {
+      TXshCell cell = xsh->getCell(r, c);
+      if (!cell.isEmpty() && cell.m_level && cell.m_level->getChildLevel()) {
+        isChild = true;
+        break;
+      }
+    }
+    if (!isChild) continue;
+    if (c == col) return childIdx;
+    childIdx++;
+  }
   return -1;
 }
 

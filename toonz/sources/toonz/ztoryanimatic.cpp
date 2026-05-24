@@ -66,6 +66,7 @@ extern ToggleCommandHandler mainAudioToggle;
 #include "tpanels.h"
 #include "ztoryscriptpanel.h"
 #include "filebrowser.h"
+#include "toonz/stage.h"
 #include <QSplitter>
 #include <QApplication>
 
@@ -2927,11 +2928,384 @@ void ZtoryAnimaticViewer::showEvent(QShowEvent *e) {
   if (m_sceneViewer) m_sceneViewer->update();
 }
 
+
+// ---- ZtoryPanelNavigator ----
+// Shot panel navigator for ZTORYC T drawing room.
+// Shows the active panel of the current shot as a large preview with
+// prev/next navigation, editable Dialog/Action/Notes fields, and a
+// Sync-to-timeline toggle.
+
+ZtoryPanelNavigator::ZtoryPanelNavigator(QWidget *parent)
+    : TPanel(parent) {
+  setWindowTitle(tr("Shot Board"));
+  setPanelType("ZtoryPanelNavigator");
+
+  QWidget *container = new QWidget(this);
+  QVBoxLayout *lay   = new QVBoxLayout(container);
+  lay->setContentsMargins(4, 4, 4, 4);
+  lay->setSpacing(4);
+
+  // --- Header: shot label ---
+  m_headerLabel = new QLabel(tr("No shot"), container);
+  m_headerLabel->setAlignment(Qt::AlignCenter);
+  m_headerLabel->setStyleSheet("font-weight: bold; color: #d0d0d0;");
+  lay->addWidget(m_headerLabel);
+
+  // --- Large single-panel preview ---
+  m_previewLabel = new QLabel(container);
+  m_previewLabel->setAlignment(Qt::AlignCenter);
+  m_previewLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+  m_previewLabel->setMinimumHeight(120);
+  m_previewLabel->setStyleSheet("QLabel{background:#1e1e1e;border:1px solid #444;}");
+  lay->addWidget(m_previewLabel, 1);
+
+  // --- Nav row: [<]  P 2/5  [>] ---
+  QWidget *navRow     = new QWidget(container);
+  QHBoxLayout *navLay = new QHBoxLayout(navRow);
+  navLay->setContentsMargins(0, 0, 0, 0);
+  navLay->setSpacing(4);
+  m_prevBtn = new QToolButton(navRow);
+  m_prevBtn->setText(tr("<"));
+  m_prevBtn->setFixedWidth(36);
+  m_prevBtn->setFixedHeight(28);
+  m_panelCountLabel = new QLabel(tr("-"), navRow);
+  m_panelCountLabel->setAlignment(Qt::AlignCenter);
+  m_panelCountLabel->setStyleSheet("color: #aaa; font-size: 11px;");
+  m_nextBtn = new QToolButton(navRow);
+  m_nextBtn->setText(tr(">"));
+  m_nextBtn->setFixedWidth(36);
+  m_nextBtn->setFixedHeight(28);
+  navLay->addWidget(m_prevBtn);
+  navLay->addWidget(m_panelCountLabel, 1);
+  navLay->addWidget(m_nextBtn);
+  lay->addWidget(navRow);
+
+  // --- Panel info row (label + duration) and shot total ---
+  m_panelInfoLabel = new QLabel(tr("-"), container);
+  m_panelInfoLabel->setAlignment(Qt::AlignCenter);
+  m_panelInfoLabel->setStyleSheet("color: #c0c0c0; font-size: 11px; font-weight: bold;");
+  lay->addWidget(m_panelInfoLabel);
+  m_shotInfoLabel = new QLabel(tr("-"), container);
+  m_shotInfoLabel->setAlignment(Qt::AlignCenter);
+  m_shotInfoLabel->setStyleSheet("color: #909090; font-size: 10px;");
+  lay->addWidget(m_shotInfoLabel);
+
+  // --- Text fields ---
+  auto makeField = [&](const QString &placeholder) -> QTextEdit * {
+    auto *te = new QTextEdit(container);
+    te->setPlaceholderText(placeholder);
+    te->setFixedHeight(52);
+    te->setAcceptRichText(false);
+    te->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    return te;
+  };
+  auto makeLbl = [&](const QString &text) -> QLabel * {
+    QLabel *l = new QLabel(text, container);
+    l->setStyleSheet("color: #a0a0a0; font-size: 10px;");
+    return l;
+  };
+  lay->addWidget(makeLbl(tr("Dialog:")));
+  m_dialogField = makeField(tr("Enter dialogue..."));
+  lay->addWidget(m_dialogField);
+  lay->addWidget(makeLbl(tr("Action:")));
+  m_actionField = makeField(tr("Enter action notes..."));
+  lay->addWidget(m_actionField);
+  lay->addWidget(makeLbl(tr("Notes:")));
+  m_notesField = makeField(tr("Enter notes..."));
+  lay->addWidget(m_notesField);
+
+  // --- Sync toggle ---
+  m_syncBtn = new QToolButton(container);
+  m_syncBtn->setText(tr("Sync timeline"));
+  m_syncBtn->setCheckable(true);
+  m_syncBtn->setChecked(true);
+  m_syncBtn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+  lay->addWidget(m_syncBtn);
+
+  setWidget(container);
+
+  // Debounce timer for xsheet changes (draws, erases inside sub-scene)
+  m_refreshTimer = new QTimer(this);
+  m_refreshTimer->setSingleShot(true);
+  m_refreshTimer->setInterval(800);
+  connect(m_refreshTimer, &QTimer::timeout, this, [this]() {
+    if (m_shotIdx >= 0) refreshPreview();
+  });
+
+  // --- Connections ---
+  connect(ZtoryModel::instance(), &ZtoryModel::shotActivatedForViewing,
+          this, &ZtoryPanelNavigator::onShotActivated);
+  connect(ZtoryModel::instance(), &ZtoryModel::returnToViewerMainRequested,
+          this, &ZtoryPanelNavigator::onReturnToMain);
+  connect(ZtoryModel::instance(), &ZtoryModel::shotDataChanged,
+          this, &ZtoryPanelNavigator::onShotDataChanged);
+  connect(ZtoryModel::instance(), &ZtoryModel::modelReset,
+          this, &ZtoryPanelNavigator::onModelReset);
+  connect(TApp::instance()->getCurrentFrame(), &TFrameHandle::frameSwitched,
+          this, &ZtoryPanelNavigator::onFrameSwitched);
+
+  // Live thumbnail update when drawing/erasing inside the sub-scene
+  connect(TApp::instance()->getCurrentXsheet(), &TXsheetHandle::xsheetChanged,
+          this, &ZtoryPanelNavigator::onXsheetChanged);
+  connect(TApp::instance()->getCurrentXsheet(), &TXsheetHandle::xsheetSwitched,
+          this, [this]() {
+    disconnect(TApp::instance()->getCurrentXsheet(), &TXsheetHandle::xsheetChanged,
+               this, nullptr);
+    connect(TApp::instance()->getCurrentXsheet(), &TXsheetHandle::xsheetChanged,
+            this, &ZtoryPanelNavigator::onXsheetChanged);
+    // Sync mode on sub-scene enter/exit
+    syncFromScene();
+  });
+
+  connect(m_prevBtn, &QToolButton::clicked, this, [this]() {
+    if (m_shotIdx < 0 || m_panelIdx <= 0) return;
+    setActivePanel(m_panelIdx - 1, m_syncEnabled);
+  });
+  connect(m_nextBtn, &QToolButton::clicked, this, [this]() {
+    if (m_shotIdx < 0) return;
+    const auto &panels = ZtoryModel::instance()->shot(m_shotIdx).panels;
+    if (m_panelIdx >= (int)panels.size() - 1) return;
+    setActivePanel(m_panelIdx + 1, m_syncEnabled);
+  });
+  connect(m_syncBtn, &QToolButton::toggled, this, [this](bool on) {
+    m_syncEnabled = on;
+  });
+
+  auto onTextChanged = [this]() {
+    if (m_blockSignals || m_shotIdx < 0) return;
+    const auto &panels = ZtoryModel::instance()->shot(m_shotIdx).panels;
+    if (m_panelIdx < 0 || m_panelIdx >= (int)panels.size()) return;
+    PanelData &pd = ZtoryModel::instance()->shot(m_shotIdx).panels[m_panelIdx];
+    pd.dialog = m_dialogField->toPlainText();
+    pd.action = m_actionField->toPlainText();
+    pd.notes  = m_notesField->toPlainText();
+    emit ZtoryModel::instance()->shotDataChanged(m_shotIdx);
+  };
+  connect(m_dialogField, &QTextEdit::textChanged, this, onTextChanged);
+  connect(m_actionField, &QTextEdit::textChanged, this, onTextChanged);
+  connect(m_notesField,  &QTextEdit::textChanged, this, onTextChanged);
+}
+
+void ZtoryPanelNavigator::onShotActivated(int col) {
+  int si = ZtoryModel::instance()->shotIndexForCol(col);
+  if (si < 0) return;
+  m_shotIdx  = si;
+  m_panelIdx = 0;
+  const auto &shot = ZtoryModel::instance()->shot(si);
+  int n = (int)shot.panels.size();
+  m_prevBtn->setEnabled(false);
+  m_nextBtn->setEnabled(n > 1);
+  m_panelCountLabel->setText(n > 0 ? tr("P 1 / %1").arg(n) : tr("-"));
+  refreshInfoLabels();
+  refreshPreview();
+  refreshTextFields();
+}
+
+void ZtoryPanelNavigator::onReturnToMain() {
+  m_shotIdx  = -1;
+  m_panelIdx = 0;
+  m_headerLabel->setText(tr("No shot"));
+  m_panelCountLabel->setText(tr("-"));
+  m_panelInfoLabel->setText(tr("-"));
+  m_shotInfoLabel->setText(tr("-"));
+  m_previewLabel->clear();
+  m_dialogField->clear();
+  m_actionField->clear();
+  m_notesField->clear();
+}
+
+void ZtoryPanelNavigator::onShotDataChanged(int shotIdx) {
+  if (shotIdx != m_shotIdx) return;
+  refreshInfoLabels();
+  refreshPreview();
+  // Skip text refresh if the user is currently typing in one of our fields.
+  // setPlainText() resets the cursor to position 0, so calling it on every
+  // keystroke makes new characters appear at the start instead of after the
+  // caret (the "letters going left" bug).
+  QWidget *fw = QApplication::focusWidget();
+  if (fw == m_dialogField || fw == m_actionField || fw == m_notesField)
+    return;
+  refreshTextFields();
+}
+
+void ZtoryPanelNavigator::onModelReset() {
+  if (m_shotIdx < 0) return;
+  refreshPreview();
+  refreshTextFields();
+}
+
+void ZtoryPanelNavigator::onFrameSwitched() {
+  if (!m_syncEnabled || m_shotIdx < 0) return;
+  refreshActivePanelFromFrame();
+}
+
+void ZtoryPanelNavigator::onXsheetChanged() {
+  // Re-sync first so we always reflect the current sub-scene, even when
+  // the user jumps from one shot to another without xsheetSwitched firing
+  // (e.g. via timeline navigation or direct cell double-click).
+  syncFromScene();
+  if (m_shotIdx >= 0) m_refreshTimer->start();
+}
+
+void ZtoryPanelNavigator::syncFromScene() {
+  TApp *app = TApp::instance();
+  ToonzScene *scene = app && app->getCurrentScene() ? app->getCurrentScene()->getScene() : nullptr;
+  if (!scene) return;
+  auto *cs = scene->getChildStack();
+  if (!cs) return;
+  if (cs->getAncestorCount() == 0) {
+    if (m_shotIdx >= 0) onReturnToMain();
+    return;
+  }
+  AncestorNode *node = cs->getAncestorInfo(0);
+  if (!node) return;
+  int newSi = ZtoryModel::instance()->shotIndexForCol(node->m_col);
+  if (newSi < 0) return;
+  if (newSi != m_shotIdx) onShotActivated(node->m_col);
+}
+
+void ZtoryPanelNavigator::setActivePanel(int panelIdx, bool updateFrame) {
+  if (m_shotIdx < 0) return;
+  const auto &panels = ZtoryModel::instance()->shot(m_shotIdx).panels;
+  if (panelIdx < 0 || panelIdx >= (int)panels.size()) return;
+
+  m_panelIdx = panelIdx;
+  int n = (int)panels.size();
+  m_prevBtn->setEnabled(panelIdx > 0);
+  m_nextBtn->setEnabled(panelIdx < n - 1);
+  m_panelCountLabel->setText(tr("P %1 / %2").arg(panelIdx + 1).arg(n));
+
+  refreshInfoLabels();
+  refreshPreview();
+  refreshTextFields();
+
+  if (updateFrame) {
+    TApp::instance()->getCurrentFrame()->setFrame(panels[panelIdx].startFrame);
+  }
+}
+
+void ZtoryPanelNavigator::refreshPreview() {
+  if (m_shotIdx < 0) return;
+  const auto &shot = ZtoryModel::instance()->shot(m_shotIdx);
+  if (m_panelIdx >= (int)shot.panels.size()) return;
+
+  // Render directly from the sub-xsheet (same as StoryboardPanel::updatePreview)
+  TApp *app = TApp::instance();
+  ToonzScene *scene = app->getCurrentScene()->getScene();
+  QPixmap px;
+  if (scene) {
+    TXsheet *xsh = scene->getChildStack()->getTopXsheet();
+    int col = shot.xsheetColumn;
+    TXshChildLevel *cl = nullptr;
+    if (xsh) {
+      for (int r = 0; r <= xsh->getFrameCount(); r++) {
+        TXshCell cell = xsh->getCell(r, col);
+        if (!cell.isEmpty() && cell.m_level && cell.m_level->getChildLevel()) {
+          cl = cell.m_level->getChildLevel();
+          break;
+        }
+      }
+    }
+    if (cl) {
+      int frame = shot.panels[m_panelIdx].startFrame;
+      px = IconGenerator::renderXsheetFrame(cl->getXsheet(), frame, TDimension(320, 180));
+    }
+  }
+
+  if (!px.isNull()) {
+    m_cachedPreview = px;
+    QSize avail = m_previewLabel->size();
+    if (avail.isEmpty()) avail = QSize(320, 180);
+    m_previewLabel->setPixmap(
+      px.scaled(avail, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+  } else if (!m_cachedPreview.isNull()) {
+    QSize avail = m_previewLabel->size();
+    m_previewLabel->setPixmap(
+      m_cachedPreview.scaled(avail, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+  } else {
+    QString lbl = shot.panels[m_panelIdx].panelLabel;
+    m_previewLabel->setText(lbl.isEmpty() ? tr("(no preview)") : lbl);
+  }
+}
+
+void ZtoryPanelNavigator::showEvent(QShowEvent *e) {
+  TPanel::showEvent(e);
+  syncFromScene();
+}
+
+void ZtoryPanelNavigator::resizeEvent(QResizeEvent *e) {
+  TPanel::resizeEvent(e);
+  if (m_shotIdx >= 0) refreshPreview();
+}
+
+void ZtoryPanelNavigator::refreshTextFields() {
+  if (m_shotIdx < 0) return;
+  const auto &panels = ZtoryModel::instance()->shot(m_shotIdx).panels;
+  if (m_panelIdx >= (int)panels.size()) return;
+
+  m_blockSignals = true;
+  const PanelData &pd = panels[m_panelIdx];
+  m_dialogField->setPlainText(pd.dialog);
+  m_actionField->setPlainText(pd.action);
+  m_notesField->setPlainText(pd.notes);
+  m_blockSignals = false;
+}
+
+void ZtoryPanelNavigator::refreshInfoLabels() {
+  if (m_shotIdx < 0) return;
+  ZtoryModel *m = ZtoryModel::instance();
+  if (m_shotIdx >= m->shotCount()) return;
+  const ShotData &shot = m->shot(m_shotIdx);
+  int n   = (int)shot.panels.size();
+  int fps = m->fps() > 0 ? m->fps() : 24;
+
+  // Header: full label (SQxxx_SHxxx if sequenced) + panel count
+  m_headerLabel->setText(tr("%1  -  %2 panels")
+    .arg(m->fullLabel(m_shotIdx))
+    .arg(n));
+
+  // Panel info: "P003 - 24f / 1.00s"
+  if (m_panelIdx >= 0 && m_panelIdx < n) {
+    const PanelData &pd = shot.panels[m_panelIdx];
+    QString plabel = pd.panelLabel.isEmpty()
+                       ? QString("P%1").arg(m_panelIdx + 1, 3, 10, QChar('0'))
+                       : pd.panelLabel;
+    double sec = (double)pd.duration / (double)fps;
+    m_panelInfoLabel->setText(tr("%1  -  %2f / %3s")
+                                .arg(plabel)
+                                .arg(pd.duration)
+                                .arg(sec, 0, 'f', 2));
+  } else {
+    m_panelInfoLabel->setText(tr("-"));
+  }
+
+  // Shot info: "Total: 96f / 4.00s"
+  int total = shot.totalDuration();
+  double secTot = (double)total / (double)fps;
+  m_shotInfoLabel->setText(tr("Total: %1f / %2s")
+                             .arg(total)
+                             .arg(secTot, 0, 'f', 2));
+}
+
+void ZtoryPanelNavigator::refreshActivePanelFromFrame() {
+  if (m_shotIdx < 0) return;
+  const auto &panels = ZtoryModel::instance()->shot(m_shotIdx).panels;
+  int frame = TApp::instance()->getCurrentFrame()->getFrame();
+  for (int i = 0; i < (int)panels.size(); i++) {
+    if (frame >= panels[i].startFrame &&
+        frame < panels[i].startFrame + panels[i].duration) {
+      if (i != m_panelIdx) setActivePanel(i, false);
+      return;
+    }
+  }
+}
+
+
 // ---- ZtoryRightPanel ----
 
 ZtoryRightPanel::ZtoryRightPanel(QWidget *parent)
     : TPanel(parent) {
-  setWindowTitle(tr("Ztory Right"));
+  setWindowTitle(tr("Ztoryc Script/Palette"));
   setPanelType("ZtoryRightPanel");
 
   QWidget *container = new QWidget(this);
@@ -2946,7 +3320,7 @@ ZtoryRightPanel::ZtoryRightPanel(QWidget *parent)
   barL->setSpacing(2);
 
   m_toggleBtn = new QToolButton(bar);
-  m_toggleBtn->setText(tr("ANIMATIC | SHOT"));
+  m_toggleBtn->setText(tr("SCRIPT | PALETTE"));
   m_toggleBtn->setCheckable(true);
   m_toggleBtn->setChecked(false);
   m_toggleBtn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
@@ -2970,10 +3344,6 @@ ZtoryRightPanel::ZtoryRightPanel(QWidget *parent)
   ZtoryScriptView *scriptView = new ZtoryScriptView(animaticSplit);
   animaticSplit->addWidget(scriptView);
 
-  // File Browser
-  FileBrowser *browser = new FileBrowser(animaticSplit, Qt::WindowFlags(), false, true);
-  animaticSplit->addWidget(browser);
-
   // Record audio mic button bar
   QWidget *micBar     = new QWidget(animaticSplit);
   QHBoxLayout *micLay = new QHBoxLayout(micBar);
@@ -2986,10 +3356,9 @@ ZtoryRightPanel::ZtoryRightPanel(QWidget *parent)
   micLay->addWidget(micBtn);
   animaticSplit->addWidget(micBar);
 
-  // Give script 60% of height, browser 35%, mic bar the rest
-  animaticSplit->setStretchFactor(0, 6);
-  animaticSplit->setStretchFactor(1, 35);
-  animaticSplit->setStretchFactor(2, 0);
+  // Script gets all space, mic bar stays compact
+  animaticSplit->setStretchFactor(0, 1);
+  animaticSplit->setStretchFactor(1, 0);
 
   m_stack->addWidget(animaticSplit);  // page 0
 
@@ -3030,7 +3399,7 @@ void ZtoryRightPanel::showAnimaticMode() {
   m_stack->setCurrentIndex(0);
   m_toggleBtn->blockSignals(true);
   m_toggleBtn->setChecked(false);
-  m_toggleBtn->setText(tr("ANIMATIC | SHOT"));
+  m_toggleBtn->setText(tr("SCRIPT | PALETTE"));
   m_toggleBtn->blockSignals(false);
 }
 
@@ -3064,7 +3433,7 @@ void ZtoryRightPanel::showShotMode(int /*col*/) {
   m_stack->setCurrentIndex(1);
   m_toggleBtn->blockSignals(true);
   m_toggleBtn->setChecked(true);
-  m_toggleBtn->setText(tr("SHOT | ANIMATIC"));
+  m_toggleBtn->setText(tr("PALETTE | SCRIPT"));
   m_toggleBtn->blockSignals(false);
 }
 
@@ -3291,16 +3660,59 @@ ZtoryAnimaticViewerPanel::ZtoryAnimaticViewerPanel(QWidget *parent)
   // to main level (ancestorCount == 0) while we are in shot view, auto-return.
   connect(TApp::instance()->getCurrentXsheet(), &TXsheetHandle::xsheetSwitched,
           this, [this]() {
-    if (m_stack->currentIndex() != 1) return;  // already in animatic mode
-    ToonzScene *scene = TApp::instance()->getCurrentScene()->getScene();
-    if (scene && scene->getChildStack()->getAncestorCount() == 0) {
-      // Xsheet returned to main level via any path — restore button routing
-      // before hiding the shot viewer (same cleanup as returnToAnimaticMode).
-      restoreAnimaticButtons();
-      m_stack->setCurrentIndex(0);
-      m_topBar->hide();
+    if (m_stack->currentIndex() == 1) {
+      ToonzScene *scene = TApp::instance()->getCurrentScene()->getScene();
+      if (scene && scene->getChildStack()->getAncestorCount() == 0) {
+        // Xsheet returned to main level via any path — restore button routing
+        // before hiding the shot viewer (same cleanup as returnToAnimaticMode).
+        restoreAnimaticButtons();
+        m_stack->setCurrentIndex(0);
+        m_topBar->hide();
+      }
     }
+    updateTitle();
   });
+
+  // Keep the title in sync with shot-data updates (e.g. shot/sequence relabel).
+  connect(ZtoryModel::instance(), &ZtoryModel::shotDataChanged,
+          this, [this](int){ updateTitle(); });
+  connect(ZtoryModel::instance(), &ZtoryModel::modelReset,
+          this, &ZtoryAnimaticViewerPanel::updateTitle);
+  connect(TApp::instance()->getCurrentScene(), &TSceneHandle::sceneSwitched,
+          this, &ZtoryAnimaticViewerPanel::updateTitle);
+
+  // Deferred: the factory calls setWindowTitle("Ztoryc Viewer") right after
+  // constructing us, which would reset our title. Running updateTitle() on the
+  // next event-loop tick guarantees it wins over the factory's hardcoded string.
+  QTimer::singleShot(0, this, &ZtoryAnimaticViewerPanel::updateTitle);
+}
+
+void ZtoryAnimaticViewerPanel::updateTitle() {
+  TApp *app = TApp::instance();
+  ToonzScene *scene = (app && app->getCurrentScene()) ? app->getCurrentScene()->getScene() : nullptr;
+  QString title;
+  if (!scene) {
+    title = tr("Animatic");
+  } else {
+    auto *cs = scene->getChildStack();
+    if (!cs || cs->getAncestorCount() == 0) {
+      // Animatic (main xsheet) mode — show "Animatic - <scene name>"
+      QString sceneName = QString::fromStdWString(scene->getSceneName());
+      if (sceneName.isEmpty()) sceneName = tr("Untitled");
+      title = tr("Animatic - %1").arg(sceneName);
+    } else {
+      // Shot editing — show full label (sequence + shot)
+      AncestorNode *node = cs->getAncestorInfo(0);
+      int si = node ? ZtoryModel::instance()->shotIndexForCol(node->m_col) : -1;
+      if (si >= 0)
+        title = ZtoryModel::instance()->fullLabel(si);
+      else
+        title = tr("Shot");
+    }
+  }
+  setWindowTitle(title);
+  // TPanel propagates window title to its title bar widget; force a refresh.
+  if (getTitleBar()) getTitleBar()->update();
 }
 
 void ZtoryAnimaticViewerPanel::enterShotMode(int /*col*/) {
@@ -3380,6 +3792,7 @@ void ZtoryAnimaticViewerPanel::returnToAnimaticMode() {
 void ZtoryAnimaticViewerPanel::showEvent(QShowEvent *e) {
   TPanel::showEvent(e);
   // QStackedWidget manages visibility of the current page; no manual show() needed.
+  updateTitle();
 }
 
 // ---- ZtoryStoryStripPanel ----
@@ -3427,7 +3840,8 @@ void ZtoryStoryStripPanel::showEvent(QShowEvent *e) {
 
 // ---- ZtoryAnimaticPanel (timeline only) ----
 
-ZtoryAnimaticPanel::ZtoryAnimaticPanel(QWidget *parent) : TPanel(parent) {
+ZtoryAnimaticPanel::ZtoryAnimaticPanel(QWidget *parent, bool switchEnabled)
+    : TPanel(parent), m_switchEnabled(switchEnabled) {
   setWindowTitle("Ztory Animatic");
   setFocusPolicy(Qt::StrongFocus);
 
@@ -3581,7 +3995,11 @@ ZtoryAnimaticPanel::ZtoryAnimaticPanel(QWidget *parent) : TPanel(parent) {
   // Layout: toolbar on top, scroll below
   lay->addWidget(toolbar);
   lay->addWidget(scroll, 1);
-  setWidget(container);
+
+  // Outer stacked widget: page 0 = animatic, page 1 = native timeline
+  m_outerStack = new QStackedWidget(this);
+  m_outerStack->addWidget(container);  // page 0
+  setWidget(m_outerStack);
 
   connect(m_ruler, &ZtoryAnimaticRuler::frameChanged,
           this, &ZtoryAnimaticPanel::onFrameChanged);
@@ -3664,6 +4082,23 @@ ZtoryAnimaticPanel::ZtoryAnimaticPanel(QWidget *parent) : TPanel(parent) {
         refreshFromScene();
     });
   });
+
+  // If this is the T-variant (m_switchEnabled), connect timeline switch
+  if (m_switchEnabled) {
+    connect(ZtoryModel::instance(), &ZtoryModel::shotActivatedForViewing,
+            this, [this](int) { showShotTimeline(); });
+    connect(ZtoryModel::instance(), &ZtoryModel::returnToViewerMainRequested,
+            this, [this]() { showAnimaticTimeline(); });
+    connect(TApp::instance()->getCurrentXsheet(), &TXsheetHandle::xsheetSwitched,
+            this, [this]() {
+      ToonzScene *scene = TApp::instance()->getCurrentScene()->getScene();
+      if (!scene) return;
+      if (scene->getChildStack()->getAncestorCount() == 0)
+        showAnimaticTimeline();
+      else
+        showShotTimeline();
+    });
+  }
 }
 
 void ZtoryAnimaticPanel::refreshFromScene() {
@@ -3866,8 +4301,29 @@ void ZtoryAnimaticPanel::refreshAudioTracks() {
 
 void ZtoryAnimaticPanel::showEvent(QShowEvent *e) {
   TPanel::showEvent(e);
-  refreshFromScene();
-  m_ruler->initPlayRangeIfNeeded();
+  ToonzScene *scene = TApp::instance()->getCurrentScene()->getScene();
+  if (m_switchEnabled && scene && scene->getChildStack()->getAncestorCount() > 0) {
+    showShotTimeline();
+  } else {
+    showAnimaticTimeline();
+    refreshFromScene();
+    m_ruler->initPlayRangeIfNeeded();
+  }
+}
+
+void ZtoryAnimaticPanel::showShotTimeline() {
+  if (!m_timelinePanel) {
+    m_timelinePanel = new TimelineViewerPanel(m_outerStack);
+    m_timelinePanel->getTitleBar()->hide();
+    m_timelinePanel->setEmbedded();
+    m_timelinePanel->reset();
+    m_outerStack->addWidget(m_timelinePanel);  // page 1
+  }
+  m_outerStack->setCurrentIndex(1);
+}
+
+void ZtoryAnimaticPanel::showAnimaticTimeline() {
+  m_outerStack->setCurrentIndex(0);
 }
 
 // Helper: returns shot index in ZtoryModel for a given xsheet column, or -1.
@@ -5456,6 +5912,17 @@ void ZtoryAnimaticPanel::contextMenuEvent(QContextMenuEvent *e) {
   }
 }
 
+class ZtoryAnimaticPanelTFactory final : public TPanelFactory {
+public:
+  ZtoryAnimaticPanelTFactory() : TPanelFactory("ZtoryAnimaticT") {}
+  TPanel *createPanel(QWidget *parent) override {
+    auto *panel = new ZtoryAnimaticPanel(parent, /*switchEnabled=*/true);
+    panel->setObjectName("ZtoryAnimaticT");
+    return panel;
+  }
+  void initialize(TPanel *panel) override { assert(0); }
+} ztoryAnimaticPanelTFactory;
+
 class ZtoryAnimaticPanelFactory final : public TPanelFactory {
 public:
   ZtoryAnimaticPanelFactory() : TPanelFactory("ZtoryAnimatic") {}
@@ -5515,5 +5982,139 @@ public:
   }
   void initialize(TPanel *panel) override { assert(0); }
 } ztoryLeftPanelFactory;
+
+
+// ---- ZtoryDrawLeftPanel ----
+
+ZtoryDrawLeftPanel::ZtoryDrawLeftPanel(QWidget *parent)
+    : TPanel(parent) {
+  setWindowTitle(tr("Ztoryc Draw Left"));
+  setPanelType("ZtoryDrawLeftPanel");
+
+  QWidget *container = new QWidget(this);
+  QVBoxLayout *lay   = new QVBoxLayout(container);
+  lay->setContentsMargins(0, 0, 0, 0);
+  lay->setSpacing(0);
+
+  // Toggle bar: BOARD / SHOT (manual switch, also auto-driven by shotActivatedForViewing)
+  QWidget *bar      = new QWidget(container);
+  QHBoxLayout *barL = new QHBoxLayout(bar);
+  barL->setContentsMargins(2, 2, 2, 2);
+  barL->setSpacing(2);
+  m_toggleBtn = new QToolButton(bar);
+  m_toggleBtn->setText(tr("BOARD / SHOT"));
+  m_toggleBtn->setCheckable(true);
+  m_toggleBtn->setChecked(false);
+  m_toggleBtn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+  m_toggleBtn->setFixedHeight(22);
+  barL->addWidget(m_toggleBtn);
+
+  m_linkBtn = new QToolButton(bar);
+  m_linkBtn->setText(tr("\xF0\x9F\x94\x97"));  // 🔗
+  m_linkBtn->setToolTip(tr("Link side panels to viewer toggle\n"
+                            "When active, Board/Shot switches automatically\n"
+                            "with the viewer on shot enter/exit"));
+  m_linkBtn->setCheckable(true);
+  m_linkBtn->setChecked(ZtoryModel::instance()->sidePanelsLinked());
+  m_linkBtn->setFixedSize(28, 22);
+  barL->addWidget(m_linkBtn);
+  lay->addWidget(bar);
+
+  m_stack = new QStackedWidget(container);
+
+  // Page 0: Board
+  m_boardPanel = new StoryboardPanel(m_stack);
+  m_boardPanel->getTitleBar()->hide();
+  m_boardPanel->setEmbedded();
+  m_stack->addWidget(m_boardPanel);  // page 0
+
+  // Page 1: Panel Navigator
+  m_navigator = new ZtoryPanelNavigator(m_stack);
+  m_navigator->getTitleBar()->hide();
+  m_navigator->setEmbedded();
+  m_stack->addWidget(m_navigator);  // page 1
+
+  lay->addWidget(m_stack, 1);
+  setWidget(container);
+
+  // Manual toggle
+  connect(m_toggleBtn, &QToolButton::toggled, this, [this](bool shotMode) {
+    if (shotMode) showNavigatorMode();
+    else          showBoardMode();
+  });
+
+  connect(m_linkBtn, &QToolButton::toggled, this, [](bool on) {
+    ZtoryModel::instance()->setSidePanelsLinked(on);
+  });
+
+  // Auto-switch on shot activated / returned to main (only when linked)
+  connect(ZtoryModel::instance(), &ZtoryModel::shotActivatedForViewing,
+          this, [this](int) { showNavigatorMode(); });
+  connect(ZtoryModel::instance(), &ZtoryModel::returnToViewerMainRequested,
+          this, &ZtoryDrawLeftPanel::showBoardMode);
+  // Safety net: xsheet navigated back to main by any path (not just via Board)
+  connect(TApp::instance()->getCurrentXsheet(), &TXsheetHandle::xsheetSwitched,
+          this, [this]() {
+    ToonzScene *scene = TApp::instance()->getCurrentScene()->getScene();
+    if (!scene) return;
+    if (scene->getChildStack()->getAncestorCount() == 0)
+      showBoardMode();
+    else
+      showNavigatorMode();
+  });
+}
+
+void ZtoryDrawLeftPanel::showEvent(QShowEvent *e) {
+  TPanel::showEvent(e);
+  ToonzScene *scene = TApp::instance()->getCurrentScene()->getScene();
+  if (!scene) return;
+  if (scene->getChildStack()->getAncestorCount() > 0)
+    showNavigatorMode();
+  else
+    showBoardMode();
+}
+
+void ZtoryDrawLeftPanel::showBoardMode() {
+  if (!ZtoryModel::instance()->sidePanelsLinked()) return;
+  m_stack->setCurrentIndex(0);
+  m_toggleBtn->blockSignals(true);
+  m_toggleBtn->setChecked(false);
+  m_toggleBtn->setText(tr("BOARD / SHOT"));
+  m_toggleBtn->blockSignals(false);
+}
+
+void ZtoryDrawLeftPanel::showNavigatorMode() {
+  if (!ZtoryModel::instance()->sidePanelsLinked()) return;
+  m_stack->setCurrentIndex(1);
+  m_toggleBtn->blockSignals(true);
+  m_toggleBtn->setChecked(true);
+  m_toggleBtn->setText(tr("SHOT / BOARD"));
+  m_toggleBtn->blockSignals(false);
+}
+
+
+class ZtoryDrawLeftPanelFactory final : public TPanelFactory {
+public:
+  ZtoryDrawLeftPanelFactory() : TPanelFactory("ZtoryDrawLeftPanel") {}
+  TPanel *createPanel(QWidget *parent) override {
+    TPanel *panel = new ZtoryDrawLeftPanel(parent);
+    panel->setObjectName("ZtoryDrawLeftPanel");
+    panel->setWindowTitle("Ztoryc Board/Navigator");
+    return panel;
+  }
+  void initialize(TPanel *panel) override { assert(0); }
+} ztoryDrawLeftPanelFactory;
+
+class ZtoryPanelNavigatorFactory final : public TPanelFactory {
+public:
+  ZtoryPanelNavigatorFactory() : TPanelFactory("ZtoryPanelNavigator") {}
+  TPanel *createPanel(QWidget *parent) override {
+    TPanel *panel = new ZtoryPanelNavigator(parent);
+    panel->setObjectName("ZtoryPanelNavigator");
+    panel->setWindowTitle("Shot Board");
+    return panel;
+  }
+  void initialize(TPanel *panel) override { assert(0); }
+} ztoryPanelNavigatorFactory;
 
 
