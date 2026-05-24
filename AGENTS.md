@@ -253,6 +253,11 @@ cd toonz/sources && ./beautification.sh
    - New Scene missing save dialog (`iocommand.cpp`)
    - Wrong column header thumbnail when sub-scenes share a name (`icongenerator.cpp` — `XsheetIconRenderer::getId` usa puntatore invece di nome)
    - Set Key (Z) not showing keyframe diamond on peg columns (`cellselectioncommand.cpp` — `TCellSelection::setKeyframes()` usava `ColumnId(col)` invece di `xsh->getColumnObjectId(col)` che ritorna `PegbarId` per le peg)
+   - **ImageManager cache leak after render** (`imagemanager.cpp`, `rendercommand.cpp`) — dopo il render tutti i frame rimangono in cache (fino a 10+ GB). Fix: `ImageManager::clear()` sui builder al completamento. Commit `be20f9512`. Impatto alto.
+   - **BaseViewerPanel preview button null crash** (`viewerpane.cpp`) — `getPreviewButtonStates()` crasha se `m_previewButton`/`m_subcameraButton` non sono inizializzati (Windows). Fix: guard su `nullptr`. Commit `d7453d1eb`.
+   - **onActiveViewerChanged parentWidget null crash** (`mainwindow.cpp`) — crash su Windows quando il viewer attivo cambia e `parentWidget()` ritorna `nullptr`. Fix: guard esplicito. Commit `761c5a755`.
+   - **macOS "Unable to create a new document"** (`BundleInfo.plist.in`) — aggiungere `NSQuitAlwaysKeepsWindows=false` e `NSApplicationSupportsSecureRestorableState=true`. Commit `a7a822704`.
+   - **macOS CI deployment target** (`tahoma-build.sh`) — senza `-DCMAKE_OSX_DEPLOYMENT_TARGET` il binary embeds `minos` uguale al runner CI, bloccando utenti su macOS più vecchio. Fix: aggiungere `-DCMAKE_OSX_DEPLOYMENT_TARGET=12.0`. Commit `940e895bc`.
 4. Commit format — Conventional Commits:
    - `feat:` new feature
    - `fix:` bug fix
