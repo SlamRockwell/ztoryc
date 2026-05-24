@@ -6,6 +6,24 @@
 > Voci più vecchie di ~2 settimane → spostarle in `CHANGELOG_ARCHIVE.md`.
 
 ---
+## [2026-05-24] — Release v0.3.2: fix CI macOS + pacchetti Windows/macOS
+
+### Fixed
+- **CI macOS: build falliva su "Package portable app and DMG"**: Homebrew ha rimosso
+  la formula `libtiff44`. `tahoma-install.sh` ora builda libtiff 4.4.0 da sorgenti
+  in `/tmp/libtiff44-build`; `tahoma-buildpkg.sh` legge `libtiff.5.dylib` da lì.
+
+### Added
+- **Windows CI: `publish_release` workflow_dispatch input**: il workflow Windows ora
+  ha lo stesso meccanismo di macOS — triggerando con `publish_release=true` carica
+  installer + portable zip direttamente nella GitHub Release.
+
+### Notes
+- Release v0.3.2 pubblicata con tutti e 4 i pacchetti (2 DMG + exe + zip).
+- Percorso QSS temi: `/Applications/Ztoryc.app/Contents/Resources/tahomastuff/config/qss/`
+- Fix macOS Gatekeeper "file danneggiato": `xattr -cr /Applications/Ztoryc.app`
+
+---
 ## [2026-05-25] — Shot Board: fix preview, label e titolo viewer
 
 ### Fixed
