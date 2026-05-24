@@ -78,6 +78,35 @@ then
    then
       cp -R thirdparty/apps/ffmpeg/lib $TOONZDIR/Ztoryc.app/Contents/Resources/ffmpeg/
    fi
+   # dylibbundler writes @executable_path/../libs/*.dylib expecting a bin/ layout,
+   # but the binaries land directly in Resources/ffmpeg/ (no bin/ subdir).
+   # Fix: rewrite @executable_path/../libs/ → @executable_path/libs/ for ffmpeg + ffprobe.
+   FFDIR="$TOONZDIR/Ztoryc.app/Contents/Resources/ffmpeg"
+   for binary in "$FFDIR/ffmpeg" "$FFDIR/ffprobe"; do
+     if [ -f "$binary" ]; then
+       while IFS= read -r dep; do
+         dep_trimmed="${dep#"${dep%%[! ]*}"}"  # ltrim spaces
+         if [[ "$dep_trimmed" == @executable_path/../libs/* ]]; then
+           libname="$(basename "$dep_trimmed")"
+           install_name_tool -change "$dep_trimmed" "@executable_path/libs/$libname" "$binary" 2>/dev/null || true
+         fi
+       done < <(otool -L "$binary" | tail -n +2 | awk '{print $1}')
+     fi
+   done
+   # Also fix internal IDs and cross-references inside the bundled dylibs.
+   if [ -d "$FFDIR/libs" ]; then
+     for dylib in "$FFDIR/libs/"*.dylib; do
+       [ -f "$dylib" ] || continue
+       while IFS= read -r dep; do
+         dep_trimmed="${dep#"${dep%%[! ]*}"}"
+         if [[ "$dep_trimmed" == @executable_path/../libs/* ]]; then
+           libname="$(basename "$dep_trimmed")"
+           install_name_tool -change "$dep_trimmed" "@executable_path/libs/$libname" "$dylib" 2>/dev/null || true
+         fi
+       done < <(otool -L "$dylib" | tail -n +2 | awk '{print $1}')
+     done
+   fi
+   echo ">>> FFmpeg load commands patched (../libs → ./libs)"
    chmod -R 755 $TOONZDIR/Ztoryc.app/Contents/Resources/ffmpeg
 fi
 
