@@ -72,6 +72,7 @@ fi
 
 cmake ../sources "${CMAKE_EXTRA[@]}" $CANON_FLAG \
       -DCMAKE_BUILD_TYPE="${CI_BUILD_TYPE:-RelWithDebInfo}" \
+      -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 \
       -DWITH_GPHOTO2=ON \
       -DWITH_SYSTEM_SUPERLU=ON \
       -DQT_PATH=$USEQTLIB \
