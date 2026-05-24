@@ -157,7 +157,7 @@ jobs:
             ${{ env.BREW_PREFIX }}/lib/cmake/opencv4
             ${{ env.BREW_PREFIX }}/lib/pkgconfig/opencv4.pc
             thirdparty/opencv
-          key: ${{ runner.arch }}-${{ runner.os }}-opencv-${{ hashFiles('ci-scripts/thirdparty_versions.sh', 'ci-scripts/osx/tahoma-buildopencv.sh', 'ci-scripts/osx/tahoma-install.sh') }}
+          key: ${{ runner.arch }}-${{ runner.os }}-opencv-osx12-${{ hashFiles('ci-scripts/thirdparty_versions.sh', 'ci-scripts/osx/tahoma-buildopencv.sh', 'ci-scripts/osx/tahoma-install.sh') }}
 
       - name: Restore libgphoto2 dependency cache
         id: restore-gphoto-cache
@@ -371,7 +371,7 @@ jobs:
             ${{ env.BREW_PREFIX }}/lib/cmake/opencv4
             ${{ env.BREW_PREFIX }}/lib/pkgconfig/opencv4.pc
             thirdparty/opencv
-          key: ${{ runner.arch }}-${{ runner.os }}-opencv-${{ hashFiles('ci-scripts/thirdparty_versions.sh', 'ci-scripts/osx/tahoma-buildopencv.sh', 'ci-scripts/osx/tahoma-install.sh') }}
+          key: ${{ runner.arch }}-${{ runner.os }}-opencv-osx12-${{ hashFiles('ci-scripts/thirdparty_versions.sh', 'ci-scripts/osx/tahoma-buildopencv.sh', 'ci-scripts/osx/tahoma-install.sh') }}
 
       - name: Save libgphoto2 dependency cache
         if: ${{ steps.restore-gphoto-cache.outputs.cache-hit != 'true' }}
