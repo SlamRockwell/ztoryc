@@ -247,28 +247,32 @@ cd toonz/sources && ./beautification.sh
 2. Verify no regressions in the modified area
 3. PR candidates (fixes developed in Ztoryc, clean enough to contribute upstream):
 
-   **🔴 Bug fix ad alto impatto — codice core, quasi certamente presenti in Tahoma2D:**
-   - **ImageManager cache leak after render** (`imagemanager.cpp`, `rendercommand.cpp`) — dopo il render tutti i frame rimangono in cache (osservato: 10 GB residui su scene da 350 frame). Fix: `ImageManager::clear()` sui builder al completamento. Commit `be20f9512`.
-   - **requireColumnSoundTrack alloca RAM proporzionale alla durata del file audio** (`TXshSoundColumn`) — su file audio da 2h a 24fps = 172.800 frame → ~1.3 GB per colonna × N colonne. Fix: cappare `toFrame` al frame count video, non alla durata audio. Commit `69a8b9043` (fix applicato in ztoryanimatic.cpp ma il pattern è nel core audio).
-   - **Save Sub-Scene As path corruption** (`toonzscene.cpp`, `iocommand.cpp`) — il percorso della sub-scene viene corrotto al salvataggio. Commit nella history Ztoryc.
-   - **Wrong column header thumbnail when sub-scenes share a name** (`icongenerator.cpp`) — `XsheetIconRenderer::getId` usa il puntatore della scena invece del nome → thumbnail sbagliata se due sub-scene hanno lo stesso nome.
-   - **Set Key (Z) not showing keyframe diamond on peg columns** (`cellselectioncommand.cpp`) — `TCellSelection::setKeyframes()` usava `ColumnId(col)` invece di `xsh->getColumnObjectId(col)` che ritorna `PegbarId` per le peg.
-   - **Peg column width reset after delete** (`columnfan.cpp`, 1 riga) — dopo aver eliminato una peg column, la colonna successiva ereditava la larghezza ridotta delle peg. Fix: `m_columns[c].m_width = 0` su reset in `shiftFoldedStates`. Commit `b8ddea829`.
+   > **Workflow:** verificare ogni bug su Tahoma2D stock prima di aprire la PR.
+   > Se riproducibile → aprire PR. Se già fixato → rimuovere dalla lista.
 
-   **🟠 Bug fix medi — probabilmente presenti:**
-   - **getPreviewButtonStates null crash** (`viewerpane.cpp`) — crash se `m_previewButton`/`m_subcameraButton` non sono inizializzati. Fix: guard su `nullptr`. Commit `d7453d1eb`.
-   - **Mesh sub-scenes wrong folder** (`meshifypopup.cpp`)
-   - **New Scene missing save dialog** (`iocommand.cpp`)
-   - **macOS "Unable to create a new document" on launch** (`BundleInfo.plist.in`) — aggiungere `NSQuitAlwaysKeepsWindows=false` e `NSApplicationSupportsSecureRestorableState=true`. Commit `a7a822704`.
-   - **macOS CI deployment target** — senza `-DCMAKE_OSX_DEPLOYMENT_TARGET=12.0` il binary embeds `minos` uguale al runner (macOS 15), bloccando utenti su macOS 12-14. Commit `940e895bc`.
+   **🔴 Da verificare su Tahoma2D — bug fix ad alto impatto:**
+   - [ ] **ImageManager cache leak after render** (`imagemanager.cpp`, `rendercommand.cpp`) — dopo il render tutti i frame rimangono in cache (osservato: 10 GB residui su scene da 350 frame). Fix: `ImageManager::clear()` sui builder al completamento. Commit `be20f9512`.
+   - [ ] **TasksViewer crash on room switch** (`tasksviewer.cpp`) — `~TasksViewer()` vuoto lascia puntatore dangling in `BatchesController::m_tasksTree`; la room successiva crasha in `QHeaderView::setModel()`. Fix: `setTasksTree(nullptr)` nel distruttore. Commit `1569cf2cc`. Riproducibile su qualsiasi layout con TasksViewer in più room.
+   - [ ] **requireColumnSoundTrack alloca RAM proporzionale alla durata del file audio** — file audio da 2h → ~1.3 GB per colonna. Fix: cappare `toFrame` al frame count video. Commit `69a8b9043` (il pattern è nel core audio).
+   - [ ] **Save Sub-Scene As path corruption** (`toonzscene.cpp`, `iocommand.cpp`) — il percorso della sub-scene viene corrotto al salvataggio.
+   - [ ] **Wrong column header thumbnail when sub-scenes share a name** (`icongenerator.cpp`) — `XsheetIconRenderer::getId` usa puntatore invece del nome → thumbnail sbagliata.
+   - [ ] **Set Key (Z) not showing keyframe diamond on peg columns** (`cellselectioncommand.cpp`) — usava `ColumnId(col)` invece di `xsh->getColumnObjectId(col)`.
+   - [ ] **Peg column width reset after delete** (`columnfan.cpp`, 1 riga) — la colonna successiva alla peg eliminata ereditava la larghezza ridotta. Commit `b8ddea829`.
 
-   **🟡 Windows/MSVC compatibility (solo se Tahoma2D vuole supportare MSVC):**
-   - `not`/`and`/`or` alternative tokens → `!`/`&&`/`||` (48 siti, `subscenecommand.cpp`, `tcenterlinecolors.cpp`, `borders_extractor.h`). Commit `105588c14`.
-   - Variabile locale `near` → rinomina (collide con macro `windef.h`). Commit `8a4dbc294`.
+   **🟠 Da verificare — bug fix medi:**
+   - [ ] **getPreviewButtonStates null crash** (`viewerpane.cpp`) — crash se `m_previewButton`/`m_subcameraButton` non inizializzati. Commit `d7453d1eb`.
+   - [ ] **Mesh sub-scenes wrong folder** (`meshifypopup.cpp`)
+   - [ ] **New Scene missing save dialog** (`iocommand.cpp`)
+   - [ ] **macOS "Unable to create a new document" on launch** (`BundleInfo.plist.in`) — `NSQuitAlwaysKeepsWindows=false` + `NSApplicationSupportsSecureRestorableState=true`. Commit `a7a822704`.
+   - [ ] **macOS CI deployment target** — senza `-DCMAKE_OSX_DEPLOYMENT_TARGET=12.0` il binary embeds `minos` uguale al runner. Commit `940e895bc`.
 
-   **🟢 Feature request (nuove funzionalità, da proporre come discussione):**
-   - **Per-xsheet In/Out markers** (`subscenecommand.cpp`) — marker In/Out separati per xsheet principale e sub-scene, utile per chiunque lavori con sub-scene.
-   - **Zoom-to-cursor nella timeline** (`columnfan.cpp` e timeline) — il frame sotto il cursore rimane fisso durante lo zoom con la rotella. Commit `b8ddea829`.
+   **🟡 Da verificare — Windows/MSVC compatibility:**
+   - [ ] `not`/`and`/`or` alternative tokens → `!`/`&&`/`||` (48 siti). Commit `105588c14`.
+   - [ ] Variabile locale `near` → rinomina (collide con macro `windef.h`). Commit `8a4dbc294`.
+
+   **🟢 Feature request (proporre come discussione, non PR):**
+   - **Per-xsheet In/Out markers** (`subscenecommand.cpp`) — marker separati per xsheet principale e sub-scene.
+   - **Zoom-to-cursor nella timeline** — il frame sotto il cursore rimane fisso durante lo zoom. Commit `b8ddea829`.
 4. Commit format — Conventional Commits:
    - `feat:` new feature
    - `fix:` bug fix
