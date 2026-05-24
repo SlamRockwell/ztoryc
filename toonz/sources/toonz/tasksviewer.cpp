@@ -159,7 +159,12 @@ void TasksViewer::update() {
   m_taskSheet->update(m_taskSheet->getCurrentTask());
 }
 
-TasksViewer::~TasksViewer() {}
+TasksViewer::~TasksViewer() {
+  // m_treeView (child widget) is deleted by Qt here, which also deletes its
+  // TaskTreeModel child. Clear the pointer in BatchesController so the next
+  // TasksViewer instance creates a fresh model instead of using a dangling ptr.
+  BatchesController::instance()->setTasksTree(nullptr);
+}
 
 //-----------------------------------------------------------------------------
 
