@@ -6,6 +6,33 @@
 > Voci più vecchie di ~2 settimane → spostarle in `CHANGELOG_ARCHIVE.md`.
 
 ---
+## [2026-05-25] — Shot Board: fix preview, label e titolo viewer
+
+### Fixed
+- **Shot Board preview sempre su shot 010**: `ZtoryModel::m_shots[si].xsheetColumn`
+  era sempre 0 (default) perché `syncShotPanels` non lo propagava. `refreshPreview()`
+  usa `shot.xsheetColumn` per scegliere da quale colonna rendere la thumbnail: con
+  valore 0 fisso, tutti gli shot mostravano la thumbnail di SH010. Ora `syncShotPanels`
+  accetta un parametro `xsheetCol` (opzionale) e lo scrive in `m_shots[si]`. Tutti e 4
+  i call site nel Board ora passano `m_shots[i].data.xsheetColumn`.
+- **Shot Board header "  -  1 panels"** (label vuoto): `syncShotPanels` non propagava
+  il `shotLabel`. Aggiunto parametro `label` opzionale; ogni call site passa
+  `m_shots[i].data.shotLabel`. Dopo `renumberAll()` in `refreshFromScene` viene
+  eseguita una seconda bulk-sync per aggiornare ZtoryModel con i label finali
+  (prima i label erano quelli pre-renumber del .ztoryc, o vuoti se nessun .ztoryc).
+- **Titolo viewer sempre "Ztoryc Viewer"**: `ZtoryAnimaticViewerPanelFactory::createPanel()`
+  chiamava `panel->setWindowTitle("Ztoryc Viewer")` dopo il costruttore, annullando
+  `updateTitle()`. Spostato `updateTitle()` in un `QTimer::singleShot(0, ...)` così
+  viene eseguito nell'event loop successivo, dopo il factory. Ora mostra
+  "Animatic - scenename" in main e il label shot ("SH020" ecc.) in shot editing mode.
+
+### Modified
+- `ZtoryModel::syncShotPanels`: firma estesa con `label = {}` e `xsheetCol = -1`
+  (parametri opzionali, backward-compatible con tutti i call site esistenti)
+- `StoryboardPanel::refreshFromScene`: bulk sync aggiuntivo dopo `renumberAll()`
+  per garantire che ZtoryModel abbia i label finali post-renumber
+
+---
 ## [2026-05-24] — Sessione breve: sync task list da Drive
 
 ### Notes

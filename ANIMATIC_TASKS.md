@@ -1,6 +1,6 @@
 # Ztoryc — Animatic Panel: Task List for Claude Code
 
-> Aggiornato 2026-05-19. Task completati ridotti a una riga.
+> Aggiornato 2026-05-24. Task completati ridotti a una riga.
 > Per le spec storiche dei task DONE vedere ANIMATIC_TASKS_ARCHIVE_2026-05.md e git history.
 > NOTA: questo è il file canonico (puntato dal symlink ~/ZtorYc/ANIMATIC_TASKS.md);
 > sostituisce ANIMATIC_TASKS_2026-05-12.md e tutti i precedenti.
@@ -86,6 +86,82 @@
 ---
 
 ## Task aperti
+
+---
+
+### MOD — UI Headers contestuali (task 32)
+
+**Priorita: ALTA | Tipo: MOD**
+
+Sintomo / richiesta: le room non hanno header che identifichino chiaramente i panel.
+Claudio vuole header statici o dinamici con label contestuali per ridurre la
+confusione visiva durante il lavoro.
+
+Specifica:
+- Left panel (Board room + Shot room): label `BOARD` / `SHOT` in alto a sinistra
+- Right panel (Animatic room): label `SCRIPT` / `PALETTE` a seconda del panel attivo
+- Il viewer contestuale deve mostrare la label della scena/shot corrente
+- Stile coerente con la UI esistente (font Tahoma2D, colore testo panel header)
+
+File: `storyboardpanel.h/.cpp`, `ztoryanimatic.h/.cpp`, `mainwindow.cpp`.
+
+---
+
+### NEW — Single-instance guard (task 33)
+
+**Priorita: ALTA | Tipo: NEW**
+
+Problema: e' possibile aprire piu' istanze di Ztoryc contemporaneamente, causando
+conflitti di scrittura sul file .ztoryc e corruzione dati.
+
+Soluzione: `QLockFile` in `main.cpp` su un file lock in una directory condivisa
+(es. `QStandardPaths::TempLocation`). Se il lock fallisce, mostrare un dialog
+"Ztoryc is already running" e uscire.
+
+```cpp
+// In main.cpp, prima di creare QApplication:
+QLockFile lockFile(QDir::tempPath() + "/ztoryc.lock");
+if (!lockFile.tryLock(100)) {
+    QMessageBox::warning(nullptr, "Ztoryc", "Ztoryc is already running.");
+    return 1;
+}
+```
+
+Edge cases:
+- Lock non rilasciato dopo crash: `QLockFile::removeStaleLockFile()` + timestamp
+- Utenti diversi sullo stesso Mac: path lock include username
+- App bundle firmata: lock in `~/Library/Caches/ztoryc/` evita problemi SIP
+
+File: `toonz/sources/toonz/main.cpp`.
+
+---
+
+### NEW — Room "Ztoryc T", Panel Navigator, rinomina "Ztoryc X", rimozione Browser (task 34)
+
+**Priorita: ALTA | Tipo: NEW + MOD**
+
+Richiesta Claudio (2026-05-23):
+
+1. **Rinomina room esistente** "Ztoryc" -> "Ztoryc X" (mantiene il layout corrente)
+2. **Nuova room "Ztoryc T"** -- layout semplificato, orientato al disegno di posa:
+   - Left: StoryboardPanel (shot grid)
+   - Center: ComboViewer (disegno shot corrente)
+   - Right: palette / strumenti (no Browser, no Script)
+3. **Panel Navigator** -- pannello compatto (stile Photoshop Navigator) che mostra
+   una miniatura del viewer corrente con un rettangolo di navigazione.
+   Posizione: sopra o sotto il right panel.
+4. **Rimozione Browser** dai right panel di entrambe le room (Ztoryc X e Ztoryc T).
+   Il Browser resta accessibile solo dalla room Tahoma2D standard.
+
+Implementazione:
+- Nuova room in `mainwindow.cpp` (`addRoom("Ztoryc T", ...)`)
+- Layout salvato in `layout/rooms/ZtorYcT.ini` (o gestito via `TMainWindow`)
+- Panel Navigator: nuova classe `ZtoryNavigatorPanel` in `ztorynavigator.h/.cpp`
+  che si aggancia al `ComboViewer` attivo tramite signal
+- Rimozione Browser: rimuovere tab Browser dal `DockLayout` dei right panel Ztoryc
+
+File: `mainwindow.cpp`, `storyboardpanel.h/.cpp`, `ztoryanimatic.h/.cpp`,
+nuovi file `ztorynavigator.h/.cpp`.
 
 ---
 
@@ -574,13 +650,15 @@ File: ztoryanimatic.h/.cpp.
 
 ## Ordine implementazione consigliato
 
-1. PERF/BUG RAM -- fix immediati (TImageCache cap + clear on shot change + undo cap)
-2. PERF/BUG RAM -- investigazione leak sub-scene (logging + Activity Monitor)
-3. BUG Script Panel -- fix rapido
-4. PERF Board thumbnail Step 1+4 -- lazy loading + thread + risoluzione fissa
-5. PERF Board thumbnail Step 3 -- flag dirty
-6. PERF Board thumbnail Step 2 -- cache su disco
-7. In/Out Marker -- prerequisito bloccante per Roll/Slide
+1. MOD UI Headers contestuali -- rapido, impatto visivo immediato
+2. NEW Single-instance guard -- 1 file, 10 righe
+3. NEW Room "Ztoryc T" + rinomina + Navigator + rimozione Browser -- piu' complesso, varie fasi
+4. PERF/BUG RAM -- fix immediati (TImageCache cap + clear on shot change + undo cap)
+5. PERF/BUG RAM -- investigazione leak sub-scene (logging + Activity Monitor)
+6. PERF Board thumbnail Step 1+4 -- lazy loading + thread + risoluzione fissa
+7. PERF Board thumbnail Step 3 -- flag dirty
+8. PERF Board thumbnail Step 2 -- cache su disco
+9. In/Out Marker -- prerequisito bloccante per Roll/Slide
 8. Roll
 9. Slide
 10. Doppio Viewer
@@ -589,6 +667,9 @@ File: ztoryanimatic.h/.cpp.
 
 ## Priority Order
 
+32. MOD UI Headers contestuali (ALTA)
+33. NEW Single-instance guard (ALTA)
+34. NEW Room "Ztoryc T" + Panel Navigator + rinomina "Ztoryc X" + rimozione Browser (ALTA)
 31. PERF/BUG Saturazione RAM (CRITICA) -- fix immediati prima, poi investigazione leak
 29. ~~BUG Script Panel~~ ✅ DONE 2026-05-22
 30. PERF Board thumbnail cache (ALTA)
