@@ -2,6 +2,16 @@ name: Ztoryc Windows Build
 
 on:
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: 'Publish a GitHub Release with the Windows artifacts'
+        required: false
+        default: 'false'
+        type: boolean
+      release_tag:
+        description: 'Release tag (default: v<semver from ZtorycVersion.cmake>)'
+        required: false
+        default: ''
 
 jobs:
   Windows:
@@ -134,3 +144,64 @@ jobs:
             C:\tools\opencv
             C:\local\boost_1_87_0
           key: ${{ runner.os }}-deps-${{ hashFiles('ci-scripts/thirdparty_versions.sh', 'ci-scripts/read_thirdparty_version.py', 'ci-scripts/windows/tahoma-install.bat', 'ci-scripts/windows/tahoma-get3rdpartyapps.bat', 'ci-scripts/windows/tahoma-build.bat') }}
+
+  publish-release:
+    needs: Windows
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.publish_release == 'true'
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: Ztoryc-*-win*
+          merge-multiple: true
+          path: release-files
+      - name: Resolve release version from ZtorycVersion.cmake
+        id: release_version
+        run: |
+          set -euo pipefail
+          F="toonz/cmake/ZtorycVersion.cmake"
+          MAJOR=$(sed -n 's/^set(ZTORYC_VERSION_MAJOR \([0-9]*\)).*/\1/p' "$F")
+          MINOR=$(sed -n 's/^set(ZTORYC_VERSION_MINOR \([0-9]*\)).*/\1/p' "$F")
+          PATCH=$(sed -n 's/^set(ZTORYC_VERSION_PATCH \([0-9]*\)).*/\1/p' "$F")
+          SEMVER="${MAJOR}.${MINOR}.${PATCH}"
+          TAG="${{ github.event.inputs.release_tag }}"
+          if [ -z "$TAG" ]; then
+            TAG="v${SEMVER}"
+          fi
+          echo "semver=$SEMVER" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+      - name: List downloaded artifacts
+        run: find release-files -type f -print
+      - name: Create release tag if missing
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          TAG="${{ steps.release_version.outputs.tag }}"
+          git fetch origin --tags --force
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists at $(git rev-parse "$TAG")"
+          else
+            git tag -a "$TAG" -m "Release $TAG"
+            git push origin "$TAG"
+          fi
+      - name: Publish GitHub Release (Windows installer + portable zip)
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          artifactErrorsFailBuild: true
+          artifacts: release-files/Ztoryc-install-win.exe,release-files/Ztoryc-portable-win.zip
+          artifactContentType: "raw"
+          name: Ztoryc ${{ steps.release_version.outputs.tag }}
+          omitBodyDuringUpdate: true
+          omitNameDuringUpdate: true
+          prerelease: false
+          replacesArtifacts: false
+          tag: ${{ steps.release_version.outputs.tag }}
+          token: ${{ secrets.GITHUB_TOKEN }}
