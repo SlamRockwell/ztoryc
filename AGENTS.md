@@ -246,18 +246,29 @@ cd toonz/sources && ./beautification.sh
 
 2. Verify no regressions in the modified area
 3. PR candidates (fixes developed in Ztoryc, clean enough to contribute upstream):
-   - Per-xsheet In/Out markers (`subscenecommand.cpp`)
-   - Save Sub-Scene As path corruption (`toonzscene.cpp`, `iocommand.cpp`)
-   - getPreviewButtonStates null crash (`viewerpane.cpp`)
-   - Mesh sub-scenes wrong folder (`meshifypopup.cpp`)
-   - New Scene missing save dialog (`iocommand.cpp`)
-   - Wrong column header thumbnail when sub-scenes share a name (`icongenerator.cpp` — `XsheetIconRenderer::getId` usa puntatore invece di nome)
-   - Set Key (Z) not showing keyframe diamond on peg columns (`cellselectioncommand.cpp` — `TCellSelection::setKeyframes()` usava `ColumnId(col)` invece di `xsh->getColumnObjectId(col)` che ritorna `PegbarId` per le peg)
-   - **ImageManager cache leak after render** (`imagemanager.cpp`, `rendercommand.cpp`) — dopo il render tutti i frame rimangono in cache (fino a 10+ GB). Fix: `ImageManager::clear()` sui builder al completamento. Commit `be20f9512`. Impatto alto.
-   - **BaseViewerPanel preview button null crash** (`viewerpane.cpp`) — `getPreviewButtonStates()` crasha se `m_previewButton`/`m_subcameraButton` non sono inizializzati (Windows). Fix: guard su `nullptr`. Commit `d7453d1eb`.
-   - **onActiveViewerChanged parentWidget null crash** (`mainwindow.cpp`) — crash su Windows quando il viewer attivo cambia e `parentWidget()` ritorna `nullptr`. Fix: guard esplicito. Commit `761c5a755`.
-   - **macOS "Unable to create a new document"** (`BundleInfo.plist.in`) — aggiungere `NSQuitAlwaysKeepsWindows=false` e `NSApplicationSupportsSecureRestorableState=true`. Commit `a7a822704`.
-   - **macOS CI deployment target** (`tahoma-build.sh`) — senza `-DCMAKE_OSX_DEPLOYMENT_TARGET` il binary embeds `minos` uguale al runner CI, bloccando utenti su macOS più vecchio. Fix: aggiungere `-DCMAKE_OSX_DEPLOYMENT_TARGET=12.0`. Commit `940e895bc`.
+
+   **🔴 Bug fix ad alto impatto — codice core, quasi certamente presenti in Tahoma2D:**
+   - **ImageManager cache leak after render** (`imagemanager.cpp`, `rendercommand.cpp`) — dopo il render tutti i frame rimangono in cache (osservato: 10 GB residui su scene da 350 frame). Fix: `ImageManager::clear()` sui builder al completamento. Commit `be20f9512`.
+   - **requireColumnSoundTrack alloca RAM proporzionale alla durata del file audio** (`TXshSoundColumn`) — su file audio da 2h a 24fps = 172.800 frame → ~1.3 GB per colonna × N colonne. Fix: cappare `toFrame` al frame count video, non alla durata audio. Commit `69a8b9043` (fix applicato in ztoryanimatic.cpp ma il pattern è nel core audio).
+   - **Save Sub-Scene As path corruption** (`toonzscene.cpp`, `iocommand.cpp`) — il percorso della sub-scene viene corrotto al salvataggio. Commit nella history Ztoryc.
+   - **Wrong column header thumbnail when sub-scenes share a name** (`icongenerator.cpp`) — `XsheetIconRenderer::getId` usa il puntatore della scena invece del nome → thumbnail sbagliata se due sub-scene hanno lo stesso nome.
+   - **Set Key (Z) not showing keyframe diamond on peg columns** (`cellselectioncommand.cpp`) — `TCellSelection::setKeyframes()` usava `ColumnId(col)` invece di `xsh->getColumnObjectId(col)` che ritorna `PegbarId` per le peg.
+   - **Peg column width reset after delete** (`columnfan.cpp`, 1 riga) — dopo aver eliminato una peg column, la colonna successiva ereditava la larghezza ridotta delle peg. Fix: `m_columns[c].m_width = 0` su reset in `shiftFoldedStates`. Commit `b8ddea829`.
+
+   **🟠 Bug fix medi — probabilmente presenti:**
+   - **getPreviewButtonStates null crash** (`viewerpane.cpp`) — crash se `m_previewButton`/`m_subcameraButton` non sono inizializzati. Fix: guard su `nullptr`. Commit `d7453d1eb`.
+   - **Mesh sub-scenes wrong folder** (`meshifypopup.cpp`)
+   - **New Scene missing save dialog** (`iocommand.cpp`)
+   - **macOS "Unable to create a new document" on launch** (`BundleInfo.plist.in`) — aggiungere `NSQuitAlwaysKeepsWindows=false` e `NSApplicationSupportsSecureRestorableState=true`. Commit `a7a822704`.
+   - **macOS CI deployment target** — senza `-DCMAKE_OSX_DEPLOYMENT_TARGET=12.0` il binary embeds `minos` uguale al runner (macOS 15), bloccando utenti su macOS 12-14. Commit `940e895bc`.
+
+   **🟡 Windows/MSVC compatibility (solo se Tahoma2D vuole supportare MSVC):**
+   - `not`/`and`/`or` alternative tokens → `!`/`&&`/`||` (48 siti, `subscenecommand.cpp`, `tcenterlinecolors.cpp`, `borders_extractor.h`). Commit `105588c14`.
+   - Variabile locale `near` → rinomina (collide con macro `windef.h`). Commit `8a4dbc294`.
+
+   **🟢 Feature request (nuove funzionalità, da proporre come discussione):**
+   - **Per-xsheet In/Out markers** (`subscenecommand.cpp`) — marker In/Out separati per xsheet principale e sub-scene, utile per chiunque lavori con sub-scene.
+   - **Zoom-to-cursor nella timeline** (`columnfan.cpp` e timeline) — il frame sotto il cursore rimane fisso durante lo zoom con la rotella. Commit `b8ddea829`.
 4. Commit format — Conventional Commits:
    - `feat:` new feature
    - `fix:` bug fix
