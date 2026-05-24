@@ -252,7 +252,7 @@ cd toonz/sources && ./beautification.sh
 
    **🔴 Da verificare su Tahoma2D — bug fix ad alto impatto:**
    - [ ] **ImageManager cache leak after render** (`imagemanager.cpp`, `rendercommand.cpp`) — dopo il render tutti i frame rimangono in cache (osservato: 10 GB residui su scene da 350 frame). Fix: `ImageManager::clear()` sui builder al completamento. Commit `be20f9512`.
-   - [ ] **TasksViewer crash on room switch** (`tasksviewer.cpp`) — `~TasksViewer()` vuoto lascia puntatore dangling in `BatchesController::m_tasksTree`; la room successiva crasha in `QHeaderView::setModel()`. Fix: `setTasksTree(nullptr)` nel distruttore. Commit `1569cf2cc`. Riproducibile su qualsiasi layout con TasksViewer in più room.
+   - [x] **TasksViewer crash on room switch** (`tasksviewer.cpp`) — `~TasksViewer()` vuoto lascia puntatore dangling in `BatchesController::m_tasksTree`; la room successiva crasha in `QHeaderView::setModel()`. Fix: `setTasksTree(nullptr)` nel distruttore. Commit `1569cf2cc`. ✅ Verificato e fixato in Ztoryc — pronto per PR upstream.
    - [ ] **requireColumnSoundTrack alloca RAM proporzionale alla durata del file audio** — file audio da 2h → ~1.3 GB per colonna. Fix: cappare `toFrame` al frame count video. Commit `69a8b9043` (il pattern è nel core audio).
    - [ ] **Save Sub-Scene As path corruption** (`toonzscene.cpp`, `iocommand.cpp`) — il percorso della sub-scene viene corrotto al salvataggio.
    - [ ] **Wrong column header thumbnail when sub-scenes share a name** (`icongenerator.cpp`) — `XsheetIconRenderer::getId` usa puntatore invece del nome → thumbnail sbagliata.
