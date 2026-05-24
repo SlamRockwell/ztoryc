@@ -6,6 +6,21 @@
 > Voci più vecchie di ~2 settimane → spostarle in `CHANGELOG_ARCHIVE.md`.
 
 ---
+## [2026-05-24c] — Post-release fix: crash Cutout Digital + upstream candidates
+
+### Fixed
+- **TasksViewer crash on room switch** (`tasksviewer.cpp`) — `~TasksViewer()` vuoto
+  lasciava puntatore dangling in `BatchesController::m_tasksTree`; switchando su
+  Cutout Digital crashava in `QHeaderView::setModel()`. Fix: `setTasksTree(nullptr)`
+  nel distruttore. 1 riga. Commit `1569cf2cc`. ✅ Pronto per PR upstream Tahoma2D.
+
+### Notes
+- Lista upstream PR candidates aggiornata in AGENTS.md con priorità e checkbox
+  "da verificare su Tahoma2D". TasksViewer crash è il primo verificato e pronto.
+- Nuovo build macOS in corso (deployment target 12.0 + tutti i fix del giorno).
+  Sostituirà i DMG in v0.3.2 quando finisce (~80 min).
+
+---
 ## [2026-05-24b] — Post-release fix: FFmpeg, Gatekeeper, deployment target
 
 ### Fixed
