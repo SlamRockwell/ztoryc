@@ -36,6 +36,13 @@
 	<string>Ztoryc needs access to removable volumes to open and save projects.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>Ztoryc — based on Tahoma2D/Toonz. Original software by Digital Video S.p.A.</string>
+	<!-- Suppress macOS "Unable to create a new document" on launch.
+	     Ztoryc is not an NSDocument-based app; these keys disable the
+	     automatic session-restore machinery that triggers the warning. -->
+	<key>NSQuitAlwaysKeepsWindows</key>
+	<false/>
+	<key>NSApplicationSupportsSecureRestorableState</key>
+	<true/>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
