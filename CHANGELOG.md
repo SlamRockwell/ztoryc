@@ -6,6 +6,30 @@
 > Voci più vecchie di ~2 settimane → spostarle in `CHANGELOG_ARCHIVE.md`.
 
 ---
+## [2026-05-24b] — Post-release fix: FFmpeg, Gatekeeper, deployment target
+
+### Fixed
+- **FFmpeg dylib path nel bundle**: `dylibbundler` scriveva `@executable_path/../libs/`
+  aspettando layout `bin/`, ma i binari finiscono direttamente in `Resources/ffmpeg/`.
+  Fix: `install_name_tool` in `tahoma-buildpkg.sh` riscrive tutti i riferimenti a
+  `@executable_path/libs/` dopo la copia (sia binari che dylibs cross-ref).
+  Risultato: formati video ora visibili nel render.
+- **"Unable to create a new document" all'avvio**: macOS session-restore machinery
+  attivata perché mancavano `NSQuitAlwaysKeepsWindows=false` e
+  `NSApplicationSupportsSecureRestorableState=true` in `BundleInfo.plist.in`.
+- **"Non puoi usare questa versione" su macOS 12-14**: nessun `CMAKE_OSX_DEPLOYMENT_TARGET`
+  impostato → il runner macOS 15 embed `minos 15.0`. Aggiunto `-DCMAKE_OSX_DEPLOYMENT_TARGET=12.0`
+  in `tahoma-build.sh` (allineato a Tahoma2D upstream). Nuovo build macOS triggerato.
+- **Windows CI**: fix `publish_release` input — rimossa dipendenza da
+  `github.repository_owner == 'tahoma2d'`.
+
+### Notes
+- Percorso immagine DMG drag-and-drop: `ci-scripts/osx/assets/ztoryc-dmg-background.png`
+  (generata da `render-dmg-background.py`)
+- Fix FFmpeg applicato manualmente all'app installata (senza rebuild)
+- Nuovo build macOS in corso per v0.3.2 con deployment target 12.0
+
+---
 ## [2026-05-24] — Release v0.3.2: fix CI macOS + pacchetti Windows/macOS
 
 ### Fixed
