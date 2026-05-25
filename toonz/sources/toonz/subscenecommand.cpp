@@ -1110,6 +1110,7 @@ void openSubXsheet() {
   ToonzScene *scene      = app->getCurrentScene()->getScene();
   int row                = app->getCurrentFrame()->getFrame();
   int col                = app->getCurrentColumn()->getColumnIndex();
+  int openedCol          = col;  // tracks the actual column opened (for duration)
   TXsheet *currentXsheet = app->getCurrentXsheet()->getXsheet();
   TXshCell targetCell;
 
@@ -1126,14 +1127,17 @@ void openSubXsheet() {
       // If so, use that.
       targetCell = currentXsheet->getCell(row, c);
       if (!targetCell.isEmpty() &&
-          (ret = scene->getChildStack()->openChild(row, c)))
+          (ret = scene->getChildStack()->openChild(row, c))) {
+        openedCol = c;
         break;
+      }
 
       /*- For each Cell in the Column, if contents are found break -*/
       for (int r = 0; r < sceneLength; r++) {
         ret = scene->getChildStack()->openChild(r, c);
         if (ret) {
           targetCell = currentXsheet->getCell(r, c);
+          openedCol  = c;
           break;
         }
       }
@@ -1163,6 +1167,7 @@ void openSubXsheet() {
           // When opening based on cell selection use the 1st
           // exposed frame in the sub-xsheet it finds
           targetCell = currentXsheet->getCell(r, c);
+          openedCol  = c;
           break;
         }
       }
@@ -1189,15 +1194,20 @@ void openSubXsheet() {
     app->getCurrentXsheet()->notifyXsheetChanged();
     app->getCurrentColumn()->setColumnIndex(0);
     app->getCurrentFrame()->setFrameIndex(subXsheetFrame);
-    // Ripristina play range sottoscena
+    // Ripristina play range sottoscena.
+    // Mark-out = sempre la durata animatic dello shot (colonna nel main xsheet),
+    // così rispecchia modifiche di rolling edit / trim fatte nel frattempo.
+    // Mark-in = 0 (o ripristinato da mappa se era stato spostato).
     TXsheet *newXsh = app->getCurrentXsheet()->getXsheet();
-    if (s_frameRangeMap.contains(newXsh)) {
-      auto range = s_frameRangeMap[newXsh];
-      XsheetGUI::setPlayRange(range.first, range.second, 1, false);
-    } else {
-      int fc = newXsh->getFrameCount();
-      XsheetGUI::setPlayRange(0, qMax(0, fc - 1), 1, false);
-    }
+    int r0col = 0, r1col = 0;
+    TXshColumn *shotColPtr = currentXsheet->getColumn(openedCol);
+    if (shotColPtr) shotColPtr->getRange(r0col, r1col);
+    int shotDuration = (r1col >= r0col) ? (r1col - r0col + 1)
+                                        : newXsh->getFrameCount();
+    int markIn = 0;
+    if (s_frameRangeMap.contains(newXsh))
+      markIn = s_frameRangeMap[newXsh].first;  // ripristina solo mark-in
+    XsheetGUI::setPlayRange(markIn, qMax(markIn, shotDuration - 1), 1, false);
     changeSaveSubXsheetAsCommand();
   } else
     DVGui::error(QObject::tr("Select a sub-scene cell."));

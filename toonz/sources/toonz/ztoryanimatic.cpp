@@ -1250,6 +1250,17 @@ static bool nearSegmentEdge(int mx, double ppf, const std::vector<ZtoryAudioTrac
 }
 
 bool ZtoryAudioTrack::event(QEvent *e) {
+  // Claim keyboard shortcuts before Qt/CommandManager steals them on macOS.
+  // Without this, ShortcutOverride propagates and Delete never reaches
+  // keyPressEvent because a global action absorbs it first.
+  if (e->type() == QEvent::ShortcutOverride && !m_locked) {
+    auto *ke = static_cast<QKeyEvent *>(e);
+    bool ctrl = ke->modifiers() & Qt::ControlModifier;
+    if (ctrl && (ke->key() == Qt::Key_X || ke->key() == Qt::Key_C || ke->key() == Qt::Key_V))
+      { ke->accept(); return true; }
+    if (!ctrl && (ke->key() == Qt::Key_Delete || ke->key() == Qt::Key_Backspace))
+      { ke->accept(); return true; }
+  }
   // WA_Hover delivers HoverMove/HoverLeave even without mouse button — more
   // reliable than setMouseTracking inside QScrollArea on macOS.
   if (e->type() == QEvent::HoverMove && m_dragMode == NoDrag && !m_razorActive) {
@@ -4740,16 +4751,16 @@ void ZtoryAnimaticPanel::onShotDoubleClicked(int col) {
   if (cell.m_level && cell.m_level->getChildLevel()) {
     app->getCurrentFrame()->setFrame(r0);
     CommandManager::instance()->execute("MI_OpenChild");
-    // Set the native play range to the full duration shown in the animatic.
+    // Set the native play range to the full animatic duration of this shot.
+    // Do NOT clamp to subXsh->getFrameCount(): in Ztoryc the sub-scene
+    // typically has fewer drawings than the animatic slot (implicit hold
+    // fills the rest), so clamping would set mark-out to the drawing count
+    // instead of the shot's timing.
     {
       int durInAnimatic = r1 - r0 + 1;
-      TXsheet *subXsh = app->getCurrentXsheet()->getXsheet();
-      if (subXsh) {
-        int subFrames = subXsh->getFrameCount();
-        int outF = qMin(durInAnimatic - 1, subFrames - 1);
-        if (outF >= 0)
-          XsheetGUI::setPlayRange(0, outF, 1, false);
-      }
+      int outF = durInAnimatic - 1;
+      if (outF >= 0)
+        XsheetGUI::setPlayRange(0, outF, 1, false);
     }
     // Keep the animatic controller's frame at the shot's main-xsheet row
     // so the animatic viewer renders at the correct position.
@@ -5559,6 +5570,34 @@ void ZtoryAnimaticPanel::onRollEdit(int colA, int newDurA, int colB, int newDurB
   resequenceXsheet();
   ztorySetShotRange(colA, 0, newDurA - 1);
   ztorySetShotRange(colB, 0, newDurB - 1);
+
+  // Live-update the play range if one of the two shots is currently open
+  // in the sub-scene editor (SHOTEDITOR room).  resequenceXsheet() has
+  // already repositioned the cells, so we re-read r0/r1 post-resequence.
+  {
+    ChildStack *cs = scene->getChildStack();
+    if (cs && cs->getAncestorCount() == 1) {
+      TXsheet *curXsh = cs->getXsheet();
+      auto tryUpdate = [&](int col, int newDur) {
+        TXshColumn *c = xsh->getColumn(col);
+        if (!c) return;
+        int r0 = 0, r1 = 0;
+        c->getRange(r0, r1);
+        for (int r = r0; r <= r1; r++) {
+          TXshCell cell = xsh->getCell(r, col);
+          if (!cell.isEmpty() && cell.m_level && cell.m_level->getChildLevel()) {
+            TXsheet *shotXsh = cell.m_level->getChildLevel()->getXsheet();
+            if (shotXsh && shotXsh == curXsh)
+              XsheetGUI::setPlayRange(0, newDur - 1, 1, false);
+            break;
+          }
+        }
+      };
+      tryUpdate(colA, newDurA);
+      tryUpdate(colB, newDurB);
+    }
+  }
+
   m_track->refreshFromScene();
 
   if (board) {
@@ -5640,16 +5679,20 @@ void ZtoryAnimaticPanel::onShotDurationChanged(int col, int newF1) {
 
   // If this shot's sub-xsheet is currently open, also update the live
   // play range so the FlipConsole markers move immediately.
+  // IMPORTANT: re-read r0/r1 POST-resequenceXsheet() — the cells were
+  // repositioned by resequence and the old r0 no longer points to them.
   ChildStack *cs = scene->getChildStack();
   if (cs && cs->getAncestorCount() == 1) {
-    // Find the child xsheet for this column.
+    TXsheet *curXsh = cs->getXsheet();
+    int pr0 = 0, pr1 = 0;
+    column->getRange(pr0, pr1);
     TXsheet *shotXsh = nullptr;
-    for (int r = r0; r <= r0 + newDuration - 1 && !shotXsh; r++) {
+    for (int r = pr0; r <= pr1 && !shotXsh; r++) {
       TXshCell cell = mainXsh->getCell(r, col);
       if (!cell.isEmpty() && cell.m_level && cell.m_level->getChildLevel())
         shotXsh = cell.m_level->getChildLevel()->getXsheet();
     }
-    if (shotXsh && cs->getXsheet() == shotXsh)
+    if (shotXsh && shotXsh == curXsh)
       XsheetGUI::setPlayRange(0, newDuration - 1, 1, false);
   }
 
@@ -5778,8 +5821,11 @@ void ZtoryAnimaticPanel::onMatchSubsceneDuration(int col) {
   TXsheet *subXsh = cell.m_level->getChildLevel()->getXsheet();
   if (!subXsh) return;
 
-  // Trova l'ultimo frame non vuoto in tutta la sottoscena
-  int lastFrame = 0;
+  // Trova l'ultimo frame non vuoto in tutta la sottoscena.
+  // Sentinel -1 = nessun contenuto trovato.  Non usare 0 come sentinel perché
+  // una sottoscena con un solo disegno al frame 0 ha lastFrame==0 e
+  // il vecchio guard "if (lastFrame <= 0) return" bloccava quel caso.
+  int lastFrame = -1;
   for (int c = 0; c < subXsh->getColumnCount(); c++) {
     int r0 = 0, r1 = 0;
     TXshColumn *column = subXsh->getColumn(c);
@@ -5795,7 +5841,7 @@ void ZtoryAnimaticPanel::onMatchSubsceneDuration(int col) {
     }
   }
 
-  if (lastFrame <= 0) return;
+  if (lastFrame < 0) return;  // sottoscena completamente vuota
   int newDuration = lastFrame + 1;
 
   // Apply new duration. Call directly — the signal connection would cause a
