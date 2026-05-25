@@ -313,6 +313,7 @@ void ToggleCommandHandler::execute() {
 //-----------------------------------------------------------------------------
 
 ToggleCommandHandler viewTableToggle(MI_ViewTable, false);
+ToggleCommandHandler viewDiskHolesToggle(MI_ViewDiskHoles, false);
 ToggleCommandHandler editInPlaceToggle(MI_ToggleEditInPlace, false);
 // Init m_status = false so the createToggle()->trigger() path (called when
 // MainAudioToggleAction env var is 1) flips it to true via execute(),
@@ -1623,6 +1624,8 @@ void SceneViewer::drawCameraStand() {
     glPushMatrix();
     tglMultMatrix(m_drawTableAff);
     ViewerDraw::drawDisk(m_tableDLId);
+    if (viewDiskHolesToggle.getStatus())
+      ViewerDraw::drawDiskHoles();
     glPopMatrix();
   }
 

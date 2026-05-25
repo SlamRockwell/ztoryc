@@ -76,6 +76,7 @@
     <menu>M_View</menu> 
 
     <item>MI_ViewTable</item>
+    <item>MI_ViewDiskHoles</item>
     <item>MI_FieldGuide</item>
     <item>MI_SafeArea</item>
     <separator/>

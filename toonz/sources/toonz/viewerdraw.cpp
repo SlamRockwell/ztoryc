@@ -874,6 +874,30 @@ void ViewerDraw::drawFieldGuide() {
 
 //-----------------------------------------------------------------------------
 
+void ViewerDraw::drawDiskHoles() {
+  // Two medium-gray filled circles — finger holes on the animation disk.
+  // Called separately from drawDisk so a View-menu toggle can hide them.
+  const int    nh = 40;
+  const double hr = kDiskHoleRadius_inch * Stage::inch;
+  const double hy = kDiskHoleY_inch      * Stage::inch;
+  const double holeOffsets[2] = { hy, -hy };
+
+  glColor3d(0.45, 0.45, 0.45);  // medium gray — visible but not distracting
+  for (int hole = 0; hole < 2; ++hole) {
+    double cy = holeOffsets[hole];
+    glBegin(GL_POLYGON);
+    for (int j = 0; j < nh; ++j) {
+      double ang = 2.0 * 3.1415293 * j / nh;
+      tglVertex(TPointD(hr * cos(ang), cy + hr * sin(ang)));
+    }
+    glEnd();
+  }
+  // restore color
+  glColor4d(0, 0, 0, 1);
+}
+
+//-----------------------------------------------------------------------------
+
 void ViewerDraw::drawDisk(int &tableDLId) {
   static TPixel32 currentBgColor;
 

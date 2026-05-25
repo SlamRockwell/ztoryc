@@ -202,6 +202,7 @@
 #define MI_ViewCamera "MI_ViewCamera"
 #define MI_ViewBBox "MI_ViewBBox"
 #define MI_ViewTable "MI_ViewTable"
+#define MI_ViewDiskHoles "MI_ViewDiskHoles"
 #define MI_FieldGuide "MI_FieldGuide"
 #define MI_RasterizePli "MI_RasterizePli"
 #define MI_SafeArea "MI_SafeArea"

@@ -220,6 +220,9 @@ class SceneViewer final : public TTool::Viewer,
 
   double m_rotationAngle[2];
 
+  // Disk finger-hole drag rotation
+  bool m_diskHoleDragging = false;
+
   bool m_firstInitialized = true;
 
 public:

@@ -617,6 +617,7 @@ void TopBar::loadMenubar() {
   // Menu' VIEW
   QMenu *viewMenu = addMenu(ShortcutTree::tr("View"), m_menuBar);
   addMenuItem(viewMenu, MI_ViewTable);
+  addMenuItem(viewMenu, MI_ViewDiskHoles);
   addMenuItem(viewMenu, MI_ViewCamera);
   addMenuItem(viewMenu, MI_ViewColorcard);
   addMenuItem(viewMenu, MI_ViewBBox);

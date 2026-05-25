@@ -60,6 +60,10 @@
 #include "tvectorimage.h"
 #include "tpalette.h"
 
+// Ztoryc
+#include "viewerdraw.h"
+#include "toonz/stage.h"
+
 // Qt includes
 #include <QUrl>
 #include <QApplication>
@@ -69,6 +73,10 @@
 
 // definito - per ora - in tapp.cpp
 extern QString updateToolEnableStatus(TTool *tool);
+
+// defined in sceneviewer.cpp
+extern ToggleCommandHandler viewTableToggle;
+extern ToggleCommandHandler viewDiskHolesToggle;
 
 //-----------------------------------------------------------------------------
 namespace {
@@ -184,6 +192,19 @@ public:
     return false;
   }
 };
+
+//-----------------------------------------------------------------------------
+
+// Returns true if worldPos is inside one of the two disk finger holes.
+// Used in mouse press / hover to start disk-rotation drag.
+bool isOnDiskHole(const TPointD &worldPos) {
+  const double hr = ViewerDraw::kDiskHoleRadius_inch * Stage::inch;
+  const double hy = ViewerDraw::kDiskHoleY_inch      * Stage::inch;
+  const TPointD topHole(0.0,  hy);
+  const TPointD botHole(0.0, -hy);
+  return norm2(worldPos - topHole) < hr * hr ||
+         norm2(worldPos - botHole) < hr * hr;
+}
 
 //-----------------------------------------------------------------------------
 }  // namespace
@@ -540,6 +561,43 @@ void SceneViewer::mouseMoveEvent(QMouseEvent *event) {
 //-----------------------------------------------------------------------------
 void SceneViewer::onMove(const TMouseEvent &event) {
   if (m_freezedStatus != NO_FREEZED) return;
+
+  // Disk finger-hole drag rotation.
+  // Body identical to mouseRotate() except m_center is always the world
+  // origin (disk/peg-bar center) instead of the screen center.
+  if (m_diskHoleDragging) {
+    if (event.buttons() == Qt::LeftButton) {
+      if (m_sw.getTotalTime() < 50) return;
+      m_sw.stop();
+      m_sw.start(true);
+
+      m_center         = TPointD(0, 0);
+      TPointD p        = winToWorld(event.mousePos() * getDevPixRatio());
+      TPointD a        = p        - m_center;
+      TPointD b        = m_oldPos - m_center;
+      if (norm2(a) > 0 && norm2(b) > 0) {
+        double ang = asin(cross(b, a) / (norm(a) * norm(b))) * M_180_PI;
+        m_angle    = m_angle + ang;
+        rotate(m_center, m_angle);
+      }
+      m_oldPos = p;
+    } else {
+      // Button released without going through onRelease (e.g. focus loss)
+      m_diskHoleDragging = false;
+      unsetCursor();
+    }
+    return;
+  }
+
+  // Hover: change cursor when over a finger hole (table visible, 2D mode)
+  if (event.buttons() == Qt::NoButton && !is3DView() &&
+      viewTableToggle.getStatus() && viewDiskHolesToggle.getStatus()) {
+    TPointD wp = winToWorld(event.mousePos() * getDevPixRatio());
+    if (isOnDiskHole(wp)) {
+      setCursor(Qt::SizeAllCursor);
+      return;
+    }
+  }
 
   // in case mouseReleaseEvent is not called, finish the action for the previous
   // button first.
@@ -903,6 +961,25 @@ void SceneViewer::onPress(const TMouseEvent &event) {
   if (m_freezedStatus != NO_FREEZED) return;
 
   TPointD pickPos = winToWorld(m_pos);
+
+  // Disk finger-hole rotation: intercept left-button press on the holes
+  // when the table is visible. Bypasses the active drawing tool.
+  if (event.button() == Qt::LeftButton && !is3DView() &&
+      viewTableToggle.getStatus() && viewDiskHolesToggle.getStatus() &&
+      isOnDiskHole(pickPos)) {
+    m_diskHoleDragging = true;
+    // Same init as mouseRotate / RotateTool::leftButtonDown
+    m_angle       = 0.0;
+    m_oldPos      = pickPos;
+    m_oldMousePos = event.m_pos;
+    m_tabletEvent = false;
+    m_tabletState = None;
+    m_sw.stop();
+    m_sw.start(true);
+    setCursor(Qt::SizeAllCursor);
+    return;
+  }
+
   // grab screen picking for stop motion live view zoom
   if (StopMotion::instance()->isPickLiveViewZoom()) {
     StopMotion::instance()->makeZoomPoint(pickPos);
@@ -997,6 +1074,13 @@ void SceneViewer::onRelease(const TMouseEvent &event) {
   // tool is declared up here to prevent an error with jumping to goto before
   // all variables are instantiated.
   TTool *tool = TApp::instance()->getCurrentTool()->getTool();
+
+  // Disk finger-hole drag: end rotation
+  if (m_diskHoleDragging) {
+    m_diskHoleDragging = false;
+    unsetCursor();
+    return;
+  }
 
   m_dragging = false;
   if (m_mousePanning > 0 || m_mouseRotating > 0 || m_mouseZooming > 0) {
@@ -1906,6 +1990,17 @@ void SceneViewer::mouseDoubleClickEvent(QMouseEvent *event) {
     return;
   }
   if (m_freezedStatus != NO_FREEZED) return;
+
+  // Double-click on a disk finger hole: reset rotation to 0
+  if (event->button() == Qt::LeftButton && !is3DView() &&
+      viewTableToggle.getStatus() && viewDiskHolesToggle.getStatus()) {
+    // use QPointF overload of winToWorld (Qt coords, origin top-left)
+    TPointD wp = winToWorld(event->pos() * getDevPixRatio());
+    if (isOnDiskHole(wp)) {
+      resetRotation();
+      return;
+    }
+  }
 
   int frame = TApp::instance()->getCurrentFrame()->getFrame();
   if (frame == -1) return;

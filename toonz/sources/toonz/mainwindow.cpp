@@ -2722,6 +2722,8 @@ void MainWindow::defineActions() {
                ViewCameraToggleAction ? 1 : 0, MenuViewCommandType);
   createToggle(MI_ViewTable, QT_TR_NOOP("&Table"), "",
                ViewTableToggleAction ? 1 : 0, MenuViewCommandType);
+  createToggle(MI_ViewDiskHoles, QT_TR_NOOP("&Disk Holes"), "",
+               1, MenuViewCommandType);
   createToggle(MI_ShowSymmetryGuide, QT_TR_NOOP("&Symmetry Guide"), "",
                ShowSymmetryGuide ? 1 : 0, MenuViewCommandType);
   createToggle(MI_ShowPerspectiveGrids, QT_TR_NOOP("&Perspective Grids"), "",

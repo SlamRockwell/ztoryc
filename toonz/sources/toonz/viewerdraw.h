@@ -41,7 +41,12 @@ void drawGridsAndOverlays(SceneViewer *viewer, double pixelSize);
 void drawCameraOverlays(SceneViewer *viewer, double pixelSize);
 void draw3DFrame(double zmin, double phi);
 void drawDisk(int &tableDLId);
+void drawDiskHoles();   // finger holes — drawn separately so the toggle works
 void drawFieldGuide();
+
+// Finger-hole constants (world units = Stage::inch * these values)
+constexpr double kDiskHoleY_inch      = 7.0;  // distance from disk center
+constexpr double kDiskHoleRadius_inch = 0.6;  // hit-test radius
 void drawColorcard(UCHAR channel);
 bool getShowFieldGuide();
 void drawSafeArea();
