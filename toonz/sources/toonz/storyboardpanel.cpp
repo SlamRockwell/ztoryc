@@ -63,6 +63,7 @@
 #include <QPageLayout>
 #include <QSizePolicy>
 #include <QResizeEvent>
+#include <QWindow>
 #include <QFile>
 #include <QXmlStreamWriter>
 #include <QXmlStreamReader>
@@ -105,7 +106,7 @@ PanelWidget::PanelWidget(QWidget *parent)
     , m_fps(24)
     , m_selected(false)
 {
-  setMinimumWidth(200);
+  setMinimumWidth(150);
   setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
   setAcceptDrops(true);
   updateBorderStyle();
@@ -301,12 +302,23 @@ void PanelWidget::updateBorderStyle() {
 
 void PanelWidget::rescalePreview() {
   int w = width() - 8;
-  if (w <= 0) w = 200;
+  if (w <= 0) w = 150;
   int h = w * 9 / 16;
   m_previewLabel->setFixedHeight(h);
-  if (!m_previewPixmap.isNull())
-    m_previewLabel->setPixmap(
-      m_previewPixmap.scaled(w, h, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+  if (!m_previewPixmap.isNull()) {
+    // HiDPI-aware display: render at physical pixel size so Retina screens are
+    // pixel-perfect without blurry upscaling.
+    qreal dpr = 1.0;
+    if (QWindow *win = window()->windowHandle())
+      dpr = win->devicePixelRatio();
+    QSize physTarget(int(w * dpr), int(h * dpr));
+    // m_previewPixmap is stored without a DPR tag (raw physical pixels).
+    // Scale to target physical size, then tag with DPR for Qt display.
+    QPixmap scaled = m_previewPixmap.scaled(
+        physTarget, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    scaled.setDevicePixelRatio(dpr);
+    m_previewLabel->setPixmap(scaled);
+  }
 }
 
 void PanelWidget::setShotIndex(int si) { m_shotIndex = si; }
@@ -462,6 +474,17 @@ void PanelWidget::mousePressEvent(QMouseEvent *e) {
 void PanelWidget::resizeEvent(QResizeEvent *e) {
   QFrame::resizeEvent(e);
   rescalePreview();
+  // If the stored pixmap is too small for the current physical size (e.g. the
+  // window was made wider), request a fresh high-res render via the board.
+  if (!m_previewPixmap.isNull()) {
+    qreal dpr = 1.0;
+    if (QWindow *win = window()->windowHandle())
+      dpr = win->devicePixelRatio();
+    int requiredPhysW = int((width() - 8) * dpr);
+    int storedPhysW   = m_previewPixmap.width();  // raw physical (no DPR tag)
+    if (requiredPhysW > int(storedPhysW * 1.2))   // >20% larger → re-render
+      emit previewRerenderNeeded(m_shotIndex, m_panelIndex);
+  }
 }
 
 void PanelWidget::dragEnterEvent(QDragEnterEvent *e) {
@@ -843,6 +866,21 @@ void StoryboardPanel::connectPanelWidget(PanelWidget *pw) {
   });
   connect(pw, &PanelWidget::clicked, this, &StoryboardPanel::onPanelClicked);
   connect(pw, &PanelWidget::dropReceived, this, &StoryboardPanel::onMoveShot);
+  // Re-render at higher resolution when the panel grows beyond its stored pixmap.
+  connect(pw, &PanelWidget::previewRerenderNeeded, this,
+          [this](int si, int pi) {
+    m_rerenderQueue.insert({si, pi});
+    if (!m_rerenderTimer) {
+      m_rerenderTimer = new QTimer(this);
+      m_rerenderTimer->setSingleShot(true);
+      connect(m_rerenderTimer, &QTimer::timeout, this, [this]() {
+        for (auto &p : m_rerenderQueue)
+          updatePreview(p.first, p.second);
+        m_rerenderQueue.clear();
+      });
+    }
+    m_rerenderTimer->start(200);  // coalesce rapid resize events into one render
+  });
   connect(pw, &PanelWidget::dataChanged, [this](int si, int pi){
     if (si >= 0 && si < (int)m_shots.size()) {
       // Update both shotLabel (primary) and shotNumber (legacy compat)
@@ -1010,7 +1048,7 @@ void StoryboardPanel::rebuildGrid() {
   m_container->adjustSize();
   QTimer::singleShot(200, this, [this](){
     int available = m_scrollArea->viewport()->width() - 8 * (m_columnsPerRow + 1);
-    int colW = qMax(200, available / m_columnsPerRow);
+    int colW = qMax(150, available / m_columnsPerRow);
     for (Shot &shot : m_shots)
       for (PanelWidget *pw : shot.panels) {
         pw->setFixedWidth(colW);
@@ -1058,7 +1096,20 @@ void StoryboardPanel::updatePreview(int shotIdx, int panelIdx) {
   if (!subXsh) return;
 
   int frame = shot.data.panels[panelIdx].startFrame;
-  QPixmap px = IconGenerator::renderXsheetFrame(subXsh, frame, TDimension(320, 180));
+
+  // Render at the panel widget's actual physical pixel width for crisp display
+  // on both Retina and standard screens. Stored WITHOUT a DPR tag so that
+  // rescalePreview() can apply DPR at draw time for the current screen.
+  PanelWidget *pw = shot.panels[panelIdx];
+  qreal dpr = 1.0;
+  if (QWindow *win = pw->window()->windowHandle())
+    dpr = win->devicePixelRatio();
+  int physW = int((pw->width() - 8) * dpr);
+  if (physW < 64) physW = 320;   // widget not yet laid out — use safe default
+  physW = qMin(physW, 1280);
+  int physH = physW * 9 / 16;
+
+  QPixmap px = IconGenerator::renderXsheetFrame(subXsh, frame, TDimension(physW, physH));
   if (!px.isNull())
     shot.panels[panelIdx]->setPreviewPixmap(px);
 }
@@ -1686,6 +1737,29 @@ void StoryboardPanel::showEvent(QShowEvent *e) {
     refreshFromScene();
   else
     QTimer::singleShot(200, this, &StoryboardPanel::onRefreshPreviews);
+}
+
+void StoryboardPanel::resizeEvent(QResizeEvent *e) {
+  TPanel::resizeEvent(e);
+  // Debounce: recompute column widths 150 ms after the last resize event so we
+  // don't thrash during live window dragging.
+  if (!m_resizeTimer) {
+    m_resizeTimer = new QTimer(this);
+    m_resizeTimer->setSingleShot(true);
+    connect(m_resizeTimer, &QTimer::timeout, this, [this]() {
+      if (m_shots.empty()) return;
+      int available = m_scrollArea->viewport()->width() - 8 * (m_columnsPerRow + 1);
+      int colW = qMax(150, available / m_columnsPerRow);
+      for (Shot &shot : m_shots)
+        for (PanelWidget *pw : shot.panels)
+          pw->setFixedWidth(colW);
+      // PanelWidget::resizeEvent fires automatically on each setFixedWidth call:
+      //   → rescalePreview() updates display immediately
+      //   → previewRerenderNeeded emitted if pixmap resolution is insufficient
+      m_container->adjustSize();
+    });
+  }
+  m_resizeTimer->start(150);
 }
 
 void StoryboardPanel::refreshFromScene() {

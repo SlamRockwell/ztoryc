@@ -30,6 +30,8 @@
 
 #include "ztorymodel.h"
 #include "ztoryundo.h"
+#include <set>
+#include <utility>
 
 class PanelWidget final : public QFrame {
   Q_OBJECT
@@ -96,6 +98,9 @@ signals:
   void seqLabelEdited(int shotIndex, QString fullLabel);
   void clicked(int shotIndex, int panelIndex, Qt::KeyboardModifiers modifiers);
   void dropReceived(int fromShot, int toShot);
+  // Emitted from resizeEvent when the stored pixmap is too small to fill the
+  // panel at native (HiDPI) resolution — StoryboardPanel re-renders on receipt.
+  void previewRerenderNeeded(int shotIdx, int panelIdx);
 protected:
   void mousePressEvent(QMouseEvent *e) override;
   void mouseDoubleClickEvent(QMouseEvent *e) override;
@@ -152,6 +157,12 @@ struct Shot {
   // re-save that would otherwise fire when loadZtoryc() publishes the
   // screenplay path it just read.
   bool m_loadingZtoryc = false;
+  // Deferred re-render queue: panels that requested a higher-res thumbnail
+  // because the window was resized. Fired 200 ms after the last resize event.
+  QTimer                        *m_rerenderTimer = nullptr;
+  std::set<std::pair<int,int>>   m_rerenderQueue;
+  // Debounce timer for window-resize → column-width recalculation.
+  QTimer                        *m_resizeTimer   = nullptr;
   // Coalescing undo for duration spin changes: captures "before" on first change,
   // then commits one UndoBoardState after 600ms of inactivity.
   std::vector<ZtoryShotSnap> m_pendingDurationBefore;
@@ -181,6 +192,7 @@ public:
   void restoreFromSnapshot(const std::vector<ZtoryShotSnap> &snap);
 protected:
   void showEvent(QShowEvent *e) override;
+  void resizeEvent(QResizeEvent *e) override;
   bool eventFilter(QObject *obj, QEvent *e) override;
 private slots:
   void onAddShot();

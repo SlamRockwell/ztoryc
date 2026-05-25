@@ -41,6 +41,7 @@
 #include <QSplitter>
 #include <QMenu>
 #include <QLabel>
+#include <QWindow>
 #include <QFileDialog>
 #include <QContextMenuEvent>
 #include "tsound.h"
@@ -3226,7 +3227,21 @@ void ZtoryPanelNavigator::refreshPreview() {
   const auto &shot = ZtoryModel::instance()->shot(m_shotIdx);
   if (m_panelIdx >= (int)shot.panels.size()) return;
 
-  // Render directly from the sub-xsheet (same as StoryboardPanel::updatePreview)
+  // Logical size of the preview label (may be 0 before first layout pass).
+  QSize avail = m_previewLabel->size();
+  if (avail.isEmpty()) avail = QSize(320, 180);
+
+  // Device pixel ratio — use the top-level window's handle; windowHandle() on
+  // a child widget returns nullptr, so we walk up to window().
+  qreal dpr = 1.0;
+  if (QWindow *win = window()->windowHandle())
+    dpr = win->devicePixelRatio();
+
+  // Physical pixel size we want to render at: avail × dpr, but cap at 1280×720
+  // so we don't trigger a slow full-resolution render on very large panels.
+  QSize physSize = (avail * dpr).boundedTo(QSize(1280, 720));
+
+  // Render directly from the sub-xsheet at the exact physical resolution.
   TApp *app = TApp::instance();
   ToonzScene *scene = app->getCurrentScene()->getScene();
   QPixmap px;
@@ -3245,20 +3260,35 @@ void ZtoryPanelNavigator::refreshPreview() {
     }
     if (cl) {
       int frame = shot.panels[m_panelIdx].startFrame;
-      px = IconGenerator::renderXsheetFrame(cl->getXsheet(), frame, TDimension(320, 180));
+      px = IconGenerator::renderXsheetFrame(
+          cl->getXsheet(), frame, TDimension(physSize.width(), physSize.height()));
+      // Tag with DPR so Qt maps the physical pixels back to logical coordinates.
+      px.setDevicePixelRatio(dpr);
     }
   }
 
+  // Helper: fit a HiDPI-tagged pixmap into the label without upscaling.
+  // The pixmap's logical size (physSize / dpr ≈ avail) fills the label exactly.
+  auto display = [&](const QPixmap &src) {
+    // If the cached pixmap has the wrong physical size (e.g. panel was resized),
+    // scale it smoothly rather than showing a blurry upscale.
+    QSize srcPhys = src.size();  // physical pixels, ignoring DPR tag
+    if (srcPhys != physSize) {
+      QPixmap rescaled = src;
+      rescaled.setDevicePixelRatio(1.0);
+      rescaled = rescaled.scaled(physSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+      rescaled.setDevicePixelRatio(dpr);
+      m_previewLabel->setPixmap(rescaled);
+    } else {
+      m_previewLabel->setPixmap(src);
+    }
+  };
+
   if (!px.isNull()) {
     m_cachedPreview = px;
-    QSize avail = m_previewLabel->size();
-    if (avail.isEmpty()) avail = QSize(320, 180);
-    m_previewLabel->setPixmap(
-      px.scaled(avail, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    display(px);
   } else if (!m_cachedPreview.isNull()) {
-    QSize avail = m_previewLabel->size();
-    m_previewLabel->setPixmap(
-      m_cachedPreview.scaled(avail, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    display(m_cachedPreview);
   } else {
     QString lbl = shot.panels[m_panelIdx].panelLabel;
     m_previewLabel->setText(lbl.isEmpty() ? tr("(no preview)") : lbl);
