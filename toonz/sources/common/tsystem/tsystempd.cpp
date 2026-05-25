@@ -248,8 +248,28 @@ bool TSystem::memoryShortage() {
 
 #elif defined(LINUX)
 
-  // to be done...
-  return false;
+  // Read /proc/meminfo — the same source used by `free -m` and top.
+  // MemAvailable (kernel 3.14+) is the best estimate of memory that can be
+  // made available without swapping: it includes free RAM plus reclaimable
+  // page-cache and slab entries.  Fall back to MemFree if unavailable.
+  FILE *f = fopen("/proc/meminfo", "r");
+  if (!f) return false;
+  uint64_t memTotal     = 0;
+  uint64_t memAvailable = 0;
+  uint64_t memFree      = 0;
+  char line[256];
+  while (fgets(line, sizeof(line), f)) {
+    uint64_t val = 0;
+    if (sscanf(line, "MemTotal: %llu kB", &val) == 1)      memTotal     = val;
+    if (sscanf(line, "MemAvailable: %llu kB", &val) == 1)  memAvailable = val;
+    if (sscanf(line, "MemFree: %llu kB", &val) == 1)       memFree      = val;
+    if (memTotal && (memAvailable || memFree)) break;
+  }
+  fclose(f);
+  if (!memTotal) return false;
+  uint64_t available = memAvailable ? memAvailable : memFree;
+  // Shortage when less than 15% of physical RAM is readily available.
+  return available < memTotal / 7;  // ~14.3%
 
 #elif defined(FREEBSD)
 
