@@ -107,6 +107,8 @@
 
 // macOS-specific headers
 #include "Carbon/Carbon.h"
+#include <mach/mach.h>
+#include <sys/sysctl.h>
 #endif
 
 #ifdef __sgi
@@ -217,8 +219,32 @@ bool TSystem::memoryShortage() {
 
 #elif defined(MACOSX)
 
-  // to be done...
-  return false;
+  // Get physical RAM total via sysctl
+  int mib[2]     = {CTL_HW, HW_MEMSIZE};
+  uint64_t total = 0;
+  size_t   len   = sizeof(total);
+  if (sysctl(mib, 2, &total, &len, nullptr, 0) != 0 || total == 0)
+    return false;
+
+  // Get VM page statistics: free + inactive pages are "available"
+  vm_statistics64_data_t vmStats;
+  mach_msg_type_number_t count = HOST_VM_INFO64_COUNT;
+  vm_size_t pageSize           = 0;
+  host_page_size(mach_host_self(), &pageSize);
+  if (host_statistics64(mach_host_self(), HOST_VM_INFO64,
+                        reinterpret_cast<host_info64_t>(&vmStats),
+                        &count) != KERN_SUCCESS)
+    return false;
+
+  // "Available" = free + inactive (reclaimable without disk I/O) + purgeable
+  uint64_t available =
+      ((uint64_t)vmStats.free_count + vmStats.inactive_count +
+       vmStats.purgeable_count) *
+      (uint64_t)pageSize;
+
+  // Shortage when less than 15% of physical RAM is readily available.
+  // This is well before the system starts thrashing swap.
+  return available < total / 7;  // ~14.3%
 
 #elif defined(LINUX)
 

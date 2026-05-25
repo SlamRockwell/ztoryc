@@ -11,6 +11,7 @@
 #include "toonz/tscenehandle.h"
 #include "toonz/txsheethandle.h"
 #include "toonzqt/icongenerator.h"
+#include "timagecache.h"
 #include "toonz/tstageobject.h"
 #include "toonz/tstageobjecttree.h"
 #include "toonz/toonzscene.h"
@@ -856,5 +857,13 @@ void ZtoryModel::updateColumnName(int si) {
 void ZtoryModel::onXsheetChanged() { /* thumbnails updated via frameSwitched debounce */ }
 void ZtoryModel::onSceneChanged()  { refreshFromScene(); load(); }
 
-void ZtoryModel::activateShotForViewing(int col) { emit shotActivatedForViewing(col); }
+void ZtoryModel::activateShotForViewing(int col) {
+  // Clear TImageCache on shot switch: on macOS memoryShortage() now works
+  // but the cache may still hold the previous shot's frames.  Releasing
+  // them proactively avoids unbounded RAM growth during long sessions.
+  // The small per-frame re-render cost on first display is negligible vs
+  // the alternative of saturating RAM with hundreds of cached frames.
+  TImageCache::instance()->clear();
+  emit shotActivatedForViewing(col);
+}
 void ZtoryModel::requestReturnToViewer()         { emit returnToViewerMainRequested(); }
