@@ -118,6 +118,9 @@ class ZtoryModel : public QObject {
   QStringList m_animaticSidePanels;  // shown in animatic mode
   QStringList m_shotSidePanels;      // shown in shot mode
   bool        m_sidePanelsLinked = true;  // if true, viewer toggle drives side panels
+  // Auto-match: shared state so both ANIMATIC toolbar and SHOTEDITOR
+  // ZtoryPanelNavigator always reflect the same toggle.
+  bool        m_autoMatch = false;
 
   ZtoryModel();
 
@@ -255,6 +258,14 @@ public:
   void        setAnimaticSidePanels(const QStringList &l) { m_animaticSidePanels = l; }
   void        setShotSidePanels(const QStringList &l)     { m_shotSidePanels = l; }
 
+  // Auto-match toggle — shared between ANIMATIC toolbar and SHOTEDITOR navigator
+  bool autoMatch() const { return m_autoMatch; }
+  void setAutoMatch(bool on) {
+    if (m_autoMatch == on) return;
+    m_autoMatch = on;
+    emit autoMatchChanged(on);
+  }
+
 signals:
   void workflowChanged(ZtoryWorkflow workflow);
   void modelReset();                          // tutto cambiato
@@ -265,6 +276,7 @@ signals:
   void shotDataChanged(int shotIdx);
   void previewUpdated(int shotIdx, int panelIdx);
   void scriptFileChanged();  // imported screenplay changed (or cleared)
+  void autoMatchChanged(bool on);  // auto-match toggle flipped
   // Viewer-switch signals: emitted by activateShotForViewing / requestReturnToViewer.
   // ZtoryAnimaticViewerPanel connects to these to switch stack pages.
   void shotActivatedForViewing(int col);

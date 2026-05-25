@@ -796,6 +796,13 @@ private:
   bool m_switchEnabled  = false;  // true in ZtoryAnimaticT (ZTORYC T room)
   bool m_refreshing = false;      // re-entrancy guard for refreshFromScene
   bool m_refreshingAudio = false; // re-entrancy guard for refreshAudioTracks
+  // Auto-match: when ON, onMatchSubsceneDuration fires on every xsheetChanged
+  // while inside a sub-scene (debounced 300ms, re-entrancy guarded).
+  // State lives in ZtoryModel::autoMatch() so ZtoryPanelNavigator can mirror it.
+  QToolButton *m_autoMatchBtn   = nullptr;
+  QTimer      *m_autoMatchTimer = nullptr;
+  bool         m_autoMatchBusy  = false;
+  int          m_autoMatchCol   = -1;
   // Per-column mute/solo/lock state — persists across refreshAudioTracks() rebuilds
   QMap<int, bool> m_colMuted;
   QSet<int>       m_colSolo;

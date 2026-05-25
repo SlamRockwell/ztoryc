@@ -3025,13 +3025,39 @@ ZtoryPanelNavigator::ZtoryPanelNavigator(QWidget *parent)
   m_notesField = makeField(tr("Enter notes..."));
   lay->addWidget(m_notesField);
 
-  // --- Sync toggle ---
-  m_syncBtn = new QToolButton(container);
+  // --- Bottom row: Sync + Auto-match toggles ---
+  QWidget *toggleRow     = new QWidget(container);
+  QHBoxLayout *toggleLay = new QHBoxLayout(toggleRow);
+  toggleLay->setContentsMargins(0, 0, 0, 0);
+  toggleLay->setSpacing(4);
+
+  m_syncBtn = new QToolButton(toggleRow);
   m_syncBtn->setText(tr("Sync timeline"));
   m_syncBtn->setCheckable(true);
   m_syncBtn->setChecked(true);
   m_syncBtn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-  lay->addWidget(m_syncBtn);
+  toggleLay->addWidget(m_syncBtn);
+
+  // Auto-match mirror button — same state as the animatic toolbar button
+  auto *autoMatchBtn = new QToolButton(toggleRow);
+  autoMatchBtn->setIcon(createQIcon("ztoryc_automatch"));
+  autoMatchBtn->setIconSize(QSize(16, 16));
+  autoMatchBtn->setFixedSize(28, 28);
+  autoMatchBtn->setCheckable(true);
+  autoMatchBtn->setChecked(ZtoryModel::instance()->autoMatch());
+  autoMatchBtn->setToolTip(tr("Auto Match Duration\nAutomatically resize the animatic slot\nto match drawing content."));
+  autoMatchBtn->setStyleSheet(
+      "QToolButton{background:transparent;border:1px solid #555;border-radius:4px;}"
+      "QToolButton:hover{background:#555;}"
+      "QToolButton:checked{background:#c8703a;border-color:#c8703a;}");
+  toggleLay->addWidget(autoMatchBtn);
+  lay->addWidget(toggleRow);
+
+  // Keep in sync with ZtoryModel (shared with the animatic toolbar button)
+  connect(autoMatchBtn, &QToolButton::toggled,
+          ZtoryModel::instance(), &ZtoryModel::setAutoMatch);
+  connect(ZtoryModel::instance(), &ZtoryModel::autoMatchChanged,
+          autoMatchBtn, &QToolButton::setChecked);
 
   setWidget(container);
 
@@ -3950,8 +3976,40 @@ ZtoryAnimaticPanel::ZtoryAnimaticPanel(QWidget *parent, bool switchEnabled)
           this, &ZtoryAnimaticPanel::onAddShot);
   tbLay->addWidget(addShotBtn);
   tbLay->addWidget(mergeBtn);
+  tbLay->addSpacing(8);
+
+  // Auto-match toggle: when ON, automatically syncs the animatic slot
+  // duration to the sub-scene's drawing content whenever it changes.
+  m_autoMatchBtn = new QToolButton(toolbar);
+  m_autoMatchBtn->setIcon(createQIcon("ztoryc_automatch"));
+  m_autoMatchBtn->setIconSize(QSize(20, 20));
+  m_autoMatchBtn->setFixedSize(28, 28);
+  m_autoMatchBtn->setCheckable(true);
+  m_autoMatchBtn->setToolTip(tr("Auto Match Duration\nWhen enabled, the animatic slot automatically\nresizes to match the sub-scene drawing content."));
+  m_autoMatchBtn->setStyleSheet(
+      "QToolButton{background:transparent;border:none;border-radius:4px;}"
+      "QToolButton:hover{background:#555;}"
+      "QToolButton:checked{background:#c8703a;}");
+  tbLay->addWidget(m_autoMatchBtn);
+  // Sync button ↔ ZtoryModel (shared state with ZtoryPanelNavigator)
+  connect(m_autoMatchBtn, &QToolButton::toggled,
+          ZtoryModel::instance(), &ZtoryModel::setAutoMatch);
+  connect(ZtoryModel::instance(), &ZtoryModel::autoMatchChanged,
+          m_autoMatchBtn, &QToolButton::setChecked);
   tbLay->addSpacing(12);
   tbLay->addStretch(1);
+
+  // Debounce timer: fires 300ms after the last xsheetChanged while inside
+  // a sub-scene with auto-match ON.
+  m_autoMatchTimer = new QTimer(this);
+  m_autoMatchTimer->setSingleShot(true);
+  connect(m_autoMatchTimer, &QTimer::timeout, this, [this]() {
+    if (m_autoMatchCol < 0 || m_autoMatchBusy) return;
+    m_autoMatchBusy = true;
+    onMatchSubsceneDuration(m_autoMatchCol);
+    m_autoMatchBusy = false;
+    m_autoMatchCol  = -1;
+  });
 
   connect(selectBtn, &QToolButton::clicked, this, [this, selectBtn, trimBtn, razorBtn](){
     m_track->setTool(ZtoryAnimaticTrack::SelectTool);
@@ -4092,6 +4150,35 @@ ZtoryAnimaticPanel::ZtoryAnimaticPanel(QWidget *parent, bool switchEnabled)
       if (scene && scene->getChildStack()->getAncestorCount() == 0)
         refreshFromScene();
     });
+
+    // Auto-match: if the toggle is ON and we're inside a sub-scene, find
+    // the corresponding main-xsheet column and schedule a debounced resize.
+    if (!ZtoryModel::instance()->autoMatch()) return;
+    if (m_autoMatchBusy) return;  // re-entrancy guard: our own resize fired this
+    ToonzScene *scene = TApp::instance()->getCurrentScene()->getScene();
+    if (!scene || scene->getChildStack()->getAncestorCount() == 0) return;
+    // Find which main-xsheet column owns the currently open sub-scene
+    TXsheet *curXsh  = scene->getChildStack()->getXsheet();
+    TXsheet *mainXsh = scene->getChildStack()->getTopXsheet();
+    if (!curXsh || !mainXsh) return;
+    int foundCol = -1;
+    for (int col = 0; col < mainXsh->getColumnCount() && foundCol < 0; col++) {
+      TXshColumn *c = mainXsh->getColumn(col);
+      if (!c) continue;
+      int r0 = 0, r1 = 0;
+      c->getRange(r0, r1);
+      for (int r = r0; r <= r1; r++) {
+        TXshCell cell = mainXsh->getCell(r, col);
+        if (!cell.isEmpty() && cell.m_level && cell.m_level->getChildLevel() &&
+            cell.m_level->getChildLevel()->getXsheet() == curXsh) {
+          foundCol = col;
+          break;
+        }
+      }
+    }
+    if (foundCol < 0) return;
+    m_autoMatchCol = foundCol;
+    m_autoMatchTimer->start(300);  // debounce: restart on every change burst
   });
 
   // If this is the T-variant (m_switchEnabled), connect timeline switch
